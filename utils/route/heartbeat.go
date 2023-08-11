@@ -8,7 +8,7 @@ import (
 )
 
 func heartbeat(c *gin.Context) {
-	uuid := c.PostForm("uuid")
+	client_uuid := c.PostForm("uuid")
 	hostname := c.PostForm("hostname")
 	cpu := c.PostForm("cpu")
 	cpu_use := c.PostForm("cpu_use")
@@ -17,14 +17,14 @@ func heartbeat(c *gin.Context) {
 	updated := time.Now().Format(time.DateTime)
 
 	var count int
-	err := conf.Db.QueryRow("SELECT COUNT(*) FROM `0e7_client` WHERE uuid=?", uuid).Scan(&count)
+	err := conf.Db.QueryRow("SELECT COUNT(*) FROM `0e7_client` WHERE uuid=?", client_uuid).Scan(&count)
 	if err != nil {
 		fmt.Println("Failed to query database:", err)
 	}
 	if count == 0 {
-		_, err = conf.Db.Exec("INSERT INTO `0e7_client` (uuid,hostname,cpu,cpu_use,memory_use,memory_max,updated) VALUES (?,?,?,?,?,?,?)", uuid, hostname, cpu, cpu_use, memory_use, memory_max, updated)
+		_, err = conf.Db.Exec("INSERT INTO `0e7_client` (uuid,hostname,cpu,cpu_use,memory_use,memory_max,updated) VALUES (?,?,?,?,?,?,?)", client_uuid, hostname, cpu, cpu_use, memory_use, memory_max, updated)
 	} else {
-		_, err = conf.Db.Exec("UPDATE `0e7_client` SET hostname=?,cpu=?,cpu_use=?,memory_use=?,memory_max=?,updated=? WHERE uuid=?", hostname, cpu, cpu_use, memory_use, memory_max, updated, uuid)
+		_, err = conf.Db.Exec("UPDATE `0e7_client` SET hostname=?,cpu=?,cpu_use=?,memory_use=?,memory_max=?,updated=? WHERE uuid=?", hostname, cpu, cpu_use, memory_use, memory_max, updated, client_uuid)
 	}
 	if err != nil {
 		c.JSON(400, gin.H{

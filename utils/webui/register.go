@@ -1,4 +1,4 @@
-package route
+package webui
 
 import (
 	"0E7/utils/config"
@@ -9,7 +9,8 @@ var conf config.Conf
 
 func Register(sconf config.Conf, router *gin.Engine) {
 	conf = sconf
-	router.POST("/api/heartbeat", heartbeat)
-	router.POST("/api/exploit", exploit)
-	router.POST("/api/exploit_download", exploit_download)
+	router.GET("/webui/exploit", exploit)
+	router.POST("/webui/exploit", exploit)
+
+	router.POST("/webui/exploit/rename", exploit_rename)
 }

