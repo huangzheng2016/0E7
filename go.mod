@@ -3,12 +3,12 @@ module 0E7
 go 1.20
 
 require (
+	github.com/gin-contrib/gzip v0.0.6
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/google/uuid v1.3.0
 	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/shirou/gopsutil v2.21.11+incompatible
-	github.com/tidwall/gjson v1.15.0
 	gopkg.in/ini.v1 v1.67.0
 )
 
@@ -30,8 +30,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
-	github.com/tidwall/match v1.1.1 // indirect
-	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

@@ -28,7 +28,7 @@ func downloadFile(filepath string) error {
 		return err
 	}
 	defer response.Body.Close()
-	out, err := os.Create(filepath + ".new")
+	out, err := os.Create("new_" + filepath)
 	if err != nil {
 		return err
 	}
@@ -65,9 +65,9 @@ func Replace() {
 	}
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd.exe", "/C", "start", "upgrade.bat")
+		cmd = exec.Command("cmd.exe", "/C", "start", "new_0e7.exe")
 	} else {
-		cmd = exec.Command("nohup ", "upgrade.sh")
+		cmd = exec.Command("nohup ", "./0e7")
 	}
 	fmt.Println(wdPath)
 	cmd.Dir = wdPath

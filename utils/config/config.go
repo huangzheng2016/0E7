@@ -2,6 +2,7 @@ package config
 
 import (
 	"0E7/utils/database"
+	"0E7/utils/udpcast"
 	"database/sql"
 	"fmt"
 	"github.com/google/uuid"
@@ -21,13 +22,22 @@ var Client_mode bool
 var Client_uuid string
 var Client_pypi string
 var Client_update bool
+var Client_worker int
 
 func Init_conf() error {
 	cfg, err := ini.Load("config.ini")
 	if err != nil {
-		fmt.Println("Failed to load config file:", err)
-		os.Exit(1)
-		return err
+		file, err := os.Create("config.ini")
+		if err != nil {
+			fmt.Println("Create error", err)
+			os.Exit(1)
+		}
+		defer file.Close()
+		cfg, err = ini.Load("config.ini")
+		if err != nil {
+			fmt.Println("Failed to load config file:", err)
+			os.Exit(1)
+		}
 	}
 
 	section := cfg.Section("global")
@@ -47,6 +57,17 @@ func Init_conf() error {
 	}
 	if Client_mode {
 		Server_url = section.Key("server_url").String()
+		if Server_url == "" {
+			args := os.Args
+			if len(args) == 2 {
+				Server_url = args[1]
+			} else {
+				Server_url = udpcast.Udp_receive()
+			}
+			if Server_url != "" {
+				section.Key("server_url").SetValue(Server_url)
+			}
+		}
 		Client_uuid = section.Key("uuid").String()
 		if Client_uuid == "" {
 			Client_uuid = uuid.New().String()
@@ -61,6 +82,11 @@ func Init_conf() error {
 		Client_update, err = section.Key("update").Bool()
 		if err != nil {
 			Client_update = true
+		}
+
+		Client_worker, err = section.Key("worker").Int()
+		if err != nil {
+			Client_worker = 5
 		}
 	}
 	section = cfg.Section("server")
@@ -78,6 +104,10 @@ func Init_conf() error {
 	if err != nil {
 		fmt.Println("Failed to save config file:", err)
 		return err
+	}
+	if Client_mode && Server_url == "" {
+		fmt.Println("Server not found")
+		os.Exit(1)
 	}
 	return err
 }
