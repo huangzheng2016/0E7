@@ -12,30 +12,29 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var conf config.Conf
 var err error
 
 func init() {
-	conf, err = config.Init_conf()
+	err = config.Init_conf()
 	if err != nil {
 		fmt.Println(err)
 	}
-	update.Init_update(conf)
+	update.Init_update()
 }
 
 func main() {
-	if conf.Server_mode {
+	if config.Server_mode {
 		r_server := gin.Default()
 		r_server.LoadHTMLGlob("template/*")
-		fmt.Println("host listening on port ", conf.Server_port)
-		route.Register(conf, r_server)
-		webui.Register(conf, r_server)
+		fmt.Println("host listening on port ", config.Server_port)
+		route.Register(r_server)
+		webui.Register(r_server)
 		update.Register(r_server)
-		go r_server.Run(":" + conf.Server_port)
+		go r_server.Run(":" + config.Server_port)
 	}
 
-	if conf.Client_mode {
-		client.Register(conf)
+	if config.Client_mode {
+		client.Register()
 	}
 
 	select {}

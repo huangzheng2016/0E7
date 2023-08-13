@@ -10,7 +10,6 @@ import (
 )
 
 var Sha256_hash []string
-var conf config.Conf
 
 func calaulateSha256(filePath string) error {
 	file, err := os.Open(filePath)
@@ -26,8 +25,7 @@ func calaulateSha256(filePath string) error {
 	Sha256_hash = append(Sha256_hash, hex.EncodeToString(sha256Sum[:]))
 	return nil
 }
-func Init_update(sconf config.Conf) {
-	conf = sconf
+func Init_update() {
 	exePath, err := os.Executable()
 	if err != nil {
 		fmt.Println(err)
@@ -36,7 +34,7 @@ func Init_update(sconf config.Conf) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	if conf.Server_mode == true {
+	if config.Server_mode == true {
 		err = calaulateSha256("0e7.exe")
 		if err != nil {
 			fmt.Println(err)

@@ -19,3 +19,7 @@
 
 # Go workspace file
 go.work
+
+# 0e7 Project
+exploit/*
+sqlite.db

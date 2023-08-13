@@ -1,6 +1,7 @@
 package update
 
 import (
+	"0E7/utils/config"
 	"bytes"
 	"fmt"
 	"io"
@@ -9,18 +10,19 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"time"
 )
 
 func downloadFile(filepath string) error {
 	values := url.Values{}
 	values.Set("platform", runtime.GOOS)
 	requestBody := bytes.NewBufferString(values.Encode())
-	request, err := http.NewRequest("POST", conf.Server_url+"/api/update", requestBody)
+	request, err := http.NewRequest("POST", config.Server_url+"/api/update", requestBody)
 	if err != nil {
 		return err
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	client := &http.Client{}
+	client := &http.Client{Timeout: time.Duration(config.Global_timeout_download) * time.Second}
 	response, err := client.Do(request)
 	if err != nil {
 		return err
@@ -39,6 +41,12 @@ func downloadFile(filepath string) error {
 }
 
 func Replace() {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("Replace Error:", err)
+		}
+	}()
+
 	var filePath string
 	if runtime.GOOS == "windows" {
 		filePath = "0e7.exe"

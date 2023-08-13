@@ -1,12 +1,13 @@
 package client
 
-import (
-	"0E7/utils/config"
-)
+var set_pipreqs map[string]bool
+var exploit_id, exploit_output map[string]string
 
-var conf config.Conf
+func Register() {
+	set_pipreqs = make(map[string]bool)
+	exploit_id = make(map[string]string)
+	exploit_output = make(map[string]string)
 
-func Register(sconf config.Conf) {
-	conf = sconf
+	heartbeat_delay = 5
 	go heartbeat()
 }

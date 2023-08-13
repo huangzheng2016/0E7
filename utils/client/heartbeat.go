@@ -1,6 +1,7 @@
 package client
 
 import (
+	"0E7/utils/config"
 	"0E7/utils/update"
 	"bytes"
 	"encoding/json"
@@ -14,7 +15,15 @@ import (
 	"time"
 )
 
+var heartbeat_delay int
+
 func heartbeat() {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("Heartbeat Error:", err)
+			go heartbeat()
+		}
+	}()
 	for true {
 		cpuInfo, err := cpu.Info()
 		if err != nil {
@@ -34,19 +43,19 @@ func heartbeat() {
 			return
 		}
 		values := url.Values{}
-		values.Set("uuid", conf.Client_uuid)
+		values.Set("uuid", config.Client_uuid)
 		values.Set("hostname", hostname.Hostname)
 		values.Set("cpu", cpuInfo[0].ModelName)
 		values.Set("cpu_use", strconv.FormatFloat(cpuPercent[0], 'f', 2, 64))
 		values.Set("memory_use", strconv.Itoa(int(memInfo.Used/1024/1024)))
 		values.Set("memory_max", strconv.Itoa(int(memInfo.Total/1024/1024)))
 		requestBody := bytes.NewBufferString(values.Encode())
-		request, err := http.NewRequest("POST", conf.Server_url+"/api/heartbeat", requestBody)
+		request, err := http.NewRequest("POST", config.Server_url+"/api/heartbeat", requestBody)
 		if err != nil {
 			fmt.Println(err)
 		}
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		client := &http.Client{}
+		client := &http.Client{Timeout: time.Duration(config.Global_timeout_http) * time.Second}
 		response, err := client.Do(request)
 		if err != nil {
 			fmt.Println(err)
@@ -64,13 +73,13 @@ func heartbeat() {
 					break
 				}
 			}
-			if found == false {
+			if found == false && config.Client_update == true {
 				fmt.Println("Try to update")
-				update.Replace()
+				go update.Replace()
 			} else {
 				exploit()
 			}
 		}
-		time.Sleep(time.Minute)
+		time.Sleep(time.Second * time.Duration(heartbeat_delay))
 	}
 }

@@ -19,11 +19,15 @@ func Init_database(section *ini.Section) (db *sql.DB, err error) {
 		password := section.Key("db_password").String()
 		tables := section.Key("db_tables").String()
 		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, host, port, tables))
-	case "sqlite3":
-		db, err = sql.Open("sqlite3", "sqlite.db")
+	//case "sqlite3":
 	default:
-		fmt.Println("Unknown database engine:", engine)
-		return db, err
+		engine = "sqlite3"
+		db, err = sql.Open("sqlite3", "sqlite.db")
+		/*
+			default:
+				fmt.Println("Unknown database engine:", engine)
+				return db, err
+		*/
 	}
 
 	if err != nil {
@@ -47,19 +51,6 @@ func init_database_client(db *sql.DB, engine string) error {
 	var stmt *sql.Stmt
 	var err error
 	switch engine {
-	case "mysql":
-		stmt, err = db.Prepare(`
-		CREATE TABLE IF NOT EXISTS '0e7_client' (
-			id INTEGER PRIMARY KEY AUTO_INCREMENT,
-			uuid TEXT NOT NULL,
-			hostname TEXT NOT NULL,
-			cpu TEXT NOT NULL,
-            cpu_use TEXT NOT NULL,
-            memory_use TEXT NOT NULL,
-            memory_max TEXT NOT NULL,
-			updated TEXT NOT NULL
-		)
-    `)
 	case "sqlite3":
 		stmt, err = db.Prepare(`
 		CREATE TABLE IF NOT EXISTS '0e7_client' (
@@ -83,11 +74,6 @@ func init_database_client(db *sql.DB, engine string) error {
 	fmt.Println("Table '0e7_client' is created successfully.")
 
 	switch engine {
-	case "mysql":
-		stmt, err = db.Prepare(`
-		
-    `)
-		//TODO: MYSQL SUPPORT
 	case "sqlite3":
 		stmt, err = db.Prepare(`
 		CREATE TABLE IF NOT EXISTS '0e7_exploit' (
@@ -99,7 +85,7 @@ func init_database_client(db *sql.DB, engine string) error {
             argv TEXT,
             platform TEXT,
             filter TEXT,
-            times INTEGER NOT NULL
+            times TEXT NOT NULL
         )
 	`)
 	}
@@ -110,6 +96,47 @@ func init_database_client(db *sql.DB, engine string) error {
 		return err
 	}
 	fmt.Println("Table '0e7_exploit' is created successfully.")
+
+	switch engine {
+	case "sqlite3":
+		stmt, err = db.Prepare(`
+		CREATE TABLE IF NOT EXISTS '0e7_flag' (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+			uuid TEXT NOT NULL,
+			flag TEXT NOT NULL,
+			status TEXT,
+			updated TEXT                 
+        )
+	`)
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec()
+	if err != nil {
+		fmt.Println("Table '0e7_flag' create failed", err)
+		return err
+	}
+	fmt.Println("Table '0e7_flag' is created successfully.")
+
+	switch engine {
+	case "sqlite3":
+		stmt, err = db.Prepare(`
+		CREATE TABLE IF NOT EXISTS '0e7_exploit_output' (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+			uuid TEXT NOT NULL,
+			client TEXT NOT NULL,
+			output TEXT,
+			status TEXT,
+			updated TEXT          
+        )
+	`)
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec()
+	if err != nil {
+		fmt.Println("Table '0e7_exploit_output' create failed", err)
+		return err
+	}
+	fmt.Println("Table '0e7_exploit_output' is created successfully.")
 
 	return err
 }
