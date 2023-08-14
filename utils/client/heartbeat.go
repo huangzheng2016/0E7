@@ -11,6 +11,7 @@ import (
 	"github.com/shirou/gopsutil/mem"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"time"
 )
@@ -24,7 +25,7 @@ func heartbeat() {
 			go heartbeat()
 		}
 	}()
-	for true {
+	for {
 		cpuInfo, err := cpu.Info()
 		if err != nil {
 			fmt.Println("Failed to get cpuInfo:", err)
@@ -45,6 +46,8 @@ func heartbeat() {
 		values := url.Values{}
 		values.Set("uuid", config.Client_uuid)
 		values.Set("hostname", hostname.Hostname)
+		values.Set("platform", runtime.GOOS)
+		values.Set("arch", runtime.GOARCH)
 		values.Set("cpu", cpuInfo[0].ModelName)
 		values.Set("cpu_use", strconv.FormatFloat(cpuPercent[0], 'f', 2, 64))
 		values.Set("memory_use", strconv.Itoa(int(memInfo.Used/1024/1024)))
@@ -60,7 +63,10 @@ func heartbeat() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		if response.StatusCode == 200 {
+		if response.StatusCode == 200 || response.StatusCode == 400 {
+			if response.StatusCode == 400 {
+				fmt.Println("Try to update manually")
+			}
 			var result map[string]interface{}
 			err = json.NewDecoder(response.Body).Decode(&result)
 			if err != nil {
@@ -68,7 +74,7 @@ func heartbeat() {
 			}
 			found := false
 			for _, hash := range result["sha256"].([]interface{}) {
-				if hash == update.Sha256_hash[0] {
+				if hash == update.Sha256Hash[0] {
 					found = true
 					break
 				}

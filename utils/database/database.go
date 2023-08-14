@@ -3,8 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/sqlite"
 	"gopkg.in/ini.v1"
 	"os"
 )
@@ -12,17 +11,19 @@ import (
 func Init_database(section *ini.Section) (db *sql.DB, err error) {
 	engine := section.Key("db_engine").String()
 	switch engine {
-	case "mysql":
-		host := section.Key("db_host").String()
-		port := section.Key("db_port").String()
-		username := section.Key("db_username").String()
-		password := section.Key("db_password").String()
-		tables := section.Key("db_tables").String()
-		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, host, port, tables))
-	//case "sqlite3":
+	/*
+		case "mysql":
+			host := section.Key("db_host").String()
+			port := section.Key("db_port").String()
+			username := section.Key("db_username").String()
+			password := section.Key("db_password").String()
+			tables := section.Key("db_tables").String()
+			db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, host, port, tables))
+		//case "sqlite3":
+	*/
 	default:
 		engine = "sqlite3"
-		db, err = sql.Open("sqlite3", "sqlite.db")
+		db, err = sql.Open("sqlite", "sqlite.db")
 		/*
 			default:
 				fmt.Println("Unknown database engine:", engine)
@@ -57,6 +58,8 @@ func init_database_client(db *sql.DB, engine string) error {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
 			uuid TEXT NOT NULL,
 			hostname TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            arch TEXT NOT NULL,
             cpu TEXT NOT NULL,
             cpu_use TEXT NOT NULL,
             memory_use TEXT NOT NULL,

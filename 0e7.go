@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var err error
@@ -21,7 +19,7 @@ func init() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	update.Init_update()
+	update.InitUpdate()
 }
 
 func main() {

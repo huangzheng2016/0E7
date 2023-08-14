@@ -16,6 +16,7 @@ import (
 func downloadFile(filepath string) error {
 	values := url.Values{}
 	values.Set("platform", runtime.GOOS)
+	values.Set("arch", runtime.GOARCH)
 	requestBody := bytes.NewBufferString(values.Encode())
 	request, err := http.NewRequest("POST", config.Server_url+"/api/update", requestBody)
 	if err != nil {
@@ -48,10 +49,9 @@ func Replace() {
 	}()
 
 	var filePath string
+	filePath = "0e7_" + runtime.GOOS + "_" + runtime.GOARCH
 	if runtime.GOOS == "windows" {
-		filePath = "0e7.exe"
-	} else if runtime.GOOS == "linux" {
-		filePath = "0e7"
+		filePath += ".exe"
 	}
 	err := downloadFile(filePath)
 	if err != nil {
@@ -65,11 +65,11 @@ func Replace() {
 	}
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd.exe", "/C", "start", "new_0e7.exe")
+		cmd = exec.Command("cmd.exe", "/C", "start", "new_"+filePath)
 	} else {
-		cmd = exec.Command("nohup ", "./0e7")
+		cmd = exec.Command("nohup", "./"+"new_"+filePath, "&")
 	}
-	fmt.Println(wdPath)
+	//fmt.Println(wdPath)
 	cmd.Dir = wdPath
 	err = cmd.Start()
 	if err != nil {
