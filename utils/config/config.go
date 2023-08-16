@@ -130,7 +130,6 @@ func Init_conf() error {
 
 func generator_key() {
 	if _, err := os.Stat("cert"); os.IsNotExist(err) {
-		// 目录不存在，创建目录
 		err := os.Mkdir("cert", 0660)
 		if err != nil {
 			fmt.Println("Error to create cert folder:", err)
@@ -150,13 +149,17 @@ func generator_key() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = ioutil.WriteFile("cert/private.key", encodePrivateKeyToPEM(privateKey), 0600)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = ioutil.WriteFile("cert/certificate.crt", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}), 0644)
-	if err != nil {
-		log.Fatal(err)
+	_, err1 := os.Stat("cert/private.key")
+	_, err2 := os.Stat("cert/certificate.crt")
+	if os.IsNotExist(err1) || os.IsNotExist(err2) {
+		err = ioutil.WriteFile("cert/private.key", encodePrivateKeyToPEM(privateKey), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = ioutil.WriteFile("cert/certificate.crt", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}), 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 

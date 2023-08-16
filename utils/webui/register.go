@@ -10,7 +10,7 @@ func Register(router *gin.Engine) {
 
 	router.POST("/webui/exploit/rename", exploit_rename)
 
-	router.POST("/api/exploit_show_output", exploit_show_output)
+	router.POST("/webui/exploit_show_output", exploit_show_output)
 
 	router.Static("/assets", "dist/assets")
 	router.Static("/js", "dist/js")
