@@ -39,7 +39,7 @@ func main() {
 		} else {
 			go r_server.Run(":" + config.Server_port)
 		}
-		go udpcast.Udp_sent(config.Server_port)
+		go udpcast.Udp_sent(config.Server_tls, config.Server_port)
 	}
 
 	if config.Client_mode {

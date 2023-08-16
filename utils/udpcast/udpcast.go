@@ -1,18 +1,17 @@
 package udpcast
 
 import (
-	"0E7/utils/config"
 	"fmt"
 	"net"
 	"strings"
 	"time"
 )
 
-func Udp_sent(server_port string) {
+func Udp_sent(server_tls bool, server_port string) {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("UDPCAST ERROR:", err)
-			go Udp_sent(server_port)
+			go Udp_sent(server_tls, server_port)
 		}
 	}()
 	for true {
@@ -29,7 +28,7 @@ func Udp_sent(server_port string) {
 		defer conn.Close()
 
 		var message []byte
-		if config.Server_tls {
+		if server_tls {
 			message = []byte("0E7" + "s" + server_port)
 		} else {
 			message = []byte("0E7" + "n" + server_port)
@@ -55,7 +54,7 @@ func Udp_receive() string {
 	}
 	defer conn.Close()
 
-	timeout := time.Minute
+	timeout := 120 * time.Second
 	conn.SetDeadline(time.Now().Add(timeout))
 
 	buffer := make([]byte, 1024)
