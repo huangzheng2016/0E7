@@ -1,6 +1,7 @@
 package udpcast
 
 import (
+	"0E7/utils/config"
 	"fmt"
 	"net"
 	"strings"
@@ -26,7 +27,13 @@ func Udp_sent(server_port string) {
 			return
 		}
 		defer conn.Close()
-		message := []byte("0E7" + server_port)
+
+		var message []byte
+		if config.Server_tls {
+			message = []byte("0E7" + "s" + server_port)
+		} else {
+			message = []byte("0E7" + "n" + server_port)
+		}
 		_, err = conn.Write(message)
 		if err != nil {
 			fmt.Printf("UDPCAST ERROR: %s\n", err.Error())
@@ -60,7 +67,11 @@ func Udp_receive() string {
 	message := string(buffer[:n])
 	if strings.HasPrefix(message, "0E7") {
 		fmt.Println("SERVER IP REVEIVED")
-		return "http://" + addr.IP.String() + ":" + message[3:]
+		if message[3] == 's' {
+			return "https://" + addr.IP.String() + ":" + message[4:]
+		} else {
+			return "http://" + addr.IP.String() + ":" + message[4:]
+		}
 	} else {
 		return ""
 	}

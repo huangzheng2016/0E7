@@ -3,6 +3,7 @@ package update
 import (
 	"0E7/utils/config"
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,7 +24,8 @@ func downloadFile(filepath string) error {
 		return err
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	client := &http.Client{Timeout: time.Duration(config.Global_timeout_download) * time.Second}
+	client := &http.Client{Timeout: time.Duration(config.Global_timeout_download) * time.Second,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 	response, err := client.Do(request)
 	if err != nil {
 		return err

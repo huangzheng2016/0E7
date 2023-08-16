@@ -33,7 +33,12 @@ func main() {
 		route.Register(r_server)
 		webui.Register(r_server)
 		update.Register(r_server)
-		go r_server.Run(":" + config.Server_port)
+
+		if config.Server_tls == true {
+			go r_server.RunTLS(":"+config.Server_port, "cert/certificate.crt", "cert/private.key")
+		} else {
+			go r_server.Run(":" + config.Server_port)
+		}
 		go udpcast.Udp_sent(config.Server_port)
 	}
 

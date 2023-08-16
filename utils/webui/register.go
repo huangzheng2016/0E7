@@ -10,7 +10,9 @@ func Register(router *gin.Engine) {
 
 	router.POST("/webui/exploit/rename", exploit_rename)
 
-	router.Static("/assets", "./frontend/dist/assets")
-	router.Static("/js", "./frontend/dist/js")
-	router.StaticFile("/", "./frontend/dist/index.html")
+	router.POST("/api/exploit_show_output", exploit_show_output)
+
+	router.Static("/assets", "dist/assets")
+	router.Static("/js", "dist/js")
+	router.StaticFile("/", "dist/index.html")
 }

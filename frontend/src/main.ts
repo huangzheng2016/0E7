@@ -70,7 +70,7 @@ const store = createStore({
       },
       payload: { uuid: string; content: string; STATUS: string; intv?: number }
     ) {
-      fetch("/api/exploit_show_output", {
+      fetch("/webui/exploit_show_output", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

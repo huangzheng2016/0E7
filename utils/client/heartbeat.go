@@ -4,6 +4,7 @@ import (
 	"0E7/utils/config"
 	"0E7/utils/update"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/shirou/gopsutil/cpu"
@@ -58,7 +59,8 @@ func heartbeat() {
 			fmt.Println(err)
 		}
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		client := &http.Client{Timeout: time.Duration(config.Global_timeout_http) * time.Second}
+		client := &http.Client{Timeout: time.Duration(config.Global_timeout_http) * time.Second,
+			Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 		response, err := client.Do(request)
 		if err != nil {
 			fmt.Println(err)

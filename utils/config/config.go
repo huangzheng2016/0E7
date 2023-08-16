@@ -3,11 +3,19 @@ package config
 import (
 	"0E7/utils/database"
 	"0E7/utils/udpcast"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"database/sql"
+	"encoding/pem"
 	"fmt"
 	"github.com/google/uuid"
 	"gopkg.in/ini.v1"
+	"io/ioutil"
+	"log"
+	"math/big"
 	"os"
+	"time"
 )
 
 var Global_timeout_http int
@@ -15,6 +23,7 @@ var Global_timeout_download int
 
 var Db *sql.DB
 var Server_mode bool
+var Server_tls bool
 var Server_port string
 var Server_url string
 var Server_flag string
@@ -95,6 +104,13 @@ func Init_conf() error {
 		Server_mode = false
 	}
 	if Server_mode {
+		Server_tls, err = section.Key("tls").Bool()
+		if err != nil {
+			Server_tls = true
+		}
+		if Server_tls == true {
+			generator_key()
+		}
 		Db, err = database.Init_database(section)
 		Server_port = section.Key("port").String()
 		Server_url = section.Key("server_url").String()
@@ -110,4 +126,44 @@ func Init_conf() error {
 		os.Exit(1)
 	}
 	return err
+}
+
+func generator_key() {
+	if _, err := os.Stat("cert"); os.IsNotExist(err) {
+		// 目录不存在，创建目录
+		err := os.Mkdir("cert", 0660)
+		if err != nil {
+			fmt.Println("Error to create cert folder:", err)
+		}
+	}
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		log.Fatal(err)
+	}
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(1, 0, 0), // 有效期为一年
+		BasicConstraintsValid: true,
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = ioutil.WriteFile("cert/private.key", encodePrivateKeyToPEM(privateKey), 0600)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = ioutil.WriteFile("cert/certificate.crt", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}), 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func encodePrivateKeyToPEM(privateKey *rsa.PrivateKey) []byte {
+	privateKeyPEM := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+	return pem.EncodeToMemory(privateKeyPEM)
 }
