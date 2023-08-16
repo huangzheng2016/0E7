@@ -46,5 +46,9 @@ func main() {
 		client.Register()
 	}
 
-	select {}
+	if config.Client_mode || config.Server_mode {
+		select {}
+	} else {
+		fmt.Println("Please check the configuration file")
+	}
 }

@@ -30,10 +30,10 @@ const beforeUpload: UploadProps['beforeUpload'] = (rawFile) => {
             position: 'bottom-right',
         })
         return false
-    } else if (rawFile.size / 1024 / 1024 > 10) {
+    } else if (rawFile.size / 1024 / 1024 > 1024) {
         ElNotification({
             title: 'Upload Failed',
-            message: 'The file size cannot exceed 10MB!',
+            message: 'The file size cannot exceed 1024MB!',
             type: 'error',
             position: 'bottom-right',
         })
