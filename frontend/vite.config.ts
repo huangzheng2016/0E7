@@ -3,8 +3,6 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-const YOUR_HOST_ADDRESS = 'http://localhost:8080'
-
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -13,21 +11,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
-  },
-  server: {
-    port: 3000,
-    proxy: {
-      '/api/submit': {
-        target: `${YOUR_HOST_ADDRESS}/webui/exploit`,
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/submit/, '')
-      },
-      '/api/list': {
-        target: `${YOUR_HOST_ADDRESS}/api/exploit_show_output`,
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/list/, '')
-      }
     }
   },
   build:{

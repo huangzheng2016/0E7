@@ -1,7 +1,9 @@
 import "./assets/main.css";
 
 import { createApp } from "vue";
+// @ts-ignore
 import { createStore } from "vuex";
+// @ts-ignore
 import App from "./App.vue";
 import ElementPlus, { ElNotification } from "element-plus";
 import "element-plus/dist/index.css";
@@ -68,7 +70,7 @@ const store = createStore({
       },
       payload: { uuid: string; content: string; STATUS: string; intv?: number }
     ) {
-      fetch("/api/list", {
+      fetch("/api/exploit_show_output", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

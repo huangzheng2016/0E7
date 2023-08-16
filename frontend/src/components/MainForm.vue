@@ -10,6 +10,7 @@ const form = ref({
     command: '',
     argv: '',
     platform: '',
+    arch: '',
     filter: '',
     times: '1'
 })
@@ -100,6 +101,10 @@ const error_notice = () => {
         <el-form-item label="Platform">
             <el-input name="platform" v-model="form.platform" />
         </el-form-item>
+
+        <el-form-item label="Arch">
+            <el-input name="Arch" v-model="form.arch" />
+        </el-form-item>
         <el-form-item label="Filter">
             <el-input name="filter" v-model="form.filter" />
         </el-form-item>
@@ -107,7 +112,7 @@ const error_notice = () => {
             <el-input-number :min="-2" :max="10" v-model="form.times" />
         </el-form-item>
     </ElForm>
-    <el-upload class="upload-demo" drag action="/api/submit" :auto-upload="false" :data="form" ref="uploadRef"
+    <el-upload class="upload-demo" drag action="/webui/exploit" :auto-upload="false" :data="form" ref="uploadRef"
         :on-success="success_notice" :before-upload="beforeUpload" :on-exceed="handleExceed" :on-change="fileChange"
         :on-error="error_notice">
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>

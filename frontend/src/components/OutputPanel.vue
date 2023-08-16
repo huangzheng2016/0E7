@@ -147,7 +147,7 @@ const showHelp = () => {
 }
 
 const get_list = async () => {
-    const res = await fetch('/api/list', {
+    const res = await fetch('/api/exploit_show_output', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'

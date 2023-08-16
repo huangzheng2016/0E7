@@ -29,7 +29,6 @@ func main() {
 		r_server := gin.Default()
 		r_server.Use(gin.Recovery())
 		r_server.Use(gzip.Gzip(gzip.DefaultCompression))
-		r_server.LoadHTMLGlob("template/*")
 		fmt.Println("host listening on port ", config.Server_port)
 		route.Register(r_server)
 		webui.Register(r_server)
