@@ -47,6 +47,10 @@ func Udp_receive() string {
 		return ""
 	}
 	defer conn.Close()
+
+	timeout := time.Minute
+	conn.SetDeadline(time.Now().Add(timeout))
+
 	buffer := make([]byte, 1024)
 	n, addr, err := conn.ReadFromUDP(buffer)
 	if err != nil {

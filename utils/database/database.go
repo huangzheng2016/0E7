@@ -87,6 +87,7 @@ func init_database_client(db *sql.DB, engine string) error {
             command TEXT,
             argv TEXT,
             platform TEXT,
+            arch TEXT,
             filter TEXT,
             times TEXT NOT NULL
         )
