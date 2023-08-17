@@ -82,7 +82,7 @@ func init_database_client(db *sql.DB, engine string) error {
 		CREATE TABLE IF NOT EXISTS '0e7_exploit' (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
 			uuid TEXT NOT NULL,
-			filename TEXT NOT NULL,
+			filename TEXT,
 			environment TEXT,
             command TEXT,
             argv TEXT,
