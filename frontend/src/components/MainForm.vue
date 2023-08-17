@@ -17,7 +17,7 @@ const form = ref({
 
 const store = useStore()
 
-const uploadRef = ref < UploadInstance > ()
+const uploadRef = ref<UploadInstance>()
 
 const beforeUpload: UploadProps['beforeUpload'] = (rawFile) => {
     let name = rawFile.name
@@ -60,7 +60,7 @@ const submit = () => {
     uploadRef.value?.submit()
 }
 
-const success_notice = (res:{
+const success_notice = (res: {
     message: string,
     exploit_uuid: string
 }) => {
@@ -99,17 +99,26 @@ const error_notice = () => {
             <el-input name="argv" v-model="form.argv" />
         </el-form-item>
         <el-form-item label="Platform">
-            <el-input name="platform" v-model="form.platform" />
+            <el-select v-model="form.platform" placeholder="windows">
+                <el-option label="windows" value="windows" />
+                <el-option label="freebsd" value="freebsd" />
+                <el-option label="linux" value="linux" />
+                <el-option label="darwin" value="darwin" />
+            </el-select>
         </el-form-item>
 
         <el-form-item label="Arch">
-            <el-input name="Arch" v-model="form.arch" />
+            <el-select v-model="form.arch" placeholder="amd64">
+                <el-option label="amd64" value="amd64" />
+                <el-option label="386" value="386" />
+                <el-option label="arm64" value="arm64" />
+            </el-select>
         </el-form-item>
         <el-form-item label="Filter">
             <el-input name="filter" v-model="form.filter" />
         </el-form-item>
         <el-form-item label="Times">
-            <el-input-number :min="-2" :max="10" v-model="form.times" />
+            <el-input-number :min="-2" :max="10" v-model="form.times" class="el-input-number" />
         </el-form-item>
     </ElForm>
     <el-upload class="upload-demo" drag action="/webui/exploit" :auto-upload="false" :data="form" ref="uploadRef"
@@ -130,14 +139,18 @@ const error_notice = () => {
 
 <style>
 @media screen and (max-width: 430px) {
-    .el-input {
-        width: 56vw;
+
+    .el-input,
+    .el-input-number {
+        width: 56vw !important;
     }
 }
 
 @media screen and (min-width: 430px) {
-    .el-input {
-        width: 245px;
+
+    .el-input,
+    .el-input-number {
+        width: 245px !important;
     }
 }
 
@@ -153,5 +166,4 @@ const error_notice = () => {
 
 .el-button {
     width: 100%;
-}
-</style>
+}</style>
