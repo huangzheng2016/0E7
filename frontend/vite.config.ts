@@ -26,9 +26,15 @@ export default defineConfig({
           }
         },
         chunkFileNames: (chunkInfo) => {
-          const facadeModuleId = chunkInfo.facadeModuleId ? chunkInfo.facadeModuleId.split('/') : [];
-          const fileName = facadeModuleId[facadeModuleId.length - 2] || '[name]';
-          return `js/${fileName}/[name].[hash].js`;
+          let fileName = chunkInfo.name || '[name]';
+          if(fileName[0]==='.') fileName = fileName.slice(1);
+          console.log('fl:'+fileName);
+          return `js/${fileName}.[hash].js`;
+        },
+        assetFileNames: (assetInfo) => {
+          let fileName = assetInfo.name || '[name]';
+          if(fileName[0]==='.') fileName = fileName.slice(1);
+          return `css/${fileName}.[hash][extname]`;
         }
       }
     }
