@@ -130,6 +130,7 @@ const error_notice = () => {
         </el-form-item>
         <el-form-item label="Platform">
             <el-select v-model="form.platform">
+                <el-option label="ALL" value="" />
                 <el-option label="windows" value="windows" />
                 <el-option label="freebsd" value="freebsd" />
                 <el-option label="linux" value="linux" />
@@ -139,6 +140,7 @@ const error_notice = () => {
 
         <el-form-item label="Arch">
             <el-select v-model="form.arch">
+                <el-option label="ALL" value="" />
                 <el-option label="amd64" value="amd64" />
                 <el-option label="386" value="386" />
                 <el-option label="arm64" value="arm64" />
