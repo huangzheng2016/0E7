@@ -23,6 +23,7 @@ func init() {
 }
 
 func main() {
+	fmt.Println("0E7 for Security")
 	update.CheckStatus()
 
 	if config.Server_mode {
