@@ -12,8 +12,10 @@ const form = ref({
     platform: '',
     arch: '',
     filter: '',
-    times: '1'
+    times: 1
 })
+
+const hasFile = ref(false)
 
 const store = useStore()
 
@@ -49,15 +51,43 @@ const handleExceed: UploadProps['onExceed'] = (files) => {
     uploadRef.value!.handleStart(file)
 }
 
-const fileChange = (file: UploadRawFile) => {
+const fileChange:UploadProps['onChange'] = (file, files) => {
+    hasFile.value = files.length > 0
     let name = file.name
     if (name.endsWith('.zip') || name.endsWith('.tar')) {
         form.value.environment = 'auto_pipreqs=True;'
     }
 }
 
+const fileRemove: UploadProps['onRemove'] = (file, files) => {
+    hasFile.value = files.length > 0
+}
+
 const submit = () => {
-    uploadRef.value?.submit()
+    if (hasFile.value) {
+        uploadRef.value?.submit()
+    } else if (form.value.command !== '') {
+        const formData = new FormData();
+        for (const [key, value] of Object.entries(form.value)) {
+            formData.append(key, String(value));
+        }
+        fetch('/webui/exploit', {
+            method: 'POST',
+            body: formData
+        }).then(res => res.json()).then(res => {
+            success_notice(res)
+        }).catch(_err => {
+            error_notice()
+        })
+    }
+    else {
+        ElNotification({
+            title: '你必须先上传一个文件或者指定指令！',
+            message: 'Please upload a file first!',
+            type: 'error',
+            position: 'bottom-right',
+        })
+    }
 }
 
 const success_notice = (res: {
@@ -99,7 +129,7 @@ const error_notice = () => {
             <el-input name="argv" v-model="form.argv" />
         </el-form-item>
         <el-form-item label="Platform">
-            <el-select v-model="form.platform" placeholder="windows">
+            <el-select v-model="form.platform">
                 <el-option label="windows" value="windows" />
                 <el-option label="freebsd" value="freebsd" />
                 <el-option label="linux" value="linux" />
@@ -108,7 +138,7 @@ const error_notice = () => {
         </el-form-item>
 
         <el-form-item label="Arch">
-            <el-select v-model="form.arch" placeholder="amd64">
+            <el-select v-model="form.arch">
                 <el-option label="amd64" value="amd64" />
                 <el-option label="386" value="386" />
                 <el-option label="arm64" value="arm64" />
@@ -123,16 +153,11 @@ const error_notice = () => {
     </ElForm>
     <el-upload class="upload-demo" drag action="/webui/exploit" :auto-upload="false" :data="form" ref="uploadRef"
         :on-success="success_notice" :before-upload="beforeUpload" :on-exceed="handleExceed" :on-change="fileChange"
-        :on-error="error_notice">
+        :on-error="error_notice" :on-remove="fileRemove" :multiple="false">
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
         <div class="el-upload__text">
             拖动文件到此处,或者<em>点击此处上传</em>
         </div>
-        <template #tip>
-            <div class="el-upload__tip">
-                只能上传一个Python文件或者压缩文件,且不超过10MB
-            </div>
-        </template>
     </el-upload>
     <el-button type="primary" class="ml-3" @click="submit">提交</el-button>
 </template>
@@ -166,4 +191,5 @@ const error_notice = () => {
 
 .el-button {
     width: 100%;
-}</style>
+}
+</style>
