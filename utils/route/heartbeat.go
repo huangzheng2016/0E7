@@ -32,7 +32,7 @@ func heartbeat(c *gin.Context) {
 		if err != nil {
 			c.JSON(400, gin.H{
 				"message": "fail",
-				"err":     err,
+				"err":     err.Error(),
 				"sha256":  update.Sha256Hash,
 			})
 			c.Abort()

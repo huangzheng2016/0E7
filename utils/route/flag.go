@@ -17,6 +17,7 @@ func flag(c *gin.Context) {
 		fmt.Println("Failed to query database:", err)
 		c.JSON(400, gin.H{
 			"message": "fail",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -24,11 +25,13 @@ func flag(c *gin.Context) {
 		_, err = config.Db.Exec("INSERT INTO `0e7_flag` (uuid,flag,updated) VALUES (?,?,?)", exploit_uuid, exploit_flag, updated)
 		c.JSON(200, gin.H{
 			"message": "success",
+			"error":   "",
 		})
 	} else {
 		_, err = config.Db.Exec("INSERT INTO `0e7_flag` (uuid,flag,status,udpated) VALUES (?,?,?,?)", exploit_uuid, exploit_flag, "SKIPPED", updated)
-		c.JSON(204, gin.H{
-			"message": "SKIPPED",
+		c.JSON(202, gin.H{
+			"message": "skipped",
+			"error":   "",
 		})
 	}
 }

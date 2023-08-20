@@ -5,11 +5,8 @@ import (
 )
 
 func Register(router *gin.Engine) {
-	router.GET("/webui/exploit", exploit)
 	router.POST("/webui/exploit", exploit)
-
-	router.POST("/webui/exploit/rename", exploit_rename)
-
+	router.POST("/webui/exploit_rename", exploit_rename)
 	router.POST("/webui/exploit_show_output", exploit_show_output)
 
 	router.Static("/assets", "dist/assets")
