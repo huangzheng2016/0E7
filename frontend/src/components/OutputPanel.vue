@@ -60,8 +60,8 @@ var commands: {
     }
 };
 
+const fitAddon = new FitAddon();
 onMounted(() => {
-    const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
     terminal = new Terminal({
         fontSize: 14,
@@ -73,7 +73,9 @@ onMounted(() => {
     terminal.loadAddon(webLinksAddon);
     terminal.loadAddon(fitAddon);
     terminal.open(document.getElementById('terminal')!);
-    fitAddon.fit();
+    setTimeout(() => {
+        fitAddon.fit();
+    }, 100);
     terminal.writeln([
         '   \x1b[3m Remote Execution Tool\x1b[0m is a tool that can execute python code online!',
         '',
@@ -134,7 +136,7 @@ onMounted(() => {
         }
         prompt(term);
     }
-
+    onTerminalResize()
 });
 
 const showHelp = () => {
@@ -174,6 +176,27 @@ const get_list = async () => {
     prompt(terminal);
 }
 
+// const debounce=(fn:()=>void,wait:number|undefined)=>{
+//     let timer:NodeJS.Timeout | null=null;
+//     return function(){
+//         if(timer !== null){
+//             clearTimeout(timer);
+//         }
+//         timer = setTimeout(fn,wait);
+//     }
+// }
+
+const onResize = () =>
+//debounce(
+{
+    fitAddon.fit()
+    console.log(1)
+}
+//, 500)
+
+const onTerminalResize = () => {
+    window.addEventListener('resize', onResize)
+}
 </script>
 <template>
     <div id="console-wrapper">
