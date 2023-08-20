@@ -4,8 +4,8 @@ import (
 	"0E7/utils/config"
 	"bytes"
 	"crypto/tls"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -46,7 +46,7 @@ func downloadFile(filepath string) error {
 func Replace() {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("Replace Error:", err)
+			log.Println("Replace Error:", err)
 		}
 	}()
 
@@ -57,12 +57,12 @@ func Replace() {
 	}
 	err := downloadFile(filePath)
 	if err != nil {
-		fmt.Println("File download error", err)
+		log.Println("File download error", err)
 		return
 	}
 	wdPath, err := os.Getwd()
 	if err != nil {
-		fmt.Println("exePath read fail", err)
+		log.Println("exePath read fail", err)
 		return
 	}
 	var cmd *exec.Cmd
@@ -71,11 +71,11 @@ func Replace() {
 	} else {
 		cmd = exec.Command("nohup", "./"+"new_"+filePath, "&")
 	}
-	//fmt.Println(wdPath)
+	//log.Println(wdPath)
 	cmd.Dir = wdPath
 	err = cmd.Start()
 	if err != nil {
-		fmt.Println("Replace fail", err)
+		log.Println("Replace fail", err)
 		return
 	}
 	os.Exit(0)

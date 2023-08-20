@@ -2,9 +2,9 @@ package database
 
 import (
 	"database/sql"
-	"fmt"
 	_ "github.com/glebarez/sqlite"
 	"gopkg.in/ini.v1"
+	"log"
 	"os"
 )
 
@@ -18,7 +18,7 @@ func Init_database(section *ini.Section) (db *sql.DB, err error) {
 			username := section.Key("db_username").String()
 			password := section.Key("db_password").String()
 			tables := section.Key("db_tables").String()
-			db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, host, port, tables))
+			db, err = sql.Open("mysql", log.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, host, port, tables))
 		//case "sqlite3":
 	*/
 	default:
@@ -26,23 +26,23 @@ func Init_database(section *ini.Section) (db *sql.DB, err error) {
 		db, err = sql.Open("sqlite", "sqlite.db")
 		/*
 			default:
-				fmt.Println("Unknown database engine:", engine)
+				log.Println("Unknown database engine:", engine)
 				return db, err
 		*/
 	}
 
 	if err != nil {
-		fmt.Println("Failed to open database:", err)
+		log.Println("Failed to open database: ", err)
 		return db, err
 	}
 
 	err = db.Ping()
 	if err != nil {
-		fmt.Println("Failed to connect to database:", err)
+		log.Println("Failed to connect to database:", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("Connected to database:", engine)
+	log.Println("Connected to database:", engine)
 
 	init_database_client(db, engine)
 	return db, err
@@ -71,10 +71,10 @@ func init_database_client(db *sql.DB, engine string) error {
 	defer stmt.Close()
 	_, err = stmt.Exec()
 	if err != nil {
-		fmt.Println("Table '0e7_client' create failed", err)
+		log.Println("Table '0e7_client' create failed", err)
 		return err
 	}
-	fmt.Println("Table '0e7_client' is created successfully.")
+	log.Println("Table '0e7_client' is created successfully.")
 
 	switch engine {
 	case "sqlite3":
@@ -96,10 +96,10 @@ func init_database_client(db *sql.DB, engine string) error {
 	defer stmt.Close()
 	_, err = stmt.Exec()
 	if err != nil {
-		fmt.Println("Table '0e7_exploit' create failed", err)
+		log.Println("Table '0e7_exploit' create failed", err)
 		return err
 	}
-	fmt.Println("Table '0e7_exploit' is created successfully.")
+	log.Println("Table '0e7_exploit' is created successfully.")
 
 	switch engine {
 	case "sqlite3":
@@ -116,10 +116,10 @@ func init_database_client(db *sql.DB, engine string) error {
 	defer stmt.Close()
 	_, err = stmt.Exec()
 	if err != nil {
-		fmt.Println("Table '0e7_flag' create failed", err)
+		log.Println("Table '0e7_flag' create failed", err)
 		return err
 	}
-	fmt.Println("Table '0e7_flag' is created successfully.")
+	log.Println("Table '0e7_flag' is created successfully.")
 
 	switch engine {
 	case "sqlite3":
@@ -137,10 +137,10 @@ func init_database_client(db *sql.DB, engine string) error {
 	defer stmt.Close()
 	_, err = stmt.Exec()
 	if err != nil {
-		fmt.Println("Table '0e7_exploit_output' create failed", err)
+		log.Println("Table '0e7_exploit_output' create failed", err)
 		return err
 	}
-	fmt.Println("Table '0e7_exploit_output' is created successfully.")
+	log.Println("Table '0e7_exploit_output' is created successfully.")
 
 	return err
 }

@@ -3,8 +3,8 @@ package route
 import (
 	"0E7/utils/config"
 	"0E7/utils/update"
-	"fmt"
 	"github.com/gin-gonic/gin"
+	"log"
 	"time"
 )
 
@@ -18,11 +18,19 @@ func heartbeat(c *gin.Context) {
 	memory_use := c.PostForm("memory_use")
 	memory_max := c.PostForm("memory_max")
 	updated := time.Now().Format(time.DateTime)
-
+	if hostname == "" || platform == "" || arch == "" || cpu == "" || cpu_use == "" || memory_use == "" || memory_max == "" {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "missing parameters",
+			"sha256":  update.Sha256Hash,
+		})
+		c.Abort()
+		return
+	}
 	var count int
 	err := config.Db.QueryRow("SELECT COUNT(*) FROM `0e7_client` WHERE uuid=? AND platform=? AND arch=?", client_uuid, platform, arch).Scan(&count)
 	if err != nil {
-		fmt.Println("Failed to query database:", err)
+		log.Println("Failed to query database:", err)
 	} else {
 		if count == 0 {
 			_, err = config.Db.Exec("INSERT INTO `0e7_client` (uuid,hostname,platform,arch,cpu,cpu_use,memory_use,memory_max,updated) VALUES (?,?,?,?,?,?,?,?,?)", client_uuid, hostname, platform, arch, cpu, cpu_use, memory_use, memory_max, updated)
@@ -32,7 +40,7 @@ func heartbeat(c *gin.Context) {
 		if err != nil {
 			c.JSON(400, gin.H{
 				"message": "fail",
-				"err":     err.Error(),
+				"error":   err.Error(),
 				"sha256":  update.Sha256Hash,
 			})
 			c.Abort()
@@ -40,7 +48,7 @@ func heartbeat(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{
 		"message": "success",
-		"err":     "",
+		"error":   "",
 		"sha256":  update.Sha256Hash,
 	})
 }

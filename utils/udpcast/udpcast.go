@@ -1,7 +1,7 @@
 package udpcast
 
 import (
-	"fmt"
+	"log"
 	"net"
 	"strings"
 	"time"
@@ -10,7 +10,7 @@ import (
 func Udp_sent(server_tls bool, server_port string) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("UDPCAST ERROR:", err)
+			log.Println("UDPCAST ERROR:", err)
 			go Udp_sent(server_tls, server_port)
 		}
 	}()
@@ -22,7 +22,7 @@ func Udp_sent(server_tls bool, server_port string) {
 			Port: port,
 		})
 		if err != nil {
-			fmt.Printf("UDPCAST ERROR: %s\n", err.Error())
+			log.Printf("UDPCAST ERROR: %s\n", err.Error())
 			return
 		}
 		defer conn.Close()
@@ -35,21 +35,21 @@ func Udp_sent(server_tls bool, server_port string) {
 		}
 		_, err = conn.Write(message)
 		if err != nil {
-			fmt.Printf("UDPCAST ERROR: %s\n", err.Error())
+			log.Printf("UDPCAST ERROR: %s\n", err.Error())
 			return
 		}
-		//fmt.Println("UDPCAST SENT")
+		//log.Println("UDPCAST SENT")
 		time.Sleep(time.Second)
 	}
 }
 func Udp_receive() string {
-	fmt.Println("SERVER NOT FOUND,WAIT FOR UDP CAST")
+	log.Println("SERVER NOT FOUND,WAIT FOR UDP CAST")
 	port := 6102
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{
 		Port: port,
 	})
 	if err != nil {
-		fmt.Printf("UDPCAST ERROR: %s\n", err.Error())
+		log.Printf("UDPCAST ERROR: %s\n", err.Error())
 		return ""
 	}
 	defer conn.Close()
@@ -60,12 +60,12 @@ func Udp_receive() string {
 	buffer := make([]byte, 1024)
 	n, addr, err := conn.ReadFromUDP(buffer)
 	if err != nil {
-		fmt.Printf("UDPCAST ERROR: %s\n", err.Error())
+		log.Printf("UDPCAST ERROR: %s\n", err.Error())
 		return ""
 	}
 	message := string(buffer[:n])
 	if strings.HasPrefix(message, "0E7") {
-		fmt.Println("SERVER IP REVEIVED")
+		log.Println("SERVER IP REVEIVED")
 		if message[3] == 's' {
 			return "https://" + addr.IP.String() + ":" + message[4:]
 		} else {

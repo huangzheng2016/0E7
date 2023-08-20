@@ -2,7 +2,6 @@ package route
 
 import (
 	"0E7/utils/config"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"time"
 )
@@ -14,7 +13,6 @@ func flag(c *gin.Context) {
 	var count int
 	err := config.Db.QueryRow("SELECT COUNT(*) FROM `0e7_flag` WHERE flag=?", exploit_flag).Scan(&count)
 	if err != nil {
-		fmt.Println("Failed to query database:", err)
 		c.JSON(400, gin.H{
 			"message": "fail",
 			"error":   err.Error(),

@@ -6,10 +6,10 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
+	"log"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -22,26 +22,26 @@ var heartbeat_delay int
 func heartbeat() {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("Heartbeat Error:", err)
+			log.Println("Heartbeat Error:", err)
 			go heartbeat()
 		}
 	}()
 	for {
 		cpuInfo, err := cpu.Info()
 		if err != nil {
-			fmt.Println("Failed to get cpuInfo:", err)
+			log.Println("Failed to get cpuInfo:", err)
 		}
 		memInfo, err := mem.VirtualMemory()
 		if err != nil {
-			fmt.Println("Failed to get memInfo:", err)
+			log.Println("Failed to get memInfo:", err)
 		}
 		cpuPercent, err := cpu.Percent(time.Second, false)
 		if err != nil {
-			fmt.Println("Failed to get cpuPercent:", err)
+			log.Println("Failed to get cpuPercent:", err)
 		}
 		hostname, err := host.Info()
 		if err != nil {
-			fmt.Println("Failed to get hostname:", err)
+			log.Println("Failed to get hostname:", err)
 			return
 		}
 		values := url.Values{}
@@ -56,23 +56,23 @@ func heartbeat() {
 		requestBody := bytes.NewBufferString(values.Encode())
 		request, err := http.NewRequest("POST", config.Server_url+"/api/heartbeat", requestBody)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 		}
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		client := &http.Client{Timeout: time.Duration(config.Global_timeout_http) * time.Second,
 			Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 		response, err := client.Do(request)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 		}
 		if response.StatusCode == 200 || response.StatusCode == 400 {
 			if response.StatusCode == 400 {
-				fmt.Println("Try to update manually")
+				log.Println("Try to update manually")
 			}
 			var result map[string]interface{}
 			err = json.NewDecoder(response.Body).Decode(&result)
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 			}
 			found := false
 			for _, hash := range result["sha256"].([]interface{}) {
@@ -82,7 +82,7 @@ func heartbeat() {
 				}
 			}
 			if found == false && config.Client_update == true {
-				fmt.Println("Try to update")
+				log.Println("Try to update")
 				go update.Replace()
 			} else {
 				jobsMutex.Lock()

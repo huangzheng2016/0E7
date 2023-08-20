@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"database/sql"
 	"encoding/pem"
-	"fmt"
 	"github.com/google/uuid"
 	"gopkg.in/ini.v1"
 	"io/ioutil"
@@ -20,6 +19,7 @@ import (
 
 var Global_timeout_http int
 var Global_timeout_download int
+var Global_debug bool
 
 var Db *sql.DB
 var Server_mode bool
@@ -38,13 +38,13 @@ func Init_conf() error {
 	if err != nil {
 		file, err := os.Create("config.ini")
 		if err != nil {
-			fmt.Println("Create error", err)
+			log.Println("Create error", err)
 			os.Exit(1)
 		}
 		defer file.Close()
 		cfg, err = ini.Load("config.ini")
 		if err != nil {
-			fmt.Println("Failed to load config file:", err)
+			log.Println("Failed to load config file:", err)
 			os.Exit(1)
 		}
 	}
@@ -57,6 +57,10 @@ func Init_conf() error {
 	Global_timeout_download, err = section.Key("timeout_download").Int()
 	if err != nil {
 		Global_timeout_download = 60
+	}
+	Global_debug, err = section.Key("debug").Bool()
+	if err != nil {
+		Client_mode = false
 	}
 
 	section = cfg.Section("client")
@@ -118,11 +122,11 @@ func Init_conf() error {
 	}
 	err = cfg.SaveTo("config.ini")
 	if err != nil {
-		fmt.Println("Failed to save config file:", err)
+		log.Println("Failed to save config file:", err)
 		return err
 	}
 	if Client_mode && Server_url == "" {
-		fmt.Println("Server not found")
+		log.Println("Server not found")
 		os.Exit(1)
 	}
 	return err
@@ -132,7 +136,7 @@ func generator_key() {
 	if _, err := os.Stat("cert"); os.IsNotExist(err) {
 		err := os.Mkdir("cert", 0660)
 		if err != nil {
-			fmt.Println("Error to create cert folder:", err)
+			log.Println("Error to create cert folder:", err)
 		}
 	}
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)

@@ -8,6 +8,7 @@ require (
 	github.com/glebarez/sqlite v1.9.0
 	github.com/google/uuid v1.3.0
 	github.com/shirou/gopsutil v2.21.11+incompatible
+	github.com/unrolled/secure v1.13.0
 	gopkg.in/ini.v1 v1.67.0
 )
 
