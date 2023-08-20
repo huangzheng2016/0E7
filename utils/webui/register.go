@@ -14,5 +14,6 @@ func Register(router *gin.Engine) {
 
 	router.Static("/assets", "dist/assets")
 	router.Static("/js", "dist/js")
+	router.Static("/css", "dist/css")
 	router.StaticFile("/", "dist/index.html")
 }
