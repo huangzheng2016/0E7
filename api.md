@@ -686,19 +686,19 @@ show the output of the exploit task,including the live view
 
 ##### Response Parameters
 
-| Parameter      | Type   | Parent   | Description                                                          |
-|----------------|--------|----------|----------------------------------------------------------------------|
-| `message`      | string |          | operation status,including `success`,`fail`                          |
-| `error`        | string |          | error message                                                        |
-| `page_count`   | int    |          | total number of pages                                                |
-| `page_num`     | int    |          | the current pages                                                    |
-| `page_show`    | int    |          | the number of the task one pages show                                |
-| `result`       | object |          | a result object                                                      |
-| `id`           | int    | `result` | the id of the task                                                   |                                          |
-| `exploit_uuid` | string | `result` | the exploit_uuid of the task                                         |
-| `client_uuid`  | string | `result` | the client_uuid of the client that run the task                      | 
-| `output`       | string | `result` | the output of the task                                               |
-| `status`       | string | `result` | the running status of the task,including `RUNNING`,`ERROR`,`SUCCESS` |
+| Parameter      | Type     | Parent   | Description                                                          |
+|----------------|----------|----------|----------------------------------------------------------------------|
+| `message`      | string   |          | operation status,including `success`,`fail`                          |
+| `error`        | string   |          | error message                                                        |
+| `page_count`   | int      |          | total number of pages                                                |
+| `page_num`     | int      |          | the current pages                                                    |
+| `page_show`    | int      |          | the number of the task one pages show                                |
+| `result`       | []object |          | a result object                                                      |
+| `id`           | int      | `result` | the id of the task                                                   |                                          |
+| `exploit_uuid` | string   | `result` | the exploit_uuid of the task                                         |
+| `client_uuid`  | string   | `result` | the client_uuid of the client that run the task                      | 
+| `output`       | string   | `result` | the output of the task                                               |
+| `status`       | string   | `result` | the running status of the task,including `RUNNING`,`ERROR`,`SUCCESS` |
 
 ##### Response Status Codes
 
