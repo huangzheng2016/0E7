@@ -147,15 +147,14 @@ func init_database_client(db *sql.DB, engine string) error {
 		stmt, err = db.Prepare(`
 		CREATE TABLE IF NOT EXISTS '0e7_action' (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
+			name TEXT NOT NULL UNIQUE,
 			code TEXT,
 			output TEXT,
 			interval INT,
 			updated TEXT          
         );
-		INSERT INTO '0e7_action' (name, code, output, interval, updated) VALUES ('ip', '', '', -1, datetime('now', 'localtime'));
-		INSERT INTO '0e7_action' (name, code, output, interval, updated) VALUES ('flag', '', '', -1, datetime('now', 'localtime'));
-		INSERT INTO '0e7_action' (name, code, output, interval, updated) VALUES ('ip', '', '', -1, datetime('now', 'localtime'));
+		INSERT OR IGNORE INTO '0e7_action' (id, name, code, output, interval, updated) VALUES (1,'ip', '', '', -1, datetime('now', 'localtime'));
+		INSERT OR IGNORE INTO '0e7_action' (id, name, code, output, interval, updated) VALUES (2,'submit', '', '', -1, datetime('now', 'localtime'));
 	`)
 	}
 	defer stmt.Close()

@@ -60,7 +60,7 @@ func Init_conf() error {
 	}
 	Global_debug, err = section.Key("debug").Bool()
 	if err != nil {
-		Client_mode = false
+		Global_debug = false
 	}
 
 	section = cfg.Section("client")

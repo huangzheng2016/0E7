@@ -18,6 +18,18 @@ import (
 var err error
 
 func main() {
+	fmt.Println("  ___   _____  _____  ____                            _  _\n" +
+		" / _ \\ | ____||___  |/ ___|   ___   ___  _   _  _ __ (_)| |_  _   _\n" +
+		"| | | ||  _|     / / \\___ \\  / _ \\ / __|| | | || '__|| || __|| | | |\n" +
+		"| |_| || |___   / /   ___) ||  __/| (__ | |_| || |   | || |_ | |_| |\n" +
+		" \\___/ |_____| /_/   |____/  \\___| \\___| \\__,_||_|   |_| \\__| \\__, |\n" +
+		"                                                              |___/\n")
+
+	log.Println("0E7 For Security")
+	err = config.Init_conf()
+	if err != nil {
+		log.Println("Config load error: ", err)
+	}
 
 	file, err := os.OpenFile("0e7.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -31,24 +43,13 @@ func main() {
 	} else {
 		log.SetOutput(file)
 	}
-	fmt.Println(
-		" ___   _____  _____    __                ____                            _  _\n" +
-			"/ _ \\ | ____||___  |  / _|  ___   _ __  / ___|   ___   ___  _   _  _ __ (_)| |_  _   _\n" +
-			"| | | ||  _|     / /  | |_  / _ \\ | '__| \\___ \\  / _ \\ / __|| | | || '__|| || __|| | | |\n" +
-			"| |_| || |___   / /   |  _|| (_) || |     ___) ||  __/| (__ | |_| || |   | || |_ | |_| |\n" +
-			" \\___/ |_____| /_/    |_|   \\___/ |_|    |____/  \\___| \\___| \\__,_||_|   |_| \\__| \\__, |\n" +
-			"                                                                                  |___/")
 
-	log.Println("0E7 For Security")
-	err = config.Init_conf()
-	if err != nil {
-		log.Println("Config load error: ", err)
-	}
 	update.InitUpdate()
 	update.CheckStatus()
-
 	if config.Server_mode {
-		if !config.Global_debug {
+		if config.Global_debug {
+			gin.SetMode(gin.DebugMode)
+		} else {
 			gin.SetMode(gin.ReleaseMode)
 		}
 		r_server := gin.Default()
