@@ -488,17 +488,18 @@ Create a exploit task
 
 ##### Query Parameters
 
-| Parameter      | Type   | Required        | Description                                                                                                               |
-|----------------|--------|-----------------|---------------------------------------------------------------------------------------------------------------------------|
-| `exploit_uuid` | string | no              | automatically generated if empty, update all parameters if exist                                                          |
-| `environment`  | string | no              | the running environment ot the task,format is `key1=value1;key2=value2;`,use in the `;` divide (include the end)          |
-| `command`      | string | yes(or file)    | the command to start exploit task                                                                                         |
-| `argv`         | string | no              | the argv to start exploit task                                                                                            |
-| `platform`     | string | no              | the platform to run exploit task,format is `windows,linux,darwin,freebsd`,if empty means all,use in the middle `,` divide |
-| `arch`         | string | no              | the arch to run exploit task,format is `386,amd64,arm64`,if empty means all,use in the middle `,` divide                  |
-| `times`        | int    | no              | the number of times the script was run,if empty default -2(running forever),especially -1(stop)                           |
-| `filter`       | string | no              | the filter to run exploit task,which `filter` match `client_id` ,if empty means all                                       |
-| `file`         | file   | yes(or command) | the file that exploit run (or command only)                                                                               |
+| Parameter      | Type   | Required             | Description                                                                                                              |
+|----------------|--------|----------------------|--------------------------------------------------------------------------------------------------------------------------|
+| `exploit_uuid` | string | no                   | automatically generated if empty, update all parameters if exist                                                         |
+| `environment`  | string | no                   | the running environment ot the task,format is `key1=value1;key2=value2;`,use in the `;` divide (include the end)         |
+| `command`      | string | yes(or file,code)    | the command to start exploit task                                                                                        |
+| `argv`         | string | no                   | the argv to start exploit task                                                                                           |
+| `platform`     | string | no                   | the platform to run exploit task,format is `windows,linux,darwin,freebsd`,if empty means all,use in the middle `,` divide |
+| `arch`         | string | no                   | the arch to run exploit task,format is `386,amd64,arm64`,if empty means all,use in the middle `,` divide                 |
+| `times`        | int    | no                   | the number of times the script was run,if empty default -2(running forever),especially -1(stop)                          |
+| `filter`       | string | no                   | the filter to run exploit task,which `filter` match `client_id` ,if empty means all                                      |
+| `file`         | file   | yes(or command,code) | the file that exploit run (or command only)                                                                              |
+| `code`         | string | yes(or command,file) | the code that run with golang or python                                                                                  |
 
 #### Response
 
@@ -573,6 +574,13 @@ You can add `auto_pipreqs=True;` in environment to enable the automatic installa
 
 `times` is the number of times the script was run,if empty default -2(running forever),especially -1(stop).It will be
 automatically decremented by one each time it is run
+
+`code` format like `^data:(code\/(?:python2|python3|golang));base64,(.*)$`
+
+Example for golang:
+```html
+data:code/golang;base64,cGFja2FnZSBtYWluCgppbXBvcnQgImZtdCIKCmZ1bmMgbWFpbigpIHsKCWZtdC5QcmludGxuKCJIZWxsbyB3b3JsZCIpCn0K
+```
 
 ### exploit_rename
 

@@ -142,5 +142,29 @@ func init_database_client(db *sql.DB, engine string) error {
 	}
 	log.Println("Table '0e7_exploit_output' is created successfully.")
 
+	switch engine {
+	case "sqlite3":
+		stmt, err = db.Prepare(`
+		CREATE TABLE IF NOT EXISTS '0e7_action' (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			code TEXT,
+			output TEXT,
+			interval INT,
+			updated TEXT          
+        );
+		INSERT INTO '0e7_action' (name, code, output, interval, updated) VALUES ('ip', '', '', -1, datetime('now', 'localtime'));
+		INSERT INTO '0e7_action' (name, code, output, interval, updated) VALUES ('flag', '', '', -1, datetime('now', 'localtime'));
+		INSERT INTO '0e7_action' (name, code, output, interval, updated) VALUES ('ip', '', '', -1, datetime('now', 'localtime'));
+	`)
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec()
+	if err != nil {
+		log.Println("Table '0e7_action' create failed", err)
+		return err
+	}
+	log.Println("Table '0e7_action' is created successfully.")
+
 	return err
 }
