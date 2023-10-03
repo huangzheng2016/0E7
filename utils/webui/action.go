@@ -189,7 +189,7 @@ func update_action() {
 	var err error
 	var id, interval int
 	var name, code, output, updated string
-	err = config.Db.QueryRow("SELECT id,name,code,output,interval,updated FROM `0e7_action` WHERE interval>=0 AND code!='' ORDER BY updated DESC LIMIT 1").Scan(&id, &name, &code, &output, &interval, &updated)
+	err = config.Db.QueryRow("SELECT id,name,code,output,interval,updated FROM `0e7_action` WHERE interval>=0 AND code!='' ORDER BY updated LIMIT 1").Scan(&id, &name, &code, &output, &interval, &updated)
 	if err == nil {
 		updatedTime, err := time.ParseInLocation(time.DateTime, updated, time.Now().Location())
 		if err != nil {

@@ -4,6 +4,7 @@ import (
 	"0E7/utils/client"
 	"0E7/utils/config"
 	"0E7/utils/route"
+	"0E7/utils/server"
 	"0E7/utils/udpcast"
 	"0E7/utils/update"
 	"0E7/utils/webui"
@@ -62,6 +63,7 @@ func main() {
 		route.Register(r_server)
 		webui.Register(r_server)
 		update.Register(r_server)
+		server.Register(r_server)
 
 		if config.Server_tls == true {
 			r_server.RedirectTrailingSlash = true

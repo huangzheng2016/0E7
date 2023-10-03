@@ -20,7 +20,7 @@ func flag(c *gin.Context) {
 		return
 	}
 	if count == 0 {
-		_, err = config.Db.Exec("INSERT INTO `0e7_flag` (uuid,flag,updated) VALUES (?,?,?)", exploit_uuid, exploit_flag, updated)
+		_, err = config.Db.Exec("INSERT INTO `0e7_flag` (uuid,flag,status,updated) VALUES (?,?,?,?)", exploit_uuid, exploit_flag, "QUEUE", updated)
 		c.JSON(200, gin.H{
 			"message": "success",
 			"error":   "",

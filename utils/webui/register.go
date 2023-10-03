@@ -19,6 +19,4 @@ func Register(router *gin.Engine) {
 	router.Static("/css", "dist/css")
 	router.StaticFile("/", "dist/index.html")
 
-	programs = make(map[int]*interp.Program)
-	go heartbeat()
 }

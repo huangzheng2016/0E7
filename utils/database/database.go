@@ -154,7 +154,7 @@ func init_database_client(db *sql.DB, engine string) error {
 			updated TEXT          
         );
 		INSERT OR IGNORE INTO '0e7_action' (id, name, code, output, interval, updated) VALUES (1,'ip', '', '', -1, datetime('now', 'localtime'));
-		INSERT OR IGNORE INTO '0e7_action' (id, name, code, output, interval, updated) VALUES (2,'submit', '', '', -1, datetime('now', 'localtime'));
+		INSERT OR IGNORE INTO '0e7_action' (id, name, code, output, interval, updated) VALUES (2,'flag', '', '', -1, datetime('now', 'localtime'));
 	`)
 	}
 	defer stmt.Close()
