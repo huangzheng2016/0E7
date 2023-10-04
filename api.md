@@ -488,18 +488,18 @@ Create a exploit task
 
 ##### Query Parameters
 
-| Parameter      | Type   | Required             | Description                                                                                                              |
-|----------------|--------|----------------------|--------------------------------------------------------------------------------------------------------------------------|
-| `exploit_uuid` | string | no                   | automatically generated if empty, update all parameters if exist                                                         |
-| `environment`  | string | no                   | the running environment ot the task,format is `key1=value1;key2=value2;`,use in the `;` divide (include the end)         |
-| `command`      | string | yes(or file,code)    | the command to start exploit task                                                                                        |
-| `argv`         | string | no                   | the argv to start exploit task                                                                                           |
+| Parameter      | Type   | Required             | Description                                                                                                               |
+|----------------|--------|----------------------|---------------------------------------------------------------------------------------------------------------------------|
+| `exploit_uuid` | string | no                   | automatically generated if empty, update all parameters if exist                                                          |
+| `environment`  | string | no                   | the running environment ot the task,format is `key1=value1;key2=value2;`,use in the `;` divide (include the end)          |
+| `command`      | string | yes(or file,code)    | the command to start exploit task                                                                                         |
+| `argv`         | string | no                   | the argv to start exploit task                                                                                            |
 | `platform`     | string | no                   | the platform to run exploit task,format is `windows,linux,darwin,freebsd`,if empty means all,use in the middle `,` divide |
-| `arch`         | string | no                   | the arch to run exploit task,format is `386,amd64,arm64`,if empty means all,use in the middle `,` divide                 |
-| `times`        | int    | no                   | the number of times the script was run,if empty default -2(running forever),especially -1(stop)                          |
-| `filter`       | string | no                   | the filter to run exploit task,which `filter` match `client_id` ,if empty means all                                      |
-| `file`         | file   | yes(or command,code) | the file that exploit run (or command only)                                                                              |
-| `code`         | string | yes(or command,file) | the code that run with golang or python                                                                                  |
+| `arch`         | string | no                   | the arch to run exploit task,format is `386,amd64,arm64`,if empty means all,use in the middle `,` divide                  |
+| `times`        | int    | no                   | the number of times the script was run,if empty default -2(running forever),especially -1(stop)                           |
+| `filter`       | string | no                   | the filter to run exploit task,which `filter` match `client_id` ,if empty means all                                       |
+| `file`         | file   | yes(or command,code) | the file that exploit run (or command only)                                                                               |
+| `code`         | string | yes(or command,file) | the code that run with golang or python                                                                                   |
 
 #### Response
 
@@ -578,6 +578,7 @@ automatically decremented by one each time it is run
 `code` format like `^data:(code\/(?:python2|python3|golang));base64,(.*)$`
 
 Example for golang:
+
 ```html
 data:code/golang;base64,cGFja2FnZSBtYWluCgppbXBvcnQgImZtdCIKCmZ1bmMgbWFpbigpIHsKCWZtdC5QcmludGxuKCJIZWxsbyB3b3JsZCIpCn0K
 ```
@@ -655,6 +656,113 @@ Content-Type: application/json
 
 If the original folder cannot be renamed, operation copy instead, but this will consume more space and you will need to
 delete them manually
+
+### exploit_show_list
+
+show the output of the exploit task,including the live view
+
+#### Endpoint
+
+`/webui/exploit_show_list`
+
+#### HTTP Method
+
+`POST`
+
+#### Request
+
+##### Content-Type
+
+`application/x-www-form-urlencoded`
+
+##### Query Parameters
+
+| Parameter      | Type   | Required | Description                                                 |
+|----------------|--------|----------|-------------------------------------------------------------|
+| `id`           | int    | no       | if not empty,show the task match `id`                       |
+| `page_show`    | int    | no       | default 20,show `page_show` task a page                     |
+| `page_num`     | int    | no       | default 1,show the `page_num` page                          |
+| `exploit_uuid` | string | no       | if not empty,show the task match `exploit_uuid`             |
+| `platform`     | string | no       | if not empty,show the task match `platform`                 |
+| `arch`         | string | no       | if not empty,show the task match `arch`                     |
+| `times`        | string | no       | if not empty,show the task match `times`,`1` means not zero |
+
+#### Response
+
+##### Content-Type
+
+`application/json`
+
+##### Response Parameters
+
+| Parameter      | Type     | Parent   | Description                                   |
+|----------------|----------|----------|-----------------------------------------------|
+| `message`      | string   |          | operation status,including `success`,`fail`   |
+| `error`        | string   |          | error message                                 |
+| `page_count`   | int      |          | total number of pages                         |
+| `page_num`     | int      |          | the current pages                             |
+| `page_show`    | int      |          | the number of the task one pages show         |
+| `result`       | []object |          | a result object                               |
+| `id`           | int      | `result` | the id of the task                            |                                          |
+| `exploit_uuid` | string   | `result` | the exploit_uuid of the task                  |
+| `filename`     | string   | `result` | only aviable with id, the filename of exploit                         | 
+| `environment`  | string   | `result` | only aviable with id, the environment of exploit                         |
+| `command`      | string   | `result` | only aviable with id, the command of exploit                         |
+| `argv`         | string   | `result` | only aviable with id, the argv of exploit |
+| `platform`     | string   | `result` | the platform of exploit                       |
+| `arch`         | string   | `result` | the arch of exploit                           |
+| `filter`       | string   | `result` | the filter of exploit                         |
+| `times`        | string   | `result` | the times of exploit                          |
+
+##### Response Status Codes
+
+- 200: OK
+- 400: Bad Request
+
+#### Example
+
+##### Request Example
+
+```http
+POST /webui/exploit_show_list HTTP/1.1
+Host: 0e7.cn
+
+```
+
+##### Response Example
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+    "error": "",
+    "message": "success",
+    "page_count": 1,
+    "page_num": 1,
+    "page_show": 20,
+    "result": [
+        {
+            "arch": "",
+            "argv": "",
+            "command": "",
+            "environment": "",
+            "exploit_uuid": "7593830b-84f0-470e-92b4-87884449436a",
+            "filename": "",
+            "filter": "",
+            "id": 6,
+            "platform": "",
+            "times": "0"
+        }
+    ]
+}
+```
+
+#### Notes
+
+if not any parameters, it will show latest 20 tasks
+
+`id` cannot take effect at the same time as `exploit_uuid`,`client_uuid`,`platform`,`arch`
 
 ### exploit_show_output
 
@@ -752,7 +860,6 @@ Content-Type: application/json
             "status": "SUCCESS"
         }
     ]
-}
 }
 ```
 

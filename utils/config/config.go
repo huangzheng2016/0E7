@@ -139,23 +139,23 @@ func generator_key() {
 			log.Println("Error to create cert folder:", err)
 		}
 	}
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		log.Fatal(err)
-	}
-	template := x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(1, 0, 0), // 有效期为一年
-		BasicConstraintsValid: true,
-	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
-	if err != nil {
-		log.Fatal(err)
-	}
 	_, err1 := os.Stat("cert/private.key")
 	_, err2 := os.Stat("cert/certificate.crt")
 	if os.IsNotExist(err1) || os.IsNotExist(err2) {
+		privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			log.Fatal(err)
+		}
+		template := x509.Certificate{
+			SerialNumber:          big.NewInt(1),
+			NotBefore:             time.Now(),
+			NotAfter:              time.Now().AddDate(1, 0, 0), // 有效期为一年
+			BasicConstraintsValid: true,
+		}
+		derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+		if err != nil {
+			log.Fatal(err)
+		}
 		err = ioutil.WriteFile("cert/private.key", encodePrivateKeyToPEM(privateKey), 0600)
 		if err != nil {
 			log.Fatal(err)
