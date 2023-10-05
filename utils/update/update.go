@@ -37,7 +37,7 @@ func InitUpdate() {
 	if config.Server_mode == true {
 		root := "."
 		pattern := regexp.MustCompile(`^0e7_[^_]+_[^_]+$`)
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		err := filepath.WalkDir(root, func(path string, info os.DirEntry, err error) error {
 			if err != nil {
 				log.Printf("Folder Walk Error: %v\n", err)
 				return nil
