@@ -198,6 +198,7 @@ Get the latest exploit tasks from server
 | `environment`  | string |        | the running environment of the task                                                                                              |
 | `command`      | string |        | the command that start the task                                                                                                  |
 | `argv`         | string |        | the argv that start the task                                                                                                     |
+| `timeout`      | string |        | the timeout of task                                                                                                              |
 | `flag`         | string |        | the flag format of the task,usually a regular expression. if not empty client will try to match output and return to `/api/flag` |
 
 ##### Response Status Codes
@@ -496,6 +497,7 @@ Create a exploit task
 | `argv`         | string | no                   | the argv to start exploit task                                                                                            |
 | `platform`     | string | no                   | the platform to run exploit task,format is `windows,linux,darwin,freebsd`,if empty means all,use in the middle `,` divide |
 | `arch`         | string | no                   | the arch to run exploit task,format is `386,amd64,arm64`,if empty means all,use in the middle `,` divide                  |
+| `timeout`      | int    | no                   | the timeout of exploit,default 15 secend                                                                                  |
 | `times`        | int    | no                   | the number of times the script was run,if empty default -2(running forever),especially -1(stop)                           |
 | `filter`       | string | no                   | the filter to run exploit task,which `filter` match `client_id` ,if empty means all                                       |
 | `file`         | file   | yes(or command,code) | the file that exploit run (or command only)                                                                               |
@@ -695,24 +697,25 @@ show the output of the exploit task,including the live view
 
 ##### Response Parameters
 
-| Parameter      | Type     | Parent   | Description                                   |
-|----------------|----------|----------|-----------------------------------------------|
-| `message`      | string   |          | operation status,including `success`,`fail`   |
-| `error`        | string   |          | error message                                 |
-| `page_count`   | int      |          | total number of pages                         |
-| `page_num`     | int      |          | the current pages                             |
-| `page_show`    | int      |          | the number of the task one pages show         |
-| `result`       | []object |          | a result object                               |
-| `id`           | int      | `result` | the id of the task                            |                                          |
-| `exploit_uuid` | string   | `result` | the exploit_uuid of the task                  |
-| `filename`     | string   | `result` | only aviable with id, the filename of exploit                         | 
-| `environment`  | string   | `result` | only aviable with id, the environment of exploit                         |
-| `command`      | string   | `result` | only aviable with id, the command of exploit                         |
-| `argv`         | string   | `result` | only aviable with id, the argv of exploit |
-| `platform`     | string   | `result` | the platform of exploit                       |
-| `arch`         | string   | `result` | the arch of exploit                           |
-| `filter`       | string   | `result` | the filter of exploit                         |
-| `times`        | string   | `result` | the times of exploit                          |
+| Parameter      | Type     | Parent   | Description                                      |
+|----------------|----------|----------|--------------------------------------------------|
+| `message`      | string   |          | operation status,including `success`,`fail`      |
+| `error`        | string   |          | error message                                    |
+| `page_count`   | int      |          | total number of pages                            |
+| `page_num`     | int      |          | the current pages                                |
+| `page_show`    | int      |          | the number of the task one pages show            |
+| `result`       | []object |          | a result object                                  |
+| `id`           | int      | `result` | the id of the task                               |                                          |
+| `exploit_uuid` | string   | `result` | the exploit_uuid of the task                     |
+| `filename`     | string   | `result` | only aviable with id, the filename of exploit    | 
+| `environment`  | string   | `result` | only aviable with id, the environment of exploit |
+| `command`      | string   | `result` | only aviable with id, the command of exploit     |
+| `argv`         | string   | `result` | only aviable with id, the argv of exploit        |
+| `platform`     | string   | `result` | the platform of exploit                          |
+| `arch`         | string   | `result` | the arch of exploit                              |
+| `filter`       | string   | `result` | the filter of exploit                            |
+| `timeout`      | string   | `result` | the timeout of exploit                           |
+| `times`        | string   | `result` | the times of exploit                             |
 
 ##### Response Status Codes
 
@@ -752,6 +755,7 @@ Content-Type: application/json
             "filter": "",
             "id": 6,
             "platform": "",
+            "timeout": "15"
             "times": "0"
         }
     ]

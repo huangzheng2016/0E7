@@ -89,6 +89,7 @@ func init_database_client(db *sql.DB, engine string) error {
             platform TEXT,
             arch TEXT,
             filter TEXT,
+            timeout TEXT,
             times TEXT NOT NULL
         )
 	`)
