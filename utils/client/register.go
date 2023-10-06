@@ -1,6 +1,8 @@
 package client
 
-import "github.com/traefik/yaegi/interp"
+import (
+	"github.com/traefik/yaegi/interp"
+)
 
 var set_pipreqs map[string]bool
 var exploit_id, exploit_output map[string]string

@@ -78,7 +78,7 @@ func main() {
 		go udpcast.Udp_sent(config.Server_tls, config.Server_port)
 
 		pcap.SetFlagRegex(config.Server_flag)
-		pcap.WatchDir("pcap")
+		go pcap.WatchDir("pcap")
 	}
 
 	if config.Client_mode {

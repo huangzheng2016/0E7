@@ -2,7 +2,7 @@ package database
 
 import (
 	"database/sql"
-	_ "github.com/glebarez/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 	"gopkg.in/ini.v1"
 	"log"
 	"os"
@@ -23,7 +23,7 @@ func Init_database(section *ini.Section) (db *sql.DB, err error) {
 	*/
 	default:
 		engine = "sqlite3"
-		db, err = sql.Open("sqlite", "sqlite.db")
+		db, err = sql.Open("sqlite3", "sqlite.db")
 		_, err = db.Exec("PRAGMA page_size = 4096;")      // 设置页面大小
 		_, err = db.Exec("PRAGMA auto_vacuum = FULL;")    // 启用自动清理
 		_, err = db.Exec("PRAGMA synchronous = NORMAL;")  // 设置同步模式
