@@ -15,6 +15,8 @@ func Register(router *gin.Engine) {
 	router.POST("/webui/action", action)
 	router.POST("/webui/action_show", action_show)
 
+	router.POST("/webui/pcap_upload", pcap_upload)
+
 	router.Static("/assets", "dist/assets")
 	router.Static("/js", "dist/js")
 	router.Static("/css", "dist/css")

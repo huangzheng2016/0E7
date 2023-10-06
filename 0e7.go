@@ -3,6 +3,7 @@ package main
 import (
 	"0E7/utils/client"
 	"0E7/utils/config"
+	"0E7/utils/pcap"
 	"0E7/utils/route"
 	"0E7/utils/server"
 	"0E7/utils/udpcast"
@@ -19,12 +20,13 @@ import (
 var err error
 
 func main() {
-	fmt.Println("  ___   _____  _____  ____                            _  _\n" +
+
+	fmt.Print("  ___   _____  _____  ____                            _  _\n" +
 		" / _ \\ | ____||___  |/ ___|   ___   ___  _   _  _ __ (_)| |_  _   _\n" +
 		"| | | ||  _|     / / \\___ \\  / _ \\ / __|| | | || '__|| || __|| | | |\n" +
 		"| |_| || |___   / /   ___) ||  __/| (__ | |_| || |   | || |_ | |_| |\n" +
 		" \\___/ |_____| /_/   |____/  \\___| \\___| \\__,_||_|   |_| \\__| \\__, |\n" +
-		"                                                              |___/\n")
+		"                                                              |___/\n\n")
 
 	log.Println("0E7 For Security")
 	err = config.Init_conf()
@@ -47,6 +49,7 @@ func main() {
 
 	update.InitUpdate()
 	update.CheckStatus()
+
 	if config.Server_mode {
 		if config.Global_debug {
 			gin.SetMode(gin.DebugMode)
@@ -73,6 +76,9 @@ func main() {
 			go r_server.Run(":" + config.Server_port)
 		}
 		go udpcast.Udp_sent(config.Server_tls, config.Server_port)
+
+		pcap.SetFlagRegex(config.Server_flag)
+		pcap.WatchDir("pcap")
 	}
 
 	if config.Client_mode {
