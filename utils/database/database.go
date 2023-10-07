@@ -2,7 +2,7 @@ package database
 
 import (
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/sqlite"
 	"gopkg.in/ini.v1"
 	"log"
 	"os"
@@ -23,7 +23,7 @@ func Init_database(section *ini.Section) (db *sql.DB, err error) {
 	*/
 	default:
 		engine = "sqlite3"
-		db, err = sql.Open("sqlite3", "sqlite.db")
+		db, err = sql.Open("sqlite", "sqlite.db")
 		_, err = db.Exec("PRAGMA page_size = 4096;")      // 设置页面大小
 		_, err = db.Exec("PRAGMA auto_vacuum = FULL;")    // 启用自动清理
 		_, err = db.Exec("PRAGMA synchronous = NORMAL;")  // 设置同步模式
@@ -73,6 +73,7 @@ func init_database_client(db *sql.DB, engine string) error {
             cpu_use TEXT NOT NULL,
             memory_use TEXT NOT NULL,
             memory_max TEXT NOT NULL,
+            pcap TEXT NOT NULL,
             updated TEXT NOT NULL
         )
 	`)
@@ -192,6 +193,27 @@ func init_database_client(db *sql.DB, engine string) error {
 		return err
 	}
 	log.Println("Table '0e7_pcapfile' is created successfully.")
+
+	switch engine {
+	case "sqlite3":
+		stmt, err = db.Prepare(`
+		CREATE TABLE IF NOT EXISTS '0e7_monitor' (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+			uuid TEXT,
+			types TEXT,
+			data TEXT,
+			interval INT,
+			updated TEXT          
+        );
+	`)
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec()
+	if err != nil {
+		log.Println("Table '0e7_monitor' create failed", err)
+		return err
+	}
+	log.Println("Table '0e7_monitor' is created successfully.")
 
 	switch engine {
 	case "sqlite3":

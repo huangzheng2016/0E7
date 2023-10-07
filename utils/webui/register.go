@@ -1,6 +1,7 @@
 package webui
 
 import (
+	_ "embed"
 	"github.com/gin-gonic/gin"
 	"github.com/traefik/yaegi/interp"
 )
@@ -16,10 +17,5 @@ func Register(router *gin.Engine) {
 	router.POST("/webui/action_show", action_show)
 
 	router.POST("/webui/pcap_upload", pcap_upload)
-
-	router.Static("/assets", "dist/assets")
-	router.Static("/js", "dist/js")
-	router.Static("/css", "dist/css")
-	router.StaticFile("/", "dist/index.html")
 
 }

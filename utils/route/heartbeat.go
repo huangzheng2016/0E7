@@ -17,6 +17,7 @@ func heartbeat(c *gin.Context) {
 	cpu_use := c.PostForm("cpu_use")
 	memory_use := c.PostForm("memory_use")
 	memory_max := c.PostForm("memory_max")
+	pcap := c.PostForm("pcap")
 	updated := time.Now().Format(time.DateTime)
 	if hostname == "" || platform == "" || arch == "" || cpu == "" || cpu_use == "" || memory_use == "" || memory_max == "" {
 		c.JSON(400, gin.H{
@@ -33,9 +34,9 @@ func heartbeat(c *gin.Context) {
 		log.Println("Failed to query database:", err)
 	} else {
 		if count == 0 {
-			_, err = config.Db.Exec("INSERT INTO `0e7_client` (uuid,hostname,platform,arch,cpu,cpu_use,memory_use,memory_max,updated) VALUES (?,?,?,?,?,?,?,?,?)", client_uuid, hostname, platform, arch, cpu, cpu_use, memory_use, memory_max, updated)
+			_, err = config.Db.Exec("INSERT INTO `0e7_client` (uuid,hostname,platform,arch,cpu,cpu_use,memory_use,memory_max,pcap,updated) VALUES (?,?,?,?,?,?,?,?,?,?)", client_uuid, hostname, platform, arch, cpu, cpu_use, memory_use, memory_max, pcap, updated)
 		} else {
-			_, err = config.Db.Exec("UPDATE `0e7_client` SET hostname=?,platform=?,arch=?,cpu=?,cpu_use=?,memory_use=?,memory_max=?,updated=? WHERE uuid=? AND platform=? AND arch=?", hostname, platform, arch, cpu, cpu_use, memory_use, memory_max, updated, client_uuid, platform, arch)
+			_, err = config.Db.Exec("UPDATE `0e7_client` SET hostname=?,platform=?,arch=?,cpu=?,cpu_use=?,memory_use=?,memory_max=?,pcap=?,updated=? WHERE uuid=? AND platform=? AND arch=?", hostname, platform, arch, cpu, cpu_use, memory_use, memory_max, pcap, updated, client_uuid, platform, arch)
 		}
 		if err != nil {
 			c.JSON(400, gin.H{

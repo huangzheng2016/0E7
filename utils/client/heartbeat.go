@@ -44,6 +44,7 @@ func heartbeat() {
 			log.Println("Failed to get hostname:", err)
 			return
 		}
+		pcap := moniter_pcap_device()
 		values := url.Values{}
 		values.Set("uuid", config.Client_uuid)
 		values.Set("hostname", hostname.Hostname)
@@ -53,6 +54,8 @@ func heartbeat() {
 		values.Set("cpu_use", strconv.FormatFloat(cpuPercent[0], 'f', 2, 64))
 		values.Set("memory_use", strconv.Itoa(int(memInfo.Used/1024/1024)))
 		values.Set("memory_max", strconv.Itoa(int(memInfo.Total/1024/1024)))
+		values.Set("pcap", pcap)
+
 		requestBody := bytes.NewBufferString(values.Encode())
 		request, err := http.NewRequest("POST", config.Server_url+"/api/heartbeat", requestBody)
 		if err != nil {
@@ -92,6 +95,7 @@ func heartbeat() {
 				}
 				jobsMutex.Unlock()
 			}
+			go monitor()
 		}
 		time.Sleep(time.Second * time.Duration(heartbeat_delay))
 	}

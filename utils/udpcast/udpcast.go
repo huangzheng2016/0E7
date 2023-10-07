@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -42,7 +43,8 @@ func Udp_sent(server_tls bool, server_port string) {
 		time.Sleep(time.Second)
 	}
 }
-func Udp_receive() string {
+func Udp_receive(wg *sync.WaitGroup, server_url *string) {
+	defer wg.Done()
 	log.Println("SERVER NOT FOUND,WAIT FOR UDP CAST")
 	port := 6102
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{
@@ -50,7 +52,7 @@ func Udp_receive() string {
 	})
 	if err != nil {
 		log.Printf("UDPCAST ERROR: %s\n", err.Error())
-		return ""
+		return
 	}
 	defer conn.Close()
 
@@ -61,17 +63,17 @@ func Udp_receive() string {
 	n, addr, err := conn.ReadFromUDP(buffer)
 	if err != nil {
 		log.Printf("UDPCAST ERROR: %s\n", err.Error())
-		return ""
+		return
 	}
 	message := string(buffer[:n])
 	if strings.HasPrefix(message, "0E7") {
 		log.Println("SERVER IP REVEIVED")
 		if message[3] == 's' {
-			return "https://" + addr.IP.String() + ":" + message[4:]
+			*server_url = "https://" + addr.IP.String() + ":" + message[4:]
 		} else {
-			return "http://" + addr.IP.String() + ":" + message[4:]
+			*server_url = "http://" + addr.IP.String() + ":" + message[4:]
 		}
 	} else {
-		return ""
+		return
 	}
 }

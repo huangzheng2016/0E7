@@ -9,15 +9,21 @@ import (
 	"0E7/utils/udpcast"
 	"0E7/utils/update"
 	"0E7/utils/webui"
+	"embed"
 	"fmt"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"io"
+	"io/fs"
 	"log"
+	"net/http"
 	"os"
 )
 
 var err error
+
+//go:embed dist
+var f embed.FS
 
 func main() {
 
@@ -34,7 +40,7 @@ func main() {
 		log.Println("Config load error: ", err)
 	}
 
-	file, err := os.OpenFile("0e7.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	file, err := os.OpenFile("0e7.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -64,6 +70,9 @@ func main() {
 		log.Println("Server listening on port ", config.Server_port)
 
 		route.Register(r_server)
+		fp, _ := fs.Sub(f, "dist")
+		r_server.StaticFS("/", http.FS(fp))
+
 		webui.Register(r_server)
 		update.Register(r_server)
 		server.Register(r_server)

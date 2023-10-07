@@ -23,4 +23,7 @@ go.work
 # 0e7 Project
 exploit/*
 sqlite.db
+sqlite.db-shm
+sqlite.db-wal
+0e7.log
 0e7_*_*

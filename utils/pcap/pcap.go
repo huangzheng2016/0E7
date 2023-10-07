@@ -104,6 +104,10 @@ func reassemblyCallback(entry FlowEntry) {
 		log.Println("Insert Error:", err)
 	}
 }
+
+func Setbpf(str string) {
+	bpf = str
+}
 func SetFlagRegex(flag string) {
 	flag_regex = flag
 }
@@ -118,6 +122,11 @@ func WatchDir(watch_dir string) {
 		err := os.MkdirAll(watch_dir, os.ModePerm)
 		if err != nil {
 			log.Println("无法创建文件夹:", err)
+			return
+		}
+		stat, err = os.Stat(watch_dir)
+		if err != nil {
+			log.Println("文件异常:", err)
 			return
 		}
 	}
@@ -147,9 +156,6 @@ func WatchDir(watch_dir string) {
 
 	defer watcher.Close()
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	// Keep running until Interrupt
 	go func() {
 		for {
 			select {
@@ -160,8 +166,8 @@ func WatchDir(watch_dir string) {
 				if event.Op&(fsnotify.Rename|fsnotify.Create) != 0 {
 					if strings.HasSuffix(event.Name, ".pcap") || strings.HasSuffix(event.Name, ".pcapng") {
 						log.Println("Found new file", event.Name, event.Op.String())
-						time.Sleep(5 * time.Second)
 						handlePcapUri(event.Name, bpf)
+						time.Sleep(1 * time.Second)
 					}
 				}
 			case err, ok := <-watcher.Errors:
@@ -177,8 +183,8 @@ func WatchDir(watch_dir string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	<-signalChan
-	log.Println("Watcher stopped")
+
+	select {}
 }
 
 /*

@@ -14,6 +14,8 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -68,14 +70,54 @@ func Init_conf() error {
 	if err != nil {
 		Client_mode = true
 	}
-	if Client_mode {
+
+	section = cfg.Section("server")
+	Server_mode, err = section.Key("enable").Bool()
+	if err != nil {
+		Server_mode = false
+	}
+	if Server_mode {
+		Server_port = section.Key("port").String()
+		if Server_port == "" {
+			Server_port = "6102"
+		}
 		Server_url = section.Key("server_url").String()
+		Server_flag = section.Key("flag").String()
+		Server_tls, err = section.Key("tls").Bool()
+		if err != nil {
+			Server_tls = true
+		}
+		if Server_tls == true {
+			generator_key()
+			Server_url = strings.Replace(Server_url, "http://", "https://", 1)
+		} else {
+			Server_url = strings.Replace(Server_url, "https://", "http://", 1)
+		}
+		Db, err = database.Init_database(section)
+	}
+	err = cfg.SaveTo("config.ini")
+	if err != nil {
+		log.Println("Failed to save config file:", err)
+		return err
+	}
+	var wg sync.WaitGroup
+	if Client_mode {
+		if Server_url == "" {
+			Server_url = section.Key("server_url").String()
+		}
 		if Server_url == "" {
 			args := os.Args
 			if len(args) == 2 {
 				Server_url = args[1]
+			} else if Server_mode == false {
+				wg.Add(1)
+				go udpcast.Udp_receive(&wg, &Server_url)
 			} else {
-				Server_url = udpcast.Udp_receive()
+				if Server_tls == true {
+					Server_url = "https://localhost:" + Server_port
+				} else {
+					Server_url = "http://localhost:" + Server_port
+				}
 			}
 			if Server_url != "" {
 				section.Key("server_url").SetValue(Server_url)
@@ -102,34 +144,12 @@ func Init_conf() error {
 			Client_worker = 5
 		}
 	}
-	section = cfg.Section("server")
-	Server_mode, err = section.Key("enable").Bool()
-	if err != nil {
-		Server_mode = false
-	}
-	if Server_mode {
-		Server_tls, err = section.Key("tls").Bool()
-		if err != nil {
-			Server_tls = true
-		}
-		if Server_tls == true {
-			generator_key()
-		}
-		Db, err = database.Init_database(section)
-		Server_port = section.Key("port").String()
-		Server_url = section.Key("server_url").String()
-		Server_flag = section.Key("flag").String()
-	}
-	err = cfg.SaveTo("config.ini")
-	if err != nil {
-		log.Println("Failed to save config file:", err)
-		return err
-	}
+	wg.Wait()
 	if Client_mode && Server_url == "" {
 		log.Println("Server not found")
 		os.Exit(1)
 	}
-	return err
+	return nil
 }
 
 func generator_key() {
@@ -149,7 +169,7 @@ func generator_key() {
 		template := x509.Certificate{
 			SerialNumber:          big.NewInt(1),
 			NotBefore:             time.Now(),
-			NotAfter:              time.Now().AddDate(1, 0, 0), // 有效期为一年
+			NotAfter:              time.Now().AddDate(10, 0, 0), // 有效期为一年
 			BasicConstraintsValid: true,
 		}
 		derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)

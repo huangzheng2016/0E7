@@ -12,7 +12,6 @@ import (
 func pcap_upload(c *gin.Context) {
 	form, err := c.MultipartForm()
 	if err != nil {
-
 		file, err := c.FormFile("file")
 		if err != nil {
 			c.JSON(400, gin.H{
@@ -37,9 +36,15 @@ func pcap_upload(c *gin.Context) {
 		}
 		return
 	}
-
 	files := form.File["files"]
 	var err_list []string
+	for _, file := range files {
+		err = savefile(file, c)
+		if err != nil {
+			err_list = append(err_list, err.Error())
+		}
+	}
+	files = form.File["file"]
 	for _, file := range files {
 		err = savefile(file, c)
 		if err != nil {
@@ -55,7 +60,7 @@ func pcap_upload(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{
 		"message": "success",
-		"error":   "upload success",
+		"error":   "",
 	})
 }
 
