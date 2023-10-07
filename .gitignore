@@ -21,7 +21,11 @@
 go.work
 
 # 0e7 Project
+dist/*
+pcap/*
 exploit/*
+cert/*
+.idea/*
 sqlite.db
 sqlite.db-shm
 sqlite.db-wal
