@@ -50,7 +50,7 @@ func Init_conf() error {
 			os.Exit(1)
 		}
 	}
-
+	Server_url = ""
 	section := cfg.Section("global")
 	Global_timeout_http, err = section.Key("timeout_http").Int()
 	if err != nil {
@@ -95,11 +95,8 @@ func Init_conf() error {
 		}
 		Db, err = database.Init_database(section)
 	}
-	err = cfg.SaveTo("config.ini")
-	if err != nil {
-		log.Println("Failed to save config file:", err)
-		return err
-	}
+
+	section = cfg.Section("client")
 	var wg sync.WaitGroup
 	if Client_mode {
 		if Server_url == "" {
@@ -149,6 +146,13 @@ func Init_conf() error {
 		log.Println("Server not found")
 		os.Exit(1)
 	}
+
+	err = cfg.SaveTo("config.ini")
+	if err != nil {
+		log.Println("Failed to save config file:", err)
+		return err
+	}
+
 	return nil
 }
 
