@@ -173,7 +173,7 @@ func generator_key() {
 		template := x509.Certificate{
 			SerialNumber:          big.NewInt(1),
 			NotBefore:             time.Now(),
-			NotAfter:              time.Now().AddDate(10, 0, 0), // 有效期为一年
+			NotAfter:              time.Now().AddDate(10, 0, 0), // 有效期为十年
 			BasicConstraintsValid: true,
 		}
 		derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
