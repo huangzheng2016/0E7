@@ -3,7 +3,7 @@
 ## A Toolbox for Security
 
 ## Quick start
-Please make sure you have golang and nodejs environments
+Please make sure you have golang and node.js environments
 ```shell
 # build the frontend first
 cd frontend
