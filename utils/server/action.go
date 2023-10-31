@@ -7,6 +7,7 @@ import (
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
 	"log"
+	"os/exec"
 	"regexp"
 	"time"
 )
@@ -43,8 +44,23 @@ func action() {
 				code = string(code_decode)
 				var new_output string
 				if fileType == "code/python2" || fileType == "code/python3" {
-					log.Println("Python support in future")
-					return
+					cmd := exec.Command("python", "-c", string(code))
+					var stdout, stdeer bytes.Buffer
+					cmd.Stderr = &stdeer
+					cmd.Stdout = &stdout
+
+					err = cmd.Start()
+					if err != nil {
+						log.Println(err)
+						return
+					}
+					err := cmd.Wait()
+					if err != nil {
+						log.Println(err)
+						log.Println("Runtime error:", stdeer.String())
+					}
+					new_output = stdout.String()
+
 				} else if fileType == "code/golang" {
 					var goibuf bytes.Buffer
 					goi := interp.New(interp.Options{Stdout: &goibuf})
