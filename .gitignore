@@ -4,6 +4,9 @@ pcap
 cert
 dist
 sqlite.db
+sqlite.db-shm
+sqlite.db-wal
 /frontend/node_modules/
 .idea
 0e7.log
+/0E7

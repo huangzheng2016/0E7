@@ -11,13 +11,14 @@ import (
 	"0E7/utils/webui"
 	"embed"
 	"fmt"
-	"github.com/gin-contrib/gzip"
-	"github.com/gin-gonic/gin"
 	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-gonic/gin"
 )
 
 var err error
@@ -27,11 +28,11 @@ var f embed.FS
 
 func main() {
 
-	fmt.Print("  ___   _____  _____  ____                            _  _\n" +
-		" / _ \\ | ____||___  |/ ___|   ___   ___  _   _  _ __ (_)| |_  _   _\n" +
-		"| | | ||  _|     / / \\___ \\  / _ \\ / __|| | | || '__|| || __|| | | |\n" +
-		"| |_| || |___   / /   ___) ||  __/| (__ | |_| || |   | || |_ | |_| |\n" +
-		" \\___/ |_____| /_/   |____/  \\___| \\___| \\__,_||_|   |_| \\__| \\__, |\n" +
+	fmt.Print("  ___   _____    _____  ____                            _  _\n" +
+		" / _ \\ | ____||___  |  / ___|   ___   ___  _   _  _ __ (_)| |_  _   _\n" +
+		"| | | ||  _|     / /   \\___ \\  / _ \\ / __|| | | || '__|| || __|| | | |\n" +
+		"| |_| || |___   / /     ___) ||  __/| (__ | |_| || |   | || |_ | |_| |\n" +
+		" \\___/ |_____| /_/     |____/  \\___| \\___| \\__,_||_|   |_| \\__| \\__, |\n" +
 		"                                                              |___/\n\n")
 
 	log.Println("0E7 For Security")
@@ -67,7 +68,7 @@ func main() {
 		r_server.Use(gin.Recovery())
 		r_server.Use(gzip.Gzip(gzip.DefaultCompression))
 
-		log.Println("Server listening on port ", config.Server_port)
+		log.Printf("Server listening on port: %s", config.Server_port)
 
 		route.Register(r_server)
 		fp, _ := fs.Sub(f, "dist")

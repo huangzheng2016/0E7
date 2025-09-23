@@ -5,14 +5,15 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/base64"
-	"github.com/gin-gonic/gin"
-	"github.com/traefik/yaegi/interp"
-	"github.com/traefik/yaegi/stdlib"
 	"log"
 	"math"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/traefik/yaegi/interp"
+	"github.com/traefik/yaegi/stdlib"
 )
 
 func action(c *gin.Context) {
@@ -57,8 +58,8 @@ func action_show(c *gin.Context) {
 	var err error
 	id := c.PostForm("id")
 	name := c.PostForm("name")
-	page_show := c.PostForm("page_show")
-	page_num := c.PostForm("page_num")
+	page_size := c.PostForm("page_size")
+	page_num := c.PostForm("page")
 	offset := 1
 	if page_num != "" {
 		offset, err = strconv.Atoi(page_num)
@@ -67,7 +68,7 @@ func action_show(c *gin.Context) {
 				"message":    "fail",
 				"error":      err.Error(),
 				"page_num":   "",
-				"page_show":  "",
+				"page":       "",
 				"page_count": "",
 				"result":     []interface{}{},
 			})
@@ -78,14 +79,14 @@ func action_show(c *gin.Context) {
 		}
 	}
 	multi := 20
-	if page_show != "" {
-		multi, err = strconv.Atoi(page_show)
+	if page_size != "" {
+		multi, err = strconv.Atoi(page_size)
 		if err != nil {
 			c.JSON(400, gin.H{
 				"message":    "fail",
 				"error":      err.Error(),
 				"page_num":   "",
-				"page_show":  "",
+				"page":       "",
 				"page_count": "",
 				"result":     []interface{}{},
 			})
@@ -106,7 +107,7 @@ func action_show(c *gin.Context) {
 			"message":    "fail",
 			"error":      err.Error(),
 			"page_num":   "",
-			"page_show":  "",
+			"page":       "",
 			"page_count": "",
 			"result":     []interface{}{},
 		})
@@ -122,7 +123,7 @@ func action_show(c *gin.Context) {
 				"message":    "fail",
 				"error":      "Page Error",
 				"page_num":   "",
-				"page_show":  multi,
+				"page":       multi,
 				"page_count": page_count,
 				"result":     []interface{}{},
 			})
@@ -145,7 +146,7 @@ func action_show(c *gin.Context) {
 			"message":    "fail",
 			"error":      err.Error(),
 			"page_num":   "",
-			"page_show":  "",
+			"page":       "",
 			"page_count": "",
 			"result":     []interface{}{},
 		})
@@ -160,7 +161,7 @@ func action_show(c *gin.Context) {
 				"message":    "fail",
 				"error":      err.Error(),
 				"page_num":   "",
-				"page_show":  "",
+				"page":       "",
 				"page_count": "",
 				"result":     []interface{}{},
 			})
@@ -180,7 +181,7 @@ func action_show(c *gin.Context) {
 		"message":    "success",
 		"error":      "",
 		"page_num":   "",
-		"page_show":  "",
+		"page":       "",
 		"page_count": "",
 		"result":     ret,
 	})

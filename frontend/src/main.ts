@@ -14,99 +14,62 @@ const store = createStore({
   state() {
     return {
       workerQueue: [],
+      totalItems: 0
     };
   },
-  mutations: {
-    push(
-      state: {
-        workerQueue: Array<{
-          uuid: string;
-          status: string;
-          content: string;
-        }>;
-      },
-      payload: string
-    ) {
-      state.workerQueue = [
-        {
-          status: "Pending",
-          uuid: payload,
-          content: "",
-        },
-        ...state.workerQueue,
-      ];
-    },
-    change(
-      state: {
-        workerQueue: Array<{
-          uuid: string;
-          status: string;
-          content: string;
-        }>;
-      },
-      payload: { uuid: string; content: string; STATUS: string }
-    ) {
-      const index = state.workerQueue.findIndex(
-        (item) => item.uuid === payload.uuid
-      );
-      if (index !== -1) {
-        state.workerQueue[index].content = payload.content;
-        state.workerQueue[index].status = payload.STATUS;
-        let tmp = state.workerQueue[index];
-        state.workerQueue.splice(index, 1);
-        state.workerQueue.unshift(tmp);
-      }
-    },
-  },
+  mutations: {},
   actions: {
-    change(
+    fetchResults( 
       {
-        commit,
+        state
       }: {
-        commit: (
-          arg0: string,
-          arg1: { uuid: string; content: string; STATUS: string }
-        ) => void;
+        state: any;
       },
-      payload: { uuid: string; content: string; STATUS: string; intv?: number }
+      payload: { page?: number; pageSize?: number } = {}
     ) {
-      fetch("/webui/exploit_show_output", {
+      const { page = 1, pageSize = 20 } = payload;
+      const urlParams = new URLSearchParams(window.location.search);
+      const uuid = urlParams.get('uuid');
+      
+      let requestBody = '';
+      if (uuid) {
+        requestBody = `exploit_uuid=${uuid}`;
+      }
+      // 添加分页参数
+      requestBody += `&page=${page}&page_size=${pageSize}`;
+      
+      return fetch("/webui/exploit_show_output", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: `exploit_uuid=${payload.uuid}`,
+        body: requestBody
       })
-        .then((res) => res.json(), (err) => {
-          ElNotification({
-            title: "与目标主机失去连接，请重试",
-            message: err,
-            type: "error",
-          });
-          clearInterval(payload.intv);
-        })
+        .then((res) => res.json())
         .then((res) => {
-          if (res.result !== null) {
-            res = res.result[0];
-            payload.content = res.output;
-            payload.STATUS = res.status;
-            commit("change", payload);
-            clearInterval(payload.intv);
+          if (res.result && Array.isArray(res.result)) {
+            // 直接替换整个 workerQueue（只显示当前页的数据）
+            state.workerQueue = res.result.map((item: any) => ({
+              id: item.id,
+              status: item.status,
+              output: item.output,
+              update_time: item.update_time
+            }));
+            
+            // 使用后端返回的总条数
+            if (res.total !== undefined) {
+              state.totalItems = res.total;
+            }
           }
+          return res;
+        })
+        .catch((error) => {
+          console.error("获取结果失败:", error);
+          throw error;
         });
-    },
+    }
   },
-  getters: {
-    top(state: {
-      workerQueue: Array<{
-        uuid: string;
-        status: string;
-        content: string;
-      }>;
-    }) {
-      return state.workerQueue[state.workerQueue.length - 1];
-    },
-  },
+  getters: {},
 });
 
 const app = createApp(App);

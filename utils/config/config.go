@@ -8,8 +8,6 @@ import (
 	"crypto/x509"
 	"database/sql"
 	"encoding/pem"
-	"github.com/google/uuid"
-	"gopkg.in/ini.v1"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -17,6 +15,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"gopkg.in/ini.v1"
 )
 
 var Global_timeout_http int
@@ -158,14 +159,14 @@ func Init_conf() error {
 
 func generator_key() {
 	if _, err := os.Stat("cert"); os.IsNotExist(err) {
-		err := os.Mkdir("cert", 0660)
+		err := os.Mkdir("cert", os.ModePerm)
 		if err != nil {
 			log.Println("Error to create cert folder:", err)
 		}
 	}
 	_, err1 := os.Stat("cert/private.key")
 	_, err2 := os.Stat("cert/certificate.crt")
-	if os.IsNotExist(err1) || os.IsNotExist(err2) {
+	if err1 != nil || err2 != nil {
 		privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
 			log.Fatal(err)
@@ -180,11 +181,11 @@ func generator_key() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = ioutil.WriteFile("cert/private.key", encodePrivateKeyToPEM(privateKey), 0600)
+		err = ioutil.WriteFile("cert/private.key", encodePrivateKeyToPEM(privateKey), os.ModePerm)
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = ioutil.WriteFile("cert/certificate.crt", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}), 0644)
+		err = ioutil.WriteFile("cert/certificate.crt", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}), os.ModePerm)
 		if err != nil {
 			log.Fatal(err)
 		}

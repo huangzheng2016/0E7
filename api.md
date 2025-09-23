@@ -682,7 +682,7 @@ show the output of the exploit task,including the live view
 | Parameter      | Type   | Required | Description                                                 |
 |----------------|--------|----------|-------------------------------------------------------------|
 | `id`           | int    | no       | if not empty,show the task match `id`                       |
-| `page_show`    | int    | no       | default 20,show `page_show` task a page                     |
+| `page`    | int    | no       | default 20,show `page` task a page                     |
 | `page_num`     | int    | no       | default 1,show the `page_num` page                          |
 | `exploit_uuid` | string | no       | if not empty,show the task match `exploit_uuid`             |
 | `platform`     | string | no       | if not empty,show the task match `platform`                 |
@@ -703,7 +703,7 @@ show the output of the exploit task,including the live view
 | `error`        | string   |          | error message                                    |
 | `page_count`   | int      |          | total number of pages                            |
 | `page_num`     | int      |          | the current pages                                |
-| `page_show`    | int      |          | the number of the task one pages show            |
+| `page`    | int      |          | the number of the task one pages show            |
 | `result`       | []object |          | a result object                                  |
 | `id`           | int      | `result` | the id of the task                               |                                          |
 | `exploit_uuid` | string   | `result` | the exploit_uuid of the task                     |
@@ -743,7 +743,7 @@ Content-Type: application/json
     "message": "success",
     "page_count": 1,
     "page_num": 1,
-    "page_show": 20,
+    "page": 20,
     "result": [
         {
             "arch": "",
@@ -791,7 +791,7 @@ show the output of the exploit task,including the live view
 | Parameter      | Type   | Required | Description                                     |
 |----------------|--------|----------|-------------------------------------------------|
 | `id`           | int    | no       | if not empty,show the task match `id`           |
-| `page_show`    | int    | no       | default 20,show `page_show` task a page         |
+| `page`    | int    | no       | default 20,show `page` task a page         |
 | `page_num`     | int    | no       | default 1,show the `page_num` page              |
 | `exploit_uuid` | string | no       | if not empty,show the task match `exploit_uuid` |
 | `client_uuid`  | string | no       | if not empty,show the task match `client_uuid`  |
@@ -812,7 +812,7 @@ show the output of the exploit task,including the live view
 | `error`        | string   |          | error message                                                        |
 | `page_count`   | int      |          | total number of pages                                                |
 | `page_num`     | int      |          | the current pages                                                    |
-| `page_show`    | int      |          | the number of the task one pages show                                |
+| `page`    | int      |          | the number of the task one pages show                                |
 | `result`       | []object |          | a result object                                                      |
 | `id`           | int      | `result` | the id of the task                                                   |                                          |
 | `exploit_uuid` | string   | `result` | the exploit_uuid of the task                                         |
@@ -846,7 +846,7 @@ Content-Type: application/json
     "error": "",
     "page_count": 8,
     "page_num": 1,
-    "page_show": 20,
+    "page": 20,
     "result": [
         {
             "client_uuid": "1ac5bb86-cda9-44b9-b7d5-acb59b498852",

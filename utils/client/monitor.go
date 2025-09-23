@@ -37,7 +37,6 @@ func monitor() {
 		log.Println(err)
 	}
 	if response.StatusCode == 200 {
-		heartbeat_delay = 5
 		var result map[string]interface{}
 		err = json.NewDecoder(response.Body).Decode(&result)
 		if err != nil {

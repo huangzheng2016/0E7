@@ -4,12 +4,13 @@ import (
 	"0E7/utils/config"
 	"bytes"
 	"encoding/base64"
-	"github.com/traefik/yaegi/interp"
-	"github.com/traefik/yaegi/stdlib"
 	"log"
 	"os/exec"
 	"regexp"
 	"time"
+
+	"github.com/traefik/yaegi/interp"
+	"github.com/traefik/yaegi/stdlib"
 )
 
 func action() {
@@ -43,7 +44,8 @@ func action() {
 				}
 				code = string(code_decode)
 				var new_output string
-				if fileType == "code/python2" || fileType == "code/python3" {
+				switch fileType {
+				case "code/python2", "code/python3":
 					cmd := exec.Command("python", "-c", string(code))
 					var stdout, stdeer bytes.Buffer
 					cmd.Stderr = &stdeer
@@ -60,8 +62,7 @@ func action() {
 						log.Println("Runtime error:", stdeer.String())
 					}
 					new_output = stdout.String()
-
-				} else if fileType == "code/golang" {
+				case "code/golang":
 					var goibuf bytes.Buffer
 					goi := interp.New(interp.Options{Stdout: &goibuf})
 					goi.Use(stdlib.Symbols)
@@ -76,6 +77,9 @@ func action() {
 						return
 					}
 					new_output = goibuf.String()
+				default:
+					log.Println("Unknown file type:", fileType)
+					return
 				}
 				if new_output != output {
 					_, err = config.Db.Exec("UPDATE `0e7_action` SET output=?,updated=? WHERE id=?", new_output, time.Now().Add(time.Duration(interval)*time.Second).Format(time.DateTime), id)
