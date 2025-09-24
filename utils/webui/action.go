@@ -2,8 +2,8 @@ package webui
 
 import (
 	"0E7/utils/config"
+	"0E7/utils/database"
 	"bytes"
-	"database/sql"
 	"encoding/base64"
 	"log"
 	"math"
@@ -23,7 +23,7 @@ func action(c *gin.Context) {
 	code := c.PostForm("code")
 	output := c.PostForm("output")
 	interval := c.PostForm("interval")
-	updated := time.Now().Format(time.DateTime)
+
 	if code != "" {
 		match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(code)
 		if match == nil {
@@ -35,11 +35,23 @@ func action(c *gin.Context) {
 			return
 		}
 	}
-	if id == "" {
-		_, err = config.Db.Exec("INSERT INTO `0e7_action` (name,code,output,interval,updated) VALUES (?,?,?,?,?)", name, code, output, interval, updated)
-	} else {
-		_, err = config.Db.Exec("UPDATE `0e7_action` SET name=?,code=?,output=?,interval=?,updated=? WHERE uuid=?", name, code, output, interval, updated, id)
+
+	intervalInt, _ := strconv.Atoi(interval)
+	actionRecord := database.Action{
+		Name:     name,
+		Code:     code,
+		Output:   output,
+		Interval: intervalInt,
 	}
+
+	if id == "" {
+		err = config.Db.Create(&actionRecord).Error
+	} else {
+		idInt, _ := strconv.Atoi(id)
+		actionRecord.ID = uint(idInt)
+		err = config.Db.Save(&actionRecord).Error
+	}
+
 	if err != nil {
 		c.JSON(400, gin.H{
 			"message": "fail",
@@ -96,11 +108,11 @@ func action_show(c *gin.Context) {
 			multi = 1
 		}
 	}
-	var count int
+	var count int64
 	if name == "" {
-		err = config.Db.QueryRow("SELECT COUNT(*) FROM `0e7_action` WHERE 1").Scan(&count)
+		err = config.Db.Model(&database.Action{}).Count(&count).Error
 	} else {
-		err = config.Db.QueryRow("SELECT COUNT(*) FROM `0e7_action` WHERE name LIKE ?", "%"+name+"%").Scan(&count)
+		err = config.Db.Model(&database.Action{}).Where("name LIKE ?", "%"+name+"%").Count(&count).Error
 	}
 	if err != nil {
 		c.JSON(400, gin.H{
@@ -131,15 +143,15 @@ func action_show(c *gin.Context) {
 		}
 	}
 
-	var rows *sql.Rows
+	var actions []database.Action
 	if id == "" {
 		if name == "" {
-			rows, err = config.Db.Query("SELECT name,substr(code,10240),substr(output,10240),output,interval,updated FROM `0e7_action` WHERE 1 ORDER BY id DESC LIMIT ? OFFSET ?", multi, (offset-1)*multi)
+			err = config.Db.Order("id DESC").Limit(multi).Offset((offset - 1) * multi).Find(&actions).Error
 		} else {
-			rows, err = config.Db.Query("SELECT name,substr(code,10240),substr(output,10240),output,interval,updated FROM `0e7_action` WHERE name LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?", "%"+name+"%", multi, (offset-1)*multi)
+			err = config.Db.Where("name LIKE ?", "%"+name+"%").Order("id DESC").Limit(multi).Offset((offset - 1) * multi).Find(&actions).Error
 		}
 	} else {
-		rows, err = config.Db.Query("SELECT name,code,output,interval,updated FROM `0e7_action` WHERE id=? ORDER BY id DESC LIMIT ? OFFSET ?", id, multi, (offset-1)*multi)
+		err = config.Db.Where("id = ?", id).Order("id DESC").Limit(multi).Offset((offset - 1) * multi).Find(&actions).Error
 	}
 	if err != nil {
 		c.JSON(400, gin.H{
@@ -153,27 +165,23 @@ func action_show(c *gin.Context) {
 		return
 	}
 	var ret []map[string]interface{}
-	for rows.Next() {
-		var name, code, output, interval, updated string
-		err := rows.Scan(&name, &code, &output, &interval, &updated)
-		if err != nil {
-			c.JSON(400, gin.H{
-				"message":    "fail",
-				"error":      err.Error(),
-				"page_num":   "",
-				"page":       "",
-				"page_count": "",
-				"result":     []interface{}{},
-			})
-			return
+	for _, action := range actions {
+		code := action.Code
+		output := action.Output
+		if len(code) > 10240 {
+			code = code[:10240]
 		}
+		if len(output) > 10240 {
+			output = output[:10240]
+		}
+
 		element := map[string]interface{}{
-			"id":       id,
-			"name":     name,
+			"id":       action.ID,
+			"name":     action.Name,
 			"code":     code,
 			"output":   output,
-			"interval": interval,
-			"updated":  updated,
+			"interval": action.Interval,
+			"updated":  action.UpdatedAt.Format(time.DateTime),
 		}
 		ret = append(ret, element)
 	}
@@ -188,17 +196,11 @@ func action_show(c *gin.Context) {
 }
 func update_action() {
 	var err error
-	var id, interval int
-	var name, code, output, updated string
-	err = config.Db.QueryRow("SELECT id,name,code,output,interval,updated FROM `0e7_action` WHERE interval>=0 AND code!='' ORDER BY updated LIMIT 1").Scan(&id, &name, &code, &output, &interval, &updated)
+	var actionRecord database.Action
+	err = config.Db.Where("interval >= 0 AND code != ''").Order("updated_at").First(&actionRecord).Error
 	if err == nil {
-		updatedTime, err := time.ParseInLocation(time.DateTime, updated, time.Now().Location())
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		if updatedTime.Before(time.Now()) {
-			match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(code)
+		if actionRecord.UpdatedAt.Before(time.Now()) {
+			match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(actionRecord.Code)
 			if match != nil {
 				fileType := match[1]
 				data := match[2]
@@ -207,7 +209,7 @@ func update_action() {
 					log.Println("Base64 decode error:", err)
 					return
 				}
-				code = string(code_decode)
+				code := string(code_decode)
 				var new_output string
 				if fileType == "code/python2" || fileType == "code/python3" {
 					log.Println("Python support in future")
@@ -216,27 +218,29 @@ func update_action() {
 					var goibuf bytes.Buffer
 					goi := interp.New(interp.Options{Stdout: &goibuf})
 					goi.Use(stdlib.Symbols)
-					programs[id], err = goi.Compile(code)
+					programs[int(actionRecord.ID)], err = goi.Compile(code)
 					if err != nil {
 						log.Println("Compile error:", err.Error())
 						return
 					}
-					_, err = goi.Execute(programs[id])
+					_, err = goi.Execute(programs[int(actionRecord.ID)])
 					if err != nil {
 						log.Println("Runtime error:", err.Error())
 						return
 					}
 					new_output = goibuf.String()
 				}
-				if new_output != output {
-					_, err = config.Db.Exec("UPDATE `0e7_action` SET output=?,updated=? WHERE id=?", new_output, time.Now().Add(time.Duration(interval)*time.Second).Format(time.DateTime), id)
+				if new_output != actionRecord.Output {
+					actionRecord.Output = new_output
+					actionRecord.UpdatedAt = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
+					err = config.Db.Save(&actionRecord).Error
 					if err != nil {
 						log.Println("Update output error:", err.Error())
 						return
 					}
-					log.Printf("Action %s update: %s\n", name, new_output)
+					log.Printf("Action %s update: %s\n", actionRecord.Name, new_output)
 				}
-				programs[id] = nil
+				programs[int(actionRecord.ID)] = nil
 			} else {
 				log.Println("Code format error")
 				return

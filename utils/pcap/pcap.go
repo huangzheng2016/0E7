@@ -2,6 +2,7 @@ package pcap
 
 import (
 	"0E7/utils/config"
+	"0E7/utils/database"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -103,8 +104,23 @@ func reassemblyCallback(entry FlowEntry) {
 		return
 	}
 
-	_, err = config.Db.Exec("INSERT INTO `0e7_pcap` (src_port,dst_port,src_ip,dst_ip,time,duration,num_packets,blocked,filename,fingerprints,suricata,flow,tags,size,updated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now', 'localtime'))",
-		entry.SrcPort, entry.DstPort, entry.SrcIp, entry.DstIp, entry.Time, entry.Duration, entry.NumPackets, entry.Blocked, entry.Filename, Fingerprints, Suricata, flowFile, Tags, entry.Size)
+	pcapRecord := database.Pcap{
+		SrcPort:      fmt.Sprintf("%d", entry.SrcPort),
+		DstPort:      fmt.Sprintf("%d", entry.DstPort),
+		SrcIP:        entry.SrcIp,
+		DstIP:        entry.DstIp,
+		Time:         entry.Time,
+		Duration:     entry.Duration,
+		NumPackets:   entry.NumPackets,
+		Blocked:      fmt.Sprintf("%t", entry.Blocked),
+		Filename:     entry.Filename,
+		Fingerprints: string(Fingerprints),
+		Suricata:     string(Suricata),
+		Flow:         flowFile,
+		Tags:         string(Tags),
+		Size:         fmt.Sprintf("%d", entry.Size),
+	}
+	err = config.Db.Create(&pcapRecord).Error
 
 	if err != nil {
 		log.Println("Insert Error:", err)
@@ -256,15 +272,21 @@ func WatchDir(watch_dir string) {
 	}
 */
 func checkfile(fname string, status bool) bool {
-	var count int
-	err := config.Db.QueryRow("SELECT COUNT(*) FROM `0e7_pcapfile` WHERE filename=?", fname).Scan(&count)
+	var count int64
+	err := config.Db.Model(&database.PcapFile{}).Where("filename = ?", fname).Count(&count).Error
 	if err != nil {
 		log.Println("Failed to query database:", err)
 		return false
 	}
 	if count == 0 {
 		if status {
-			_, err = config.Db.Exec("INSERT INTO `0e7_pcapfile` (filename,updated) VALUES (?,datetime('now', 'localtime'))", fname)
+			pcapFile := database.PcapFile{
+				Filename: fname,
+			}
+			err = config.Db.Create(&pcapFile).Error
+			if err != nil {
+				log.Println("Failed to insert pcap file:", err)
+			}
 		}
 		return true
 	} else {

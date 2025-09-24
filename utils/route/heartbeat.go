@@ -2,10 +2,11 @@ package route
 
 import (
 	"0E7/utils/config"
+	"0E7/utils/database"
 	"0E7/utils/update"
-	"github.com/gin-gonic/gin"
 	"log"
-	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 func heartbeat(c *gin.Context) {
@@ -18,7 +19,7 @@ func heartbeat(c *gin.Context) {
 	memory_use := c.PostForm("memory_use")
 	memory_max := c.PostForm("memory_max")
 	pcap := c.PostForm("pcap")
-	updated := time.Now().Format(time.DateTime)
+
 	if hostname == "" || platform == "" || arch == "" || cpu == "" || cpu_use == "" || memory_use == "" || memory_max == "" {
 		c.JSON(400, gin.H{
 			"message": "fail",
@@ -28,15 +29,36 @@ func heartbeat(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	var count int
-	err := config.Db.QueryRow("SELECT COUNT(*) FROM `0e7_client` WHERE uuid=? AND platform=? AND arch=?", client_uuid, platform, arch).Scan(&count)
+
+	var count int64
+	err := config.Db.Model(&database.Client{}).Where("uuid = ? AND platform = ? AND arch = ?", client_uuid, platform, arch).Count(&count).Error
 	if err != nil {
 		log.Println("Failed to query database:", err)
 	} else {
 		if count == 0 {
-			_, err = config.Db.Exec("INSERT INTO `0e7_client` (uuid,hostname,platform,arch,cpu,cpu_use,memory_use,memory_max,pcap,updated) VALUES (?,?,?,?,?,?,?,?,?,?)", client_uuid, hostname, platform, arch, cpu, cpu_use, memory_use, memory_max, pcap, updated)
+			client := database.Client{
+				UUID:      client_uuid,
+				Hostname:  hostname,
+				Platform:  platform,
+				Arch:      arch,
+				CPU:       cpu,
+				CPUUse:    cpu_use,
+				MemoryUse: memory_use,
+				MemoryMax: memory_max,
+				Pcap:      pcap,
+			}
+			err = config.Db.Create(&client).Error
 		} else {
-			_, err = config.Db.Exec("UPDATE `0e7_client` SET hostname=?,platform=?,arch=?,cpu=?,cpu_use=?,memory_use=?,memory_max=?,pcap=?,updated=? WHERE uuid=? AND platform=? AND arch=?", hostname, platform, arch, cpu, cpu_use, memory_use, memory_max, pcap, updated, client_uuid, platform, arch)
+			err = config.Db.Model(&database.Client{}).Where("uuid = ? AND platform = ? AND arch = ?", client_uuid, platform, arch).Updates(map[string]interface{}{
+				"hostname":   hostname,
+				"platform":   platform,
+				"arch":       arch,
+				"cpu":        cpu,
+				"cpu_use":    cpu_use,
+				"memory_use": memory_use,
+				"memory_max": memory_max,
+				"pcap":       pcap,
+			}).Error
 		}
 		if err != nil {
 			c.JSON(400, gin.H{

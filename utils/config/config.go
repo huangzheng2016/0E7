@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"database/sql"
 	"encoding/pem"
 	"io/ioutil"
 	"log"
@@ -18,13 +17,15 @@ import (
 
 	"github.com/google/uuid"
 	"gopkg.in/ini.v1"
+	"gorm.io/gorm"
 )
 
 var Global_timeout_http int
 var Global_timeout_download int
 var Global_debug bool
 
-var Db *sql.DB
+var Db *gorm.DB
+var GormDb *gorm.DB
 var Server_mode bool
 var Server_tls bool
 var Server_port string
@@ -95,6 +96,7 @@ func Init_conf() error {
 			Server_url = strings.Replace(Server_url, "https://", "http://", 1)
 		}
 		Db, err = database.Init_database(section)
+		GormDb = Db
 	}
 
 	section = cfg.Section("client")

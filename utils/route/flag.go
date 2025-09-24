@@ -2,16 +2,17 @@ package route
 
 import (
 	"0E7/utils/config"
+	"0E7/utils/database"
+
 	"github.com/gin-gonic/gin"
-	"time"
 )
 
 func flag(c *gin.Context) {
 	exploit_uuid := c.PostForm("uuid")
 	exploit_flag := c.PostForm("flag")
-	updated := time.Now().Format(time.DateTime)
-	var count int
-	err := config.Db.QueryRow("SELECT COUNT(*) FROM `0e7_flag` WHERE flag=?", exploit_flag).Scan(&count)
+
+	var count int64
+	err := config.Db.Model(&database.Flag{}).Where("flag = ?", exploit_flag).Count(&count).Error
 	if err != nil {
 		c.JSON(400, gin.H{
 			"message": "fail",
@@ -19,14 +20,39 @@ func flag(c *gin.Context) {
 		})
 		return
 	}
+
 	if count == 0 {
-		_, err = config.Db.Exec("INSERT INTO `0e7_flag` (uuid,flag,status,updated) VALUES (?,?,?,?)", exploit_uuid, exploit_flag, "QUEUE", updated)
+		flag := database.Flag{
+			UUID:   exploit_uuid,
+			Flag:   exploit_flag,
+			Status: "QUEUE",
+		}
+		err = config.Db.Create(&flag).Error
+		if err != nil {
+			c.JSON(400, gin.H{
+				"message": "fail",
+				"error":   err.Error(),
+			})
+			return
+		}
 		c.JSON(200, gin.H{
 			"message": "success",
 			"error":   "",
 		})
 	} else {
-		_, err = config.Db.Exec("INSERT INTO `0e7_flag` (uuid,flag,status,udpated) VALUES (?,?,?,?)", exploit_uuid, exploit_flag, "SKIPPED", updated)
+		flag := database.Flag{
+			UUID:   exploit_uuid,
+			Flag:   exploit_flag,
+			Status: "SKIPPED",
+		}
+		err = config.Db.Create(&flag).Error
+		if err != nil {
+			c.JSON(400, gin.H{
+				"message": "fail",
+				"error":   err.Error(),
+			})
+			return
+		}
 		c.JSON(202, gin.H{
 			"message": "skipped",
 			"error":   "",

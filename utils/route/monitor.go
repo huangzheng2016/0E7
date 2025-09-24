@@ -2,6 +2,8 @@ package route
 
 import (
 	"0E7/utils/config"
+	"0E7/utils/database"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,7 +18,8 @@ func monitor(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	rows, err := config.Db.Query("SELECT id,types,data,interval FROM `0e7_monitor` WHERE uuid=?", uuid)
+	var monitors []database.Monitor
+	err := config.Db.Where("uuid = ?", uuid).Find(&monitors).Error
 	if err != nil {
 		c.JSON(400, gin.H{
 			"message": "fail",
@@ -25,27 +28,15 @@ func monitor(c *gin.Context) {
 		})
 		return
 	}
-	defer rows.Close()
 
 	var ret []map[string]interface{}
 	found := false
-	for rows.Next() {
-		var id int
-		var types, data, interval string
-		err := rows.Scan(&id, &types, &data, &interval)
-		if err != nil {
-			c.JSON(400, gin.H{
-				"message": "fail",
-				"error":   err.Error(),
-				"result":  []interface{}{},
-			})
-			return
-		}
+	for _, monitor := range monitors {
 		element := map[string]interface{}{
-			"id":       id,
-			"types":    types,
-			"data":     data,
-			"interval": interval,
+			"id":       monitor.ID,
+			"types":    monitor.Types,
+			"data":     monitor.Data,
+			"interval": monitor.Interval,
 		}
 		ret = append(ret, element)
 		found = true

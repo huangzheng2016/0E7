@@ -2,6 +2,7 @@ package server
 
 import (
 	"0E7/utils/config"
+	"0E7/utils/database"
 	"bytes"
 	"encoding/base64"
 	"log"
@@ -23,17 +24,11 @@ func action() {
 		jobsMutex.Unlock()
 	}()
 	var err error
-	var id, interval int
-	var name, code, output, updated string
-	err = config.Db.QueryRow("SELECT id,name,code,output,interval,updated FROM `0e7_action` WHERE interval>=0 AND code!='' ORDER BY updated LIMIT 1").Scan(&id, &name, &code, &output, &interval, &updated)
+	var actionRecord database.Action
+	err = config.Db.Where("interval >= 0 AND code != ''").Order("updated_at").First(&actionRecord).Error
 	if err == nil {
-		updatedTime, err := time.ParseInLocation(time.DateTime, updated, time.Now().Location())
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		if updatedTime.Before(time.Now()) {
-			match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(code)
+		if actionRecord.UpdatedAt.Before(time.Now()) {
+			match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(actionRecord.Code)
 			if match != nil {
 				fileType := match[1]
 				data := match[2]
@@ -42,7 +37,7 @@ func action() {
 					log.Println("Base64 decode error:", err)
 					return
 				}
-				code = string(code_decode)
+				code := string(code_decode)
 				var new_output string
 				switch fileType {
 				case "code/python2", "code/python3":
@@ -66,12 +61,12 @@ func action() {
 					var goibuf bytes.Buffer
 					goi := interp.New(interp.Options{Stdout: &goibuf})
 					goi.Use(stdlib.Symbols)
-					programs[id], err = goi.Compile(code)
+					programs[int(actionRecord.ID)], err = goi.Compile(code)
 					if err != nil {
 						log.Println("Compile error:", err.Error())
 						return
 					}
-					_, err = goi.Execute(programs[id])
+					_, err = goi.Execute(programs[int(actionRecord.ID)])
 					if err != nil {
 						log.Println("Runtime error:", err.Error())
 						return
@@ -81,15 +76,17 @@ func action() {
 					log.Println("Unknown file type:", fileType)
 					return
 				}
-				if new_output != output {
-					_, err = config.Db.Exec("UPDATE `0e7_action` SET output=?,updated=? WHERE id=?", new_output, time.Now().Add(time.Duration(interval)*time.Second).Format(time.DateTime), id)
+				if new_output != actionRecord.Output {
+					actionRecord.Output = new_output
+					actionRecord.UpdatedAt = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
+					err = config.Db.Save(&actionRecord).Error
 					if err != nil {
 						log.Println("Update output error:", err.Error())
 						return
 					}
-					log.Printf("Action %s update: %s\n", name, new_output)
+					log.Printf("Action %s update: %s\n", actionRecord.Name, new_output)
 				}
-				programs[id] = nil
+				programs[int(actionRecord.ID)] = nil
 			} else {
 				log.Println("Code format error")
 				return

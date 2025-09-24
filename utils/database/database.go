@@ -1,44 +1,54 @@
 package database
 
 import (
-	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
-	_ "github.com/glebarez/sqlite"
 	"gopkg.in/ini.v1"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-func Init_database(section *ini.Section) (db *sql.DB, err error) {
+func Init_database(section *ini.Section) (db *gorm.DB, err error) {
 	engine := section.Key("db_engine").String()
 	switch engine {
-	/*
-		case "mysql":
-			host := section.Key("db_host").String()
-			port := section.Key("db_port").String()
-			username := section.Key("db_username").String()
-			password := section.Key("db_password").String()
-			tables := section.Key("db_tables").String()
-			db, err = sql.Open("mysql", log.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, host, port, tables))
-		//case "sqlite3":
-	*/
+	case "mysql":
+		host := section.Key("db_host").String()
+		port := section.Key("db_port").String()
+		username := section.Key("db_username").String()
+		password := section.Key("db_password").String()
+		tables := section.Key("db_tables").String()
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&compress=True",
+			username, password, host, port, tables)
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+			SkipDefaultTransaction: true,
+			Logger:                 logger.Default.LogMode(logger.Silent),
+		})
 	default:
-		engine = "sqlite3"
-		db, err = sql.Open("sqlite", "sqlite.db")
-		_, err = db.Exec("PRAGMA page_size = 4096;")      // 设置页面大小
-		_, err = db.Exec("PRAGMA auto_vacuum = FULL;")    // 启用自动清理
-		_, err = db.Exec("PRAGMA synchronous = NORMAL;")  // 设置同步模式
-		_, err = db.Exec("PRAGMA journal_mode = WAL;")    // 启用 WAL 模式
-		_, err = db.Exec("PRAGMA cache_size = -1024;")    // 设置缓存大小（负数表示使用默认值）
-		_, err = db.Exec("PRAGMA temp_store = MEMORY;")   // 设置临时存储模式为内存
-		_, err = db.Exec("PRAGMA mmap_size = 268435456;") // 设置内存映射大小
-		_, err = db.Exec("PRAGMA optimize;")              // 优化数据库
-		_, err = db.Exec("VACUUM;")
-		/*
-			default:
-				log.Println("Unknown database engine:", engine)
-				return db, err
-		*/
+		engine = "sqlite"
+		dsn := "file:sqlite.db?mode=rwc" +
+			"&_journal_mode=WAL" +
+			"&_synchronous=FULL" +
+			"&_cache_size=-2000" +
+			"&_auto_vacuum=FULL" +
+			"&_page_size=4096" +
+			"&_mmap_size=268435456" +
+			"&_temp_store=2" +
+			"&_busy_timeout=5000" +
+			"&_foreign_keys=1" +
+			"&_secure_delete=OFF"
+		db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{
+			SkipDefaultTransaction: true,
+			Logger:                 logger.Default.LogMode(logger.Silent),
+		})
+		if err == nil {
+			db.Exec("VACUUM;")
+			sqlDB, _ := db.DB()
+			sqlDB.SetMaxOpenConns(1)
+		}
 	}
 
 	if err != nil {
@@ -46,7 +56,13 @@ func Init_database(section *ini.Section) (db *sql.DB, err error) {
 		return db, err
 	}
 
-	err = db.Ping()
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Println("Failed to get underlying sql.DB:", err)
+		return db, err
+	}
+
+	err = sqlDB.Ping()
 	if err != nil {
 		log.Println("Failed to connect to database:", err)
 		os.Exit(1)
@@ -54,198 +70,55 @@ func Init_database(section *ini.Section) (db *sql.DB, err error) {
 
 	log.Println("Connected to database:", engine)
 
-	init_database_client(db, engine)
+	err = init_database_client(db, engine)
 	return db, err
 }
 
-func init_database_client(db *sql.DB, engine string) error {
-	var stmt *sql.Stmt
-	var err error
-	switch engine {
-	case "sqlite3":
-		stmt, err = db.Prepare(`
-		CREATE TABLE IF NOT EXISTS '0e7_client' (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-			uuid TEXT NOT NULL,
-			hostname TEXT NOT NULL,
-            platform TEXT NOT NULL,
-            arch TEXT NOT NULL,
-            cpu TEXT NOT NULL,
-            cpu_use TEXT NOT NULL,
-            memory_use TEXT NOT NULL,
-            memory_max TEXT NOT NULL,
-            pcap TEXT NOT NULL,
-            updated TEXT NOT NULL
-        )
-	`)
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec()
+func init_database_client(db *gorm.DB, engine string) error {
+	// 自动迁移所有表结构
+	err := db.AutoMigrate(
+		&Client{},
+		&Exploit{},
+		&Flag{},
+		&ExploitOutput{},
+		&Action{},
+		&PcapFile{},
+		&Monitor{},
+		&Pcap{},
+	)
 	if err != nil {
-		log.Println("Table '0e7_client' create failed", err)
+		log.Println("Failed to migrate database tables:", err)
 		return err
 	}
-	log.Println("Table '0e7_client' is created successfully.")
 
-	switch engine {
-	case "sqlite3":
-		stmt, err = db.Prepare(`
-		CREATE TABLE IF NOT EXISTS '0e7_exploit' (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-			uuid TEXT NOT NULL,
-			filename TEXT,
-			environment TEXT,
-            command TEXT,
-            argv TEXT,
-            platform TEXT,
-            arch TEXT,
-            filter TEXT,
-            timeout TEXT,
-            times TEXT NOT NULL
-        )
-	`)
+	// 初始化默认数据
+	if engine == "sqlite" {
+		// 插入默认的 action 数据
+		var count int64
+		db.Model(&Action{}).Count(&count)
+		if count == 0 {
+			actions := []Action{
+				{
+					ID:       1,
+					Name:     "flag",
+					Code:     "",
+					Output:   "",
+					Interval: -1,
+				},
+				{
+					ID:       2,
+					Name:     "ipbucket_default",
+					Code:     "127.0.0.1",
+					Output:   "",
+					Interval: -1,
+				},
+			}
+			for _, action := range actions {
+				db.Create(&action)
+			}
+		}
 	}
-	defer stmt.Close()
-	_, err = stmt.Exec()
-	if err != nil {
-		log.Println("Table '0e7_exploit' create failed", err)
-		return err
-	}
-	log.Println("Table '0e7_exploit' is created successfully.")
 
-	switch engine {
-	case "sqlite3":
-		stmt, err = db.Prepare(`
-		CREATE TABLE IF NOT EXISTS '0e7_flag' (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-			uuid TEXT NOT NULL,
-			flag TEXT NOT NULL,
-			status TEXT,
-			updated TEXT                 
-        )
-	`)
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec()
-	if err != nil {
-		log.Println("Table '0e7_flag' create failed", err)
-		return err
-	}
-	log.Println("Table '0e7_flag' is created successfully.")
-
-	switch engine {
-	case "sqlite3":
-		stmt, err = db.Prepare(`
-		CREATE TABLE IF NOT EXISTS '0e7_exploit_output' (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-			uuid TEXT NOT NULL,
-			client TEXT NOT NULL,
-			output TEXT,
-			status TEXT,
-			updated TEXT          
-        )
-	`)
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec()
-	if err != nil {
-		log.Println("Table '0e7_exploit_output' create failed", err)
-		return err
-	}
-	log.Println("Table '0e7_exploit_output' is created successfully.")
-
-	switch engine {
-	case "sqlite3":
-		stmt, err = db.Prepare(`
-		CREATE TABLE IF NOT EXISTS '0e7_action' (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
-			code TEXT,
-			output TEXT,
-			interval INT,
-			updated TEXT          
-        );
-		INSERT OR IGNORE INTO '0e7_action' (id, name, code, output, interval, updated) VALUES (1,'flag', '', '', -1, datetime('now', 'localtime'));
-		INSERT OR IGNORE INTO '0e7_action' (id, name, code, output, interval, updated) VALUES (2,'ipbucket_default', '127.0.0.1', '', -1, datetime('now', 'localtime'));
-	`)
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec()
-	if err != nil {
-		log.Println("Table '0e7_action' create failed", err)
-		return err
-	}
-	log.Println("Table '0e7_action' is created successfully.")
-
-	switch engine {
-	case "sqlite3":
-		stmt, err = db.Prepare(`
-		CREATE TABLE IF NOT EXISTS '0e7_pcapfile' (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-			filename TEXT,
-			updated TEXT          
-        );
-	`)
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec()
-	if err != nil {
-		log.Println("Table '0e7_pcapfile' create failed", err)
-		return err
-	}
-	log.Println("Table '0e7_pcapfile' is created successfully.")
-
-	switch engine {
-	case "sqlite3":
-		stmt, err = db.Prepare(`
-		CREATE TABLE IF NOT EXISTS '0e7_monitor' (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-			uuid TEXT,
-			types TEXT,
-			data TEXT,
-			interval INT,
-			updated TEXT          
-        );
-	`)
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec()
-	if err != nil {
-		log.Println("Table '0e7_monitor' create failed", err)
-		return err
-	}
-	log.Println("Table '0e7_monitor' is created successfully.")
-
-	switch engine {
-	case "sqlite3":
-		stmt, err = db.Prepare(`
-		CREATE TABLE IF NOT EXISTS '0e7_pcap' (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-			src_port TEXT,
-			dst_port TEXT,
-			src_ip TEXT,
-			dst_ip TEXT,
-			time INT,
-			duration INT,
-			num_packets INT,
-			blocked TEXT,
-			filename TEXT,
-			fingerprints TEXT,
-			suricata TEXT,
-			flow TEXT,
-			tags TEXT,
-			size TEXT,
-			updated TEXT          
-        );
-	`)
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec()
-	if err != nil {
-		log.Println("Table '0e7_pcap' create failed", err)
-		return err
-	}
-	log.Println("Table '0e7_pcap' is created successfully.")
-
-	return err
+	log.Println("Database tables migrated successfully.")
+	return nil
 }
