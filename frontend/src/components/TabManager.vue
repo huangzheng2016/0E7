@@ -187,7 +187,7 @@ const activeTab = computed(() => {
 // 处理ActionList的事件
 const handleActionEdit = (action: any) => {
   addTab({
-    title: `编辑定时计划 - ${action.name}`,
+    title: `${action.name} - 编辑定时计划`,
     type: 'action-edit',
     data: action,
     closable: true
@@ -206,7 +206,7 @@ const handleActionAdd = () => {
 // 处理ExploitList的事件
 const handleExploitEdit = (exploit: any) => {
   addTab({
-    title: `编辑执行脚本 - ${exploit.exploit_uuid}`,
+    title: `${exploit.exploit_uuid} - 编辑执行脚本`,
     type: 'exploit-edit',
     data: exploit,
     closable: true
