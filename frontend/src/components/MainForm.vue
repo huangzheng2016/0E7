@@ -82,10 +82,11 @@ const fileChange:UploadProps['onChange'] = (file, files) => {
 const updateUploadData = () => {
     if (uploadRef.value) {
         const uploadElement = uploadRef.value
-        // 更新上传数据
-        uploadElement.data = {
+        if ('setData' in uploadElement) {
+          (uploadElement as any).setData({
             ...form.value,
             environment: computedEnvironment.value
+          })
         }
     }
 }
@@ -146,7 +147,7 @@ const submit = () => {
         for (const [key, value] of Object.entries(submitData)) {
             if (key === 'code') {
                 // 将代码编码为base64格式
-                const encodedCode = encodeCodeToBase64(value, form.value.code_language)
+                const encodedCode = encodeCodeToBase64(String(value), form.value.code_language)
                 formData.append('code', encodedCode)
             } else {
                 formData.append(key, String(value));

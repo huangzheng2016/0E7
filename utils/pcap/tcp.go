@@ -39,7 +39,7 @@ type tcpStreamFactory struct {
 
 func (factory *tcpStreamFactory) New(net, transport gopacket.Flow, tcp *layers.TCP, ac reassembly.AssemblerContext) reassembly.Stream {
 	fsmOptions := reassembly.TCPSimpleFSMOptions{
-		SupportMissingEstablishment: nonstrict,
+		SupportMissingEstablishment: true,
 	}
 	stream := &tcpStream{
 		net:                net,

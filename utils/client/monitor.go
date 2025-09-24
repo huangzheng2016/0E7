@@ -73,6 +73,7 @@ func monitor() {
 		}
 	}
 }
+
 func monitor_run(id int) {
 	old := monitor_list[id]
 	if old.types == "pcap" {

@@ -5,12 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/ip4defrag"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
-	"github.com/google/gopacket/reassembly"
 	"io/ioutil"
 	"log"
 	"os"
@@ -18,20 +12,23 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/ip4defrag"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/reassembly"
 )
 
 var decoder = ""
 var lazy = false
 var checksum = false
 var nohttp = true
-
 var snaplen = 65536
 var tstype = ""
 var promisc = true
-
-var watch_dir = ""
 var flag_regex = ""
-var pcap_over_ip = ""
 var bpf = ""
 var nonstrict = false
 var experimental = false
@@ -121,12 +118,12 @@ func WatchDir(watch_dir string) {
 		log.Println("Failed to open the watch_dir with error: ", err)
 		err := os.MkdirAll(watch_dir, os.ModePerm)
 		if err != nil {
-			log.Println("无法创建文件夹:", err)
+			log.Println("Create dir failed:", err)
 			return
 		}
 		stat, err = os.Stat(watch_dir)
 		if err != nil {
-			log.Println("文件异常:", err)
+			log.Println("Stat dir failed:", err)
 			return
 		}
 	}

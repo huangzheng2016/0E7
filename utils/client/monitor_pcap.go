@@ -7,15 +7,16 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/pcap"
-	"github.com/google/gopacket/pcapgo"
 	"log"
 	"mime/multipart"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcapgo"
 )
 
 func moniter_pcap_device() string {
@@ -37,6 +38,7 @@ func moniter_pcap_device() string {
 	}
 	return string(device)
 }
+
 func moniter_pcap(device string, desc string, bpf string, timeout time.Duration) {
 	var wg sync.WaitGroup
 	if device != "" {
@@ -55,6 +57,7 @@ func moniter_pcap(device string, desc string, bpf string, timeout time.Duration)
 	}
 	wg.Wait()
 }
+
 func capture(device string, desc string, bpf string, timeout time.Duration, wg *sync.WaitGroup) (err error) {
 	defer wg.Done()
 	handle, err := pcap.OpenLive(device, 65536, true, timeout)
