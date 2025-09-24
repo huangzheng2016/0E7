@@ -40,6 +40,14 @@ const computedEnvironment = computed(() => {
     return env
 })
 
+// 计算文件上传的数据
+const uploadData = computed(() => {
+    return {
+        ...form.value,
+        environment: computedEnvironment.value
+    }
+})
+
 const beforeUpload: UploadProps['beforeUpload'] = (rawFile) => {
     let name = rawFile.name
     if (name.endsWith('.py') && name.endsWith('.zip')
@@ -374,7 +382,7 @@ onMounted(() => {
         </el-tab-pane>
         
         <el-tab-pane name="file" label="文件上传">
-            <el-upload class="upload-demo" drag action="/webui/exploit" :auto-upload="false" :data="form" ref="uploadRef"
+            <el-upload class="upload-demo" drag action="/webui/exploit" :auto-upload="false" :data="uploadData" ref="uploadRef"
                 :on-success="success_notice" :before-upload="beforeUpload" :on-exceed="handleExceed" :on-change="fileChange"
                 :on-error="error_notice" :on-remove="fileRemove" :multiple="false">
                 <el-icon class="el-icon--upload"><upload-filled /></el-icon>
@@ -407,10 +415,95 @@ onMounted(() => {
 
 .mode-tabs {
     margin-bottom: 20px;
+    width: 100%;
 }
 
 .mode-tabs .el-tabs__content {
     padding: 0;
+    width: 100%;
+    min-height: 400px;
+}
+
+.mode-tabs .el-tab-pane {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 确保 tabs 容器和内容区域充分利用空间 */
+.mode-tabs .el-tabs__header {
+    width: 100%;
+}
+
+.mode-tabs .el-tabs__nav-wrap {
+    width: 100%;
+}
+
+.mode-tabs .el-tabs__nav-scroll {
+    width: 100%;
+}
+
+/* 代码编辑器响应式样式 */
+.mode-tabs .el-tab-pane .code-editor-container {
+    width: 100%;
+    flex: 1;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+}
+
+.mode-tabs .el-tab-pane .code-editor-container .cm-editor {
+    flex: 1;
+    min-height: 400px;
+    width: 100%;
+}
+
+/* 文件上传区域响应式样式 */
+.mode-tabs .el-tab-pane .upload-demo {
+    width: 100%;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 响应式媒体查询 */
+@media (max-width: 768px) {
+    .mode-tabs .el-tabs__content {
+        min-height: 300px;
+    }
+    
+    .mode-tabs .el-tab-pane .code-editor-container {
+        min-height: 300px;
+    }
+    
+    .mode-tabs .el-tab-pane .code-editor-container .cm-editor {
+        min-height: 300px;
+    }
+    
+    .mode-tabs .el-tab-pane .upload-demo {
+        min-height: 300px;
+    }
+}
+
+@media (max-width: 480px) {
+    .mode-tabs .el-tabs__content {
+        min-height: 250px;
+    }
+    
+    .mode-tabs .el-tab-pane .code-editor-container {
+        min-height: 250px;
+    }
+    
+    .mode-tabs .el-tab-pane .code-editor-container .cm-editor {
+        min-height: 250px;
+    }
+    
+    .mode-tabs .el-tab-pane .upload-demo {
+        min-height: 250px;
+    }
 }
 
 .upload-demo {

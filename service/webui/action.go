@@ -72,12 +72,10 @@ func action_show(c *gin.Context) {
 		offset, err = strconv.Atoi(page_num)
 		if err != nil {
 			c.JSON(400, gin.H{
-				"message":    "fail",
-				"error":      err.Error(),
-				"page_num":   "",
-				"page":       "",
-				"page_count": "",
-				"result":     []interface{}{},
+				"message": "fail",
+				"error":   err.Error(),
+				"total":   0,
+				"result":  []interface{}{},
 			})
 			return
 		}
@@ -90,12 +88,10 @@ func action_show(c *gin.Context) {
 		multi, err = strconv.Atoi(page_size)
 		if err != nil {
 			c.JSON(400, gin.H{
-				"message":    "fail",
-				"error":      err.Error(),
-				"page_num":   "",
-				"page":       "",
-				"page_count": "",
-				"result":     []interface{}{},
+				"message": "fail",
+				"error":   err.Error(),
+				"total":   0,
+				"result":  []interface{}{},
 			})
 			return
 		}
@@ -111,12 +107,10 @@ func action_show(c *gin.Context) {
 	}
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message":    "fail",
-			"error":      err.Error(),
-			"page_num":   "",
-			"page":       "",
-			"page_count": "",
-			"result":     []interface{}{},
+			"message": "fail",
+			"error":   err.Error(),
+			"total":   0,
+			"result":  []interface{}{},
 		})
 		return
 	}
@@ -127,12 +121,10 @@ func action_show(c *gin.Context) {
 	if page_count < offset {
 		if err != nil {
 			c.JSON(400, gin.H{
-				"message":    "fail",
-				"error":      "Page Error",
-				"page_num":   "",
-				"page":       multi,
-				"page_count": page_count,
-				"result":     []interface{}{},
+				"message": "fail",
+				"error":   "Page Error",
+				"total":   count,
+				"result":  []interface{}{},
 			})
 			return
 		}
@@ -150,12 +142,10 @@ func action_show(c *gin.Context) {
 	}
 	if err != nil {
 		c.JSON(400, gin.H{
-			"message":    "fail",
-			"error":      err.Error(),
-			"page_num":   "",
-			"page":       "",
-			"page_count": "",
-			"result":     []interface{}{},
+			"message": "fail",
+			"error":   err.Error(),
+			"total":   0,
+			"result":  []interface{}{},
 		})
 		return
 	}
@@ -181,11 +171,9 @@ func action_show(c *gin.Context) {
 		ret = append(ret, element)
 	}
 	c.JSON(200, gin.H{
-		"message":    "success",
-		"error":      "",
-		"page_num":   "",
-		"page":       "",
-		"page_count": "",
-		"result":     ret,
+		"message": "success",
+		"error":   "",
+		"total":   count,
+		"result":  ret,
 	})
 }

@@ -86,7 +86,7 @@ const getExtension = () => {
     <Codemirror
       v-model="code"
       :placeholder="placeholder"
-      :style="{ height: '300px', width: '100%' }"
+      :style="{ height: '400px', width: '100%' }"
       :autofocus="true"
       :indent-with-tab="true"
       :tab-size="4"
@@ -102,6 +102,8 @@ const getExtension = () => {
   border-radius: 4px;
   margin-bottom: 20px;
   padding: 10px; /* 容器内边距 */
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .editor-header {
@@ -120,9 +122,18 @@ const getExtension = () => {
 }
 
 :deep(.cm-editor) {
-  height: 300px;
+  height: 400px;
+  width: 100%;
   font-size: 14px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+:deep(.cm-scroller) {
+  width: 100%;
+}
+
+:deep(.cm-content) {
+  width: 100%;
 }
 
 :deep(.cm-placeholder) {

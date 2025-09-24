@@ -23,7 +23,10 @@ const autoRefresh = ref(false);
 
 // 全量刷新函数
 const refreshAllData = () => {
-    store.dispatch('fetchResults', { page: currentPage.value, pageSize: pageSize.value }).catch(error => {
+    store.dispatch('fetchResults', { page: currentPage.value, pageSize: pageSize.value }).then(() => {
+        // 刷新完成后确保分页状态同步
+        totalItems.value = store.state.totalItems;
+    }).catch(error => {
         console.error('刷新数据失败:', error);
     });
 }
@@ -56,7 +59,7 @@ const handleSizeChange = (size: number) => {
 }
 
 // 设置定时器，每3秒全量刷新一次
-const refreshInterval = ref<number>();
+const refreshInterval = ref<number | ReturnType<typeof setInterval>>();
 
 // 启动自动刷新
 const startAutoRefresh = () => {
@@ -88,6 +91,14 @@ watch(autoRefresh, (newValue) => {
 onMounted(() => {
     // 初始加载数据
     refreshAllData();
+    
+    // 确保分页状态正确初始化
+    nextTick(() => {
+        // 如果 store 中已经有数据，确保分页状态同步
+        if (store.state.totalItems > 0) {
+            totalItems.value = store.state.totalItems;
+        }
+    });
 });
 
 // 组件卸载时清理定时器
@@ -139,6 +150,15 @@ watch (() => store.state.totalItems, (newVal) => {
             <!-- 自动刷新控件（左下角） -->
             <div class="refresh-control">
                 <el-checkbox v-model="autoRefresh">自动刷新</el-checkbox>
+                <el-button 
+                    type="primary" 
+                    size="small" 
+                    @click="refreshAllData"
+                    style="margin-left: 10px"
+                >
+                    <el-icon><Refresh /></el-icon>
+                    手动刷新
+                </el-button>
             </div>
             
             <!-- 分页控件（右下角） -->

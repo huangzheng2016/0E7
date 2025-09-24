@@ -1,23 +1,42 @@
 <script setup lang="ts">
-import MainForm from './components/MainForm.vue'
-import OutputTable from './components/OutputTable.vue'
+import TabManager from './components/TabManager.vue'
 </script>
 
 <template>
-  <header>
-    <h1 style="text-align: center;margin-bottom: 20px;"></h1>
-  </header>
-
-  <main>
-    <MainForm />
-    <div class="results-container">
-      <h3 style="margin-bottom: 15px; color: #606266;">执行结果</h3>
-      <OutputTable />
-    </div>
-  </main>
+  <div class="app-container">
+    <TabManager />
+  </div>
 </template>
 
+<style>
+/* 全局重置样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+}
+</style>
+
 <style scoped>
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f7fa;
+  padding: 20px;
+}
+
 .results-container {
   border: 1px solid #e6e8eb;
   border-radius: 4px;
