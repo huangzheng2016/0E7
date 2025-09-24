@@ -25,7 +25,7 @@ const emit = defineEmits(['update:modelValue', 'update:language'])
 const code = ref(props.modelValue)
 const currentLanguage = ref(props.language)
 
-const extensions = {
+const extensions: Record<string, any> = {
   'python2': python(),
   'python3': python(),
   'golang': javascript()

@@ -56,7 +56,7 @@ const handleSizeChange = (size: number) => {
 }
 
 // 设置定时器，每3秒全量刷新一次
-const refreshInterval = ref<NodeJS.Timeout>();
+const refreshInterval = ref<number>();
 
 // 启动自动刷新
 const startAutoRefresh = () => {
@@ -154,7 +154,24 @@ watch (() => store.state.totalItems, (newVal) => {
                 :hide-on-single-page="false"
                 @current-change="handlePageChange"
                 @size-change="handleSizeChange"
-            />
+            >
+                <template #total="{ total }">
+                    总计 {{ total }} 条
+                </template>
+                <template #sizes="{ sizes }">
+                    <span class="el-pagination__sizes">
+                        <span class="el-pagination__sizes-text">每页</span>
+                        <el-select v-model="pageSize" @change="handleSizeChange" size="small">
+                            <el-option
+                                v-for="size in sizes"
+                                :key="size"
+                                :label="size + ' 条'"
+                                :value="size"
+                            />
+                        </el-select>
+                    </span>
+                </template>
+            </el-pagination>
             </div>
         </div>
     </div>

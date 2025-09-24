@@ -13,6 +13,15 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
+  server: {
+    proxy: {
+      '/webui': {
+        target: 'https://localhost:6102',
+        changeOrigin: true,
+        secure: false
+      }
+    }
+  },
   build:{
     outDir: '../dist',
     sourcemap: false,

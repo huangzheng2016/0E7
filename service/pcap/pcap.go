@@ -1,8 +1,8 @@
 package pcap
 
 import (
-	"0E7/utils/config"
-	"0E7/utils/database"
+	"0E7/service/config"
+	"0E7/service/database"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -23,18 +23,20 @@ import (
 	"github.com/google/uuid"
 )
 
-var decoder = ""
-var lazy = false
-var checksum = false
-var nohttp = true
-var snaplen = 65536
-var tstype = ""
-var promisc = true
-var flag_regex = ""
-var bpf = ""
-var nonstrict = false
-var experimental = false
-var flushAfter = ""
+var (
+	decoder      = ""
+	lazy         = false
+	checksum     = false
+	nohttp       = true
+	snaplen      = 65536
+	tstype       = ""
+	promisc      = true
+	flag_regex   = ""
+	bpf          = ""
+	nonstrict    = false
+	experimental = false
+	flushAfter   = ""
+)
 
 type FlowItem struct {
 	From string `json:"f"`
@@ -90,7 +92,7 @@ func reassemblyCallback(entry FlowEntry) {
 		log.Println("Flow Error:", err)
 		return
 	}
-	// 这里想用sha256做优化，但是time的时间有点问题，不知道该不该压缩
+	// TODO: 这里想用sha256做优化，但是time的时间有点问题，不知道该不该压缩
 	flowFile := filepath.Join("flow", uuid.New().String())
 	err = ioutil.WriteFile(flowFile, []byte(Flow), 0644)
 	if err != nil {

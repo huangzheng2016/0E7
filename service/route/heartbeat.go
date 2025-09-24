@@ -1,9 +1,9 @@
 package route
 
 import (
-	"0E7/utils/config"
-	"0E7/utils/database"
-	"0E7/utils/update"
+	"0E7/service/config"
+	"0E7/service/database"
+	"0E7/service/update"
 	"log"
 
 	"github.com/gin-gonic/gin"

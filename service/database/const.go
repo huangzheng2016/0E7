@@ -26,19 +26,21 @@ func (Client) TableName() string {
 
 // Exploit 漏洞利用表
 type Exploit struct {
-	ID          uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	UUID        string    `json:"uuid" gorm:"column:uuid;type:varchar(255);not null;"`
-	Filename    string    `json:"filename" gorm:"column:filename;type:varchar(255);"`
-	Environment string    `json:"environment" gorm:"column:environment;type:varchar(255);"`
-	Command     string    `json:"command" gorm:"column:command;type:varchar(255);"`
-	Argv        string    `json:"argv" gorm:"column:argv;type:varchar(255);"`
-	Platform    string    `json:"platform" gorm:"column:platform;type:varchar(255);"`
-	Arch        string    `json:"arch" gorm:"column:arch;type:varchar(255);"`
-	Filter      string    `json:"filter" gorm:"column:filter;type:varchar(255);"`
-	Timeout     string    `json:"timeout" gorm:"column:timeout;type:varchar(255);"`
-	Times       string    `json:"times" gorm:"column:times;type:varchar(255);not null;"`
-	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	ID          uint   `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	UUID        string `json:"uuid" gorm:"column:uuid;type:varchar(255);not null;"`
+	Filename    string `json:"filename" gorm:"column:filename;type:varchar(255);"`
+	Environment string `json:"environment" gorm:"column:environment;type:varchar(255);"`
+	Command     string `json:"command" gorm:"column:command;type:varchar(255);"`
+	Argv        string `json:"argv" gorm:"column:argv;type:varchar(255);"`
+	Platform    string `json:"platform" gorm:"column:platform;type:varchar(255);"`
+	Arch        string `json:"arch" gorm:"column:arch;type:varchar(255);"`
+	Filter      string `json:"filter" gorm:"column:filter;type:varchar(255);"`
+	Timeout     string `json:"timeout" gorm:"column:timeout;type:varchar(255);"`
+	Times       string `json:"times" gorm:"column:times;type:varchar(255);not null;"`
+	Flag        string `json:"flag" gorm:"column:flag;type:varchar(255);"`
+
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (Exploit) TableName() string {
@@ -51,6 +53,7 @@ type Flag struct {
 	UUID      string    `json:"uuid" gorm:"column:uuid;type:varchar(255);not null;"`
 	Flag      string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;"`
 	Status    string    `json:"status" gorm:"column:status;type:varchar(255);"`
+	Msg       string    `json:"msg" gorm:"column:msg;type:text;"` // 提交结果消息
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
@@ -80,7 +83,10 @@ type Action struct {
 	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;unique;"`
 	Code      string    `json:"code" gorm:"column:code;type:text;"`
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
+	Config    string    `json:"config" gorm:"column:config;type:text;"`
 	Interval  int       `json:"interval" gorm:"column:interval;type:int;"`
+	Timeout   int       `json:"timeout" gorm:"column:timeout;type:int;default:60;"`              // 超时时间（秒），默认60秒，最多60秒
+	Status    string    `json:"status" gorm:"column:status;type:varchar(50);default:'pending';"` // 任务状态：pending, running, completed, timeout, error
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }

@@ -100,7 +100,7 @@ func init_database_client(db *gorm.DB, engine string) error {
 			actions := []Action{
 				{
 					ID:       1,
-					Name:     "flag",
+					Name:     "flag_submiter",
 					Code:     "",
 					Output:   "",
 					Interval: -1,

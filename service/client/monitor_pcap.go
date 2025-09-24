@@ -1,7 +1,7 @@
 package client
 
 import (
-	"0E7/utils/config"
+	"0E7/service/config"
 	"bytes"
 	"context"
 	"crypto/tls"

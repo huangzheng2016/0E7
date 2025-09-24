@@ -14,6 +14,7 @@ const form = ref({
     arch: '',
     filter: '',
     times: 0,
+    flag: '',
     code: '',
     code_language: 'python3',
     usePipreqs: true,
@@ -266,6 +267,7 @@ onMounted(() => {
                 form.value.arch = task.arch || ''
                 form.value.filter = task.filter || ''
                 form.value.times = task.times || 0 // 默认值为0
+                form.value.flag = task.flag || ''
                 
                 // 设置文件名（如果存在）
                 if (task.filename && !task.filename.startsWith('data:code/')) {
@@ -349,6 +351,9 @@ onMounted(() => {
         
         <el-form-item label="筛选">
             <el-input name="filter" v-model="form.filter" placeholder="筛选条件" />
+        </el-form-item>
+        <el-form-item label="Flag正则">
+            <el-input name="flag" v-model="form.flag" placeholder="Flag匹配" />
         </el-form-item>
         <el-form-item label="执行次数">
             <el-input-number :min="-2" :max="999" v-model="form.times" class="el-input-number" />

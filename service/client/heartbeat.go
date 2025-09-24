@@ -1,9 +1,10 @@
 package client
 
 import (
-	"0E7/utils/config"
-	"0E7/utils/update"
+	"0E7/service/config"
+	"0E7/service/update"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"log"
@@ -18,8 +19,6 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-var heartbeat_delay int
-
 func heartbeat() {
 	defer func() {
 		if err := recover(); err != nil {
@@ -28,16 +27,12 @@ func heartbeat() {
 		}
 	}()
 	go func() {
-		for {
-			select {
-			case <-jobsChan:
-				jobsMutex.Lock()
-				if currentJobs < config.Client_worker {
-					currentJobs++
-					go exploit()
-				}
-				jobsMutex.Unlock()
-			}
+		for range jobsChan {
+			go func() {
+				workerSemaphore.Acquire(context.Background(), 1)
+				defer workerSemaphore.Release(1)
+				exploit()
+			}()
 		}
 	}()
 	for {
@@ -102,16 +97,16 @@ func heartbeat() {
 					}
 				}
 			}
-			if found == false && config.Client_update == true {
+			if !found && config.Client_update {
 				log.Println("Try to update")
 				go update.Replace()
 			} else {
-				jobsMutex.Lock()
-				if currentJobs < config.Client_worker {
-					currentJobs++
-					go exploit()
-				}
-				jobsMutex.Unlock()
+				// 获取 worker 资源并启动 exploit
+				go func() {
+					workerSemaphore.Acquire(context.Background(), 1)
+					defer workerSemaphore.Release(1)
+					exploit()
+				}()
 			}
 			go monitor()
 		}

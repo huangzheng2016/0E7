@@ -1,19 +1,14 @@
 package webui
 
 import (
-	"0E7/utils/config"
-	"0E7/utils/database"
-	"bytes"
-	"encoding/base64"
-	"log"
+	"0E7/service/config"
+	"0E7/service/database"
 	"math"
 	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/traefik/yaegi/interp"
-	"github.com/traefik/yaegi/stdlib"
 )
 
 func action(c *gin.Context) {
@@ -193,58 +188,4 @@ func action_show(c *gin.Context) {
 		"page_count": "",
 		"result":     ret,
 	})
-}
-func update_action() {
-	var err error
-	var actionRecord database.Action
-	err = config.Db.Where("interval >= 0 AND code != ''").Order("updated_at").First(&actionRecord).Error
-	if err == nil {
-		if actionRecord.UpdatedAt.Before(time.Now()) {
-			match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(actionRecord.Code)
-			if match != nil {
-				fileType := match[1]
-				data := match[2]
-				code_decode, err := base64.StdEncoding.DecodeString(data)
-				if err != nil {
-					log.Println("Base64 decode error:", err)
-					return
-				}
-				code := string(code_decode)
-				var new_output string
-				if fileType == "code/python2" || fileType == "code/python3" {
-					log.Println("Python support in future")
-					return
-				} else if fileType == "code/golang" {
-					var goibuf bytes.Buffer
-					goi := interp.New(interp.Options{Stdout: &goibuf})
-					goi.Use(stdlib.Symbols)
-					programs[int(actionRecord.ID)], err = goi.Compile(code)
-					if err != nil {
-						log.Println("Compile error:", err.Error())
-						return
-					}
-					_, err = goi.Execute(programs[int(actionRecord.ID)])
-					if err != nil {
-						log.Println("Runtime error:", err.Error())
-						return
-					}
-					new_output = goibuf.String()
-				}
-				if new_output != actionRecord.Output {
-					actionRecord.Output = new_output
-					actionRecord.UpdatedAt = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
-					err = config.Db.Save(&actionRecord).Error
-					if err != nil {
-						log.Println("Update output error:", err.Error())
-						return
-					}
-					log.Printf("Action %s update: %s\n", actionRecord.Name, new_output)
-				}
-				programs[int(actionRecord.ID)] = nil
-			} else {
-				log.Println("Code format error")
-				return
-			}
-		}
-	}
 }

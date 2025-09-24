@@ -1,8 +1,8 @@
 package config
 
 import (
-	"0E7/utils/database"
-	"0E7/utils/udpcast"
+	"0E7/service/database"
+	"0E7/service/udpcast"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -20,22 +20,23 @@ import (
 	"gorm.io/gorm"
 )
 
-var Global_timeout_http int
-var Global_timeout_download int
-var Global_debug bool
-
-var Db *gorm.DB
-var GormDb *gorm.DB
-var Server_mode bool
-var Server_tls bool
-var Server_port string
-var Server_url string
-var Server_flag string
-var Client_mode bool
-var Client_uuid string
-var Client_pypi string
-var Client_update bool
-var Client_worker int
+var (
+	Global_timeout_http     int
+	Global_timeout_download int
+	Global_debug            bool
+	Db                      *gorm.DB
+	Server_mode             bool
+	Server_tls              bool
+	Server_port             string
+	Server_url              string
+	Server_flag             string
+	Client_mode             bool
+	Client_uuid             string
+	Client_pypi             string
+	Client_update           bool
+	Client_worker           int
+	Client_monitor          bool
+)
 
 func Init_conf() error {
 	cfg, err := ini.Load("config.ini")
@@ -96,7 +97,6 @@ func Init_conf() error {
 			Server_url = strings.Replace(Server_url, "https://", "http://", 1)
 		}
 		Db, err = database.Init_database(section)
-		GormDb = Db
 	}
 
 	section = cfg.Section("client")
@@ -142,6 +142,11 @@ func Init_conf() error {
 		Client_worker, err = section.Key("worker").Int()
 		if err != nil {
 			Client_worker = 5
+		}
+
+		Client_monitor, err = section.Key("monitor").Bool()
+		if err != nil {
+			Client_monitor = false
 		}
 	}
 	wg.Wait()

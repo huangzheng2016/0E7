@@ -1,7 +1,7 @@
 package client
 
 import (
-	"0E7/utils/config"
+	"0E7/service/config"
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
@@ -15,12 +15,12 @@ import (
 func monitor() {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println("Exploit error: ", err)
+			log.Println("Monitor error: ", err)
 		}
-		jobsMutex.Lock()
-		currentJobs--
-		jobsMutex.Unlock()
 	}()
+	if !config.Client_monitor {
+		return
+	}
 	values := url.Values{}
 	values.Set("uuid", config.Client_uuid)
 	requestBody := bytes.NewBufferString(values.Encode())
@@ -54,28 +54,34 @@ func monitor() {
 				interval = 60
 			}
 			new := Tmonitor{types: types, data: data, interval: interval}
-			if monitor_list[id] != new {
-				monitor_list[id] = new
+			if oldValue, exists := monitor_list.Load(id); !exists || oldValue.(Tmonitor) != new {
+				monitor_list.Store(id, new)
 				go monitor_run(id)
 			}
 		}
-		for key := range monitor_list {
+		monitor_list.Range(func(key, value interface{}) bool {
+			id := key.(int)
 			found := false
-			for _, id := range id_list {
-				if key == id {
+			for _, listId := range id_list {
+				if id == listId {
 					found = true
 					break
 				}
 			}
 			if !found {
-				delete(monitor_list, key)
+				monitor_list.Delete(id)
 			}
-		}
+			return true
+		})
 	}
 }
 
 func monitor_run(id int) {
-	old := monitor_list[id]
+	value, exists := monitor_list.Load(id)
+	if !exists {
+		return
+	}
+	old := value.(Tmonitor)
 	if old.types == "pcap" {
 		type item struct {
 			Name        string `json:"name"`
@@ -89,7 +95,8 @@ func monitor_run(id int) {
 			return
 		}
 		for {
-			if old != monitor_list[id] || old.interval == 0 {
+			currentValue, exists := monitor_list.Load(id)
+			if !exists || currentValue.(Tmonitor) != old || old.interval == 0 {
 				break
 			}
 			now := time.Now()

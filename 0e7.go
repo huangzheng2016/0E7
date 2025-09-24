@@ -1,14 +1,14 @@
 package main
 
 import (
-	"0E7/utils/client"
-	"0E7/utils/config"
-	"0E7/utils/pcap"
-	"0E7/utils/route"
-	"0E7/utils/server"
-	"0E7/utils/udpcast"
-	"0E7/utils/update"
-	"0E7/utils/webui"
+	"0E7/service/client"
+	"0E7/service/config"
+	"0E7/service/pcap"
+	"0E7/service/route"
+	"0E7/service/server"
+	"0E7/service/udpcast"
+	"0E7/service/update"
+	"0E7/service/webui"
 	"embed"
 	"fmt"
 	"io"
