@@ -31,10 +31,18 @@ const store = createStore({
       const urlParams = new URLSearchParams(window.location.search);
       const uuid = urlParams.get('uuid');
       
-      let requestBody = '';
-      if (uuid) {
-        requestBody = `exploit_uuid=${uuid}`;
+      // 当UUID为空时，不查询output，直接返回空结果
+      if (!uuid) {
+        state.workerQueue = [];
+        state.totalItems = 0;
+        return Promise.resolve({
+          message: "success",
+          total: 0,
+          result: []
+        });
       }
+      
+      let requestBody = `exploit_uuid=${uuid}`;
       // 添加分页参数
       requestBody += `&page=${page}&page_size=${pageSize}`;
       
@@ -55,12 +63,18 @@ const store = createStore({
               output: item.output,
               update_time: item.update_time
             }));
-            
-            // 使用后端返回的总条数
-            if (res.total !== undefined) {
-              state.totalItems = res.total;
-            }
+          } else {
+            // 当没有数据时，清空队列
+            state.workerQueue = [];
           }
+          
+          // 使用后端返回的总条数
+          if (res.total !== undefined) {
+            state.totalItems = res.total;
+          } else {
+            state.totalItems = 0;
+          }
+          
           return res;
         })
         .catch((error) => {

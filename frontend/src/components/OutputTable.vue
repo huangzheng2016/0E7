@@ -99,11 +99,15 @@ onMounted(() => {
             totalItems.value = store.state.totalItems;
         }
     });
+    
+    // 监听自定义刷新事件
+    window.addEventListener('refresh-output', refreshAllData);
 });
 
-// 组件卸载时清理定时器
+// 组件卸载时清理定时器和事件监听器
 onUnmounted(() => {
     stopAutoRefresh();
+    window.removeEventListener('refresh-output', refreshAllData);
 });
 
 watch(() => store.state.workerQueue, (newVal) => {
@@ -126,7 +130,7 @@ watch (() => store.state.totalItems, (newVal) => {
             <ElTableColumn label="状态" prop="status" width="100">
                 <template #default="{ row }">
                     <el-tag 
-                        :type="row.status === 'SUCCESS' ? 'success' : row.status === 'ERROR' ? 'danger' : 'warning'"
+                        :type="row.status === 'SUCCESS' ? 'success' : row.status === 'ERROR' ? 'danger' : row.status === 'TIMEOUT' ? 'warning' : 'info'"
                         size="small"
                     >
                         {{ row.status }}

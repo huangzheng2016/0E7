@@ -19,6 +19,8 @@ interface PaginationState {
 
 interface SearchState {
   name?: string
+  code?: string
+  output?: string
 }
 
 const props = defineProps<{
@@ -38,6 +40,8 @@ const totalItems = ref(0)
 
 // 搜索相关
 const searchName = ref('')
+const searchCode = ref('')
+const searchOutput = ref('')
 
 // 状态同步
 watch(() => props.paginationState, (newState) => {
@@ -51,6 +55,8 @@ watch(() => props.paginationState, (newState) => {
 watch(() => props.searchState, (newState) => {
   if (newState) {
     searchName.value = newState.name || ''
+    searchCode.value = newState.code || ''
+    searchOutput.value = newState.output || ''
   }
 }, { immediate: true })
 
@@ -65,13 +71,15 @@ watch([currentPage, pageSize, totalItems], () => {
         totalItems: totalItems.value
       },
       search: {
-        name: searchName.value
+        name: searchName.value,
+        code: searchCode.value,
+        output: searchOutput.value
       }
     })
   }
 })
 
-watch(searchName, () => {
+watch([searchName, searchCode, searchOutput], () => {
   // 只有在数据加载完成后才触发状态同步
   if (totalItems.value > 0 || actions.value.length > 0) {
     emit('state-change', {
@@ -81,7 +89,9 @@ watch(searchName, () => {
         totalItems: totalItems.value
       },
       search: {
-        name: searchName.value
+        name: searchName.value,
+        code: searchCode.value,
+        output: searchOutput.value
       }
     })
   }
@@ -96,6 +106,12 @@ const fetchActions = async () => {
     formData.append('page_size', pageSize.value.toString())
     if (searchName.value) {
       formData.append('name', searchName.value)
+    }
+    if (searchCode.value) {
+      formData.append('code', searchCode.value)
+    }
+    if (searchOutput.value) {
+      formData.append('output', searchOutput.value)
     }
 
     const response = await fetch('/webui/action_show', {
@@ -154,16 +170,44 @@ const deleteAction = async (action: Action) => {
       }
     )
 
-    // 这里需要调用删除API，但当前后端没有提供删除接口
-    // 暂时显示提示信息
-    ElNotification({
-      title: '提示',
-      message: '删除功能需要后端API支持，请联系管理员',
-      type: 'warning',
-      position: 'bottom-right'
+    // 调用删除API
+    const formData = new FormData()
+    formData.append('id', action.id.toString())
+    
+    const response = await fetch('/webui/action_delete', {
+      method: 'POST',
+      body: formData
     })
+    
+    const result = await response.json()
+    
+    if (result.message === 'success') {
+      ElNotification({
+        title: '删除成功',
+        message: '定时计划已删除',
+        type: 'success',
+        position: 'bottom-right'
+      })
+      // 刷新列表
+      fetchActions()
+    } else {
+      ElNotification({
+        title: '删除失败',
+        message: result.error || '删除失败',
+        type: 'error',
+        position: 'bottom-right'
+      })
+    }
   } catch (error) {
-    // 用户取消删除
+    if (error !== 'cancel') {
+      console.error('删除Action失败:', error)
+      ElNotification({
+        title: '删除失败',
+        message: '网络错误，请稍后重试',
+        type: 'error',
+        position: 'bottom-right'
+      })
+    }
   }
 }
 
@@ -179,6 +223,15 @@ const addAction = () => {
 
 // 搜索
 const handleSearch = () => {
+  currentPage.value = 1
+  fetchActions()
+}
+
+// 重置搜索
+const resetSearch = () => {
+  searchName.value = ''
+  searchCode.value = ''
+  searchOutput.value = ''
   currentPage.value = 1
   fetchActions()
 }
@@ -242,15 +295,29 @@ onMounted(() => {
         <el-input
           v-model="searchName"
           placeholder="搜索定时计划名称"
-          style="width: 300px"
+          style="width: 200px"
           @keyup.enter="handleSearch"
-        >
-          <template #append>
-            <el-button @click="handleSearch">
-              <el-icon><Search /></el-icon>
-            </el-button>
-          </template>
-        </el-input>
+        />
+        <el-input
+          v-model="searchCode"
+          placeholder="搜索代码内容"
+          style="width: 200px"
+          @keyup.enter="handleSearch"
+        />
+        <el-input
+          v-model="searchOutput"
+          placeholder="搜索输出内容"
+          style="width: 200px"
+          @keyup.enter="handleSearch"
+        />
+        <el-button @click="handleSearch">
+          <el-icon><Search /></el-icon>
+          搜索
+        </el-button>
+        <el-button @click="resetSearch">
+          <el-icon><Refresh /></el-icon>
+          重置
+        </el-button>
       </div>
       
       <div class="action-section">

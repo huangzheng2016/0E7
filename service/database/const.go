@@ -38,6 +38,7 @@ type Exploit struct {
 	Timeout     string `json:"timeout" gorm:"column:timeout;type:varchar(255);"`
 	Times       string `json:"times" gorm:"column:times;type:varchar(255);not null;"`
 	Flag        string `json:"flag" gorm:"column:flag;type:varchar(255);"`
+	IsDeleted   bool   `json:"is_deleted" gorm:"column:is_deleted;type:boolean;default:false;"`
 
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
@@ -87,6 +88,7 @@ type Action struct {
 	Interval  int       `json:"interval" gorm:"column:interval;type:int;"`
 	Timeout   int       `json:"timeout" gorm:"column:timeout;type:int;default:60;"`              // 超时时间（秒），默认60秒，最多60秒
 	Status    string    `json:"status" gorm:"column:status;type:varchar(50);default:'pending';"` // 任务状态：pending, running, completed, timeout, error
+	IsDeleted bool      `json:"is_deleted" gorm:"column:is_deleted;type:boolean;default:false;"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }

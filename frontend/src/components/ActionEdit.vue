@@ -59,6 +59,7 @@ watch(() => props.action, (newAction) => {
         if (parts.length === 2) {
           const langPart = parts[0].split('/')
           if (langPart.length === 2) {
+            // 先设置语言，再设置代码内容
             form.value.code_language = langPart[1]
           }
           
@@ -70,6 +71,22 @@ watch(() => props.action, (newAction) => {
       } catch (error) {
         console.error('Base64解码失败:', error)
         form.value.code = newAction.code
+      }
+    } else if (newAction.code) {
+      // 普通代码内容，尝试从代码内容推断语言
+      form.value.code = newAction.code
+      
+      // 简单的语言推断逻辑
+      if (newAction.code.includes('#!/usr/bin/env python2') || 
+          newAction.code.includes('#!/usr/bin/python2')) {
+        form.value.code_language = 'python2'
+      } else if (newAction.code.includes('#!/usr/bin/env python3') || 
+                 newAction.code.includes('#!/usr/bin/python3') ||
+                 newAction.code.includes('print(')) {
+        form.value.code_language = 'python3'
+      } else if (newAction.code.includes('package main') || 
+                 newAction.code.includes('func main()')) {
+        form.value.code_language = 'golang'
       }
     }
   }

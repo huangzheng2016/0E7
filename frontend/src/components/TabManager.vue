@@ -238,6 +238,9 @@ const handleSaveSuccess = () => {
   // 不关闭编辑选项卡，保持当前编辑窗口打开
   // 不自动切换窗口，让用户继续在当前编辑页面工作
   
+  // 触发输出页面的刷新
+  window.dispatchEvent(new CustomEvent('refresh-output'))
+  
   // 可以选择性地刷新列表数据，但不切换窗口
   // 这样用户可以在编辑完成后手动切换到列表查看更新结果
 }
