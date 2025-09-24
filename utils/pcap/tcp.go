@@ -198,19 +198,19 @@ func (t *tcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 	duration = t.FlowItems[len(t.FlowItems)-1].Time - time
 
 	entry := FlowEntry{
-		Src_port:    int(t.src_port),
-		Dst_port:    int(t.dst_port),
-		Src_ip:      src.String(),
-		Dst_ip:      dst.String(),
-		Time:        time,
-		Duration:    duration,
-		Num_packets: t.num_packets,
-		Blocked:     false,
-		Tags:        make([]string, 0),
-		Suricata:    make([]int, 0),
-		Filename:    t.source,
-		Flow:        t.FlowItems,
-		Size:        t.total_size,
+		SrcPort:    int(t.src_port),
+		DstPort:    int(t.dst_port),
+		SrcIp:      src.String(),
+		DstIp:      dst.String(),
+		Time:       time,
+		Duration:   duration,
+		NumPackets: t.num_packets,
+		Blocked:    false,
+		Tags:       make([]string, 0),
+		Suricata:   make([]int, 0),
+		Filename:   t.source,
+		Flow:       t.FlowItems,
+		Size:       t.total_size,
 	}
 
 	t.reassemblyCallback(entry)

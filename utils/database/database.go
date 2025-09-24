@@ -2,10 +2,11 @@ package database
 
 import (
 	"database/sql"
-	_ "github.com/glebarez/sqlite"
-	"gopkg.in/ini.v1"
 	"log"
 	"os"
+
+	_ "github.com/glebarez/sqlite"
+	"gopkg.in/ini.v1"
 )
 
 func Init_database(section *ini.Section) (db *sql.DB, err error) {
@@ -220,20 +221,20 @@ func init_database_client(db *sql.DB, engine string) error {
 		stmt, err = db.Prepare(`
 		CREATE TABLE IF NOT EXISTS '0e7_pcap' (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-			Src_port TEXT,
-			Dst_port TEXT,
-			Src_ip TEXT,
-			Dst_ip TEXT,
-			Time INT,
-			Duration INT,
-			Num_packets INT,
-			Blocked TEXT,
-			Filename TEXT,
-			Fingerprints TEXT,
-			Suricata TEXT,
-			Flow TEXT,
-			Tags TEXT,
-			Size TEXT,
+			src_port TEXT,
+			dst_port TEXT,
+			src_ip TEXT,
+			dst_ip TEXT,
+			time INT,
+			duration INT,
+			num_packets INT,
+			blocked TEXT,
+			filename TEXT,
+			fingerprints TEXT,
+			suricata TEXT,
+			flow TEXT,
+			tags TEXT,
+			size TEXT,
 			updated TEXT          
         );
 	`)

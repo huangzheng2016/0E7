@@ -19,6 +19,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/reassembly"
+	"github.com/google/uuid"
 )
 
 var decoder = ""
@@ -35,20 +36,20 @@ var experimental = false
 var flushAfter = ""
 
 type FlowItem struct {
-	From string `json:"From"`
-	Data string `json:"Data"`
-	B64  string `json:"B64"`
-	Time int    `json:"Time"`
+	From string `json:"f"`
+	Data string `json:"d"`
+	B64  string `json:"b"`
+	Time int    `json:"t"`
 }
 
 type FlowEntry struct {
-	Src_port     int
-	Dst_port     int
-	Src_ip       string
-	Dst_ip       string
+	SrcPort      int
+	DstPort      int
+	SrcIp        string
+	DstIp        string
 	Time         int
 	Duration     int
-	Num_packets  int
+	NumPackets   int
 	Blocked      bool
 	Filename     string
 	Fingerprints []uint32
@@ -88,14 +89,22 @@ func reassemblyCallback(entry FlowEntry) {
 		log.Println("Flow Error:", err)
 		return
 	}
+	// 这里想用sha256做优化，但是time的时间有点问题，不知道该不该压缩
+	flowFile := filepath.Join("flow", uuid.New().String())
+	err = ioutil.WriteFile(flowFile, []byte(Flow), 0644)
+	if err != nil {
+		log.Println("Write flow file failed:", err)
+		return
+	}
+
 	Tags, err := json.Marshal(entry.Tags)
 	if err != nil {
 		log.Println("Tags Error:", err)
 		return
 	}
 
-	_, err = config.Db.Exec("INSERT INTO `0e7_pcap` (Src_port,Dst_port,Src_ip,Dst_ip,Time,Duration,Num_packets,Blocked,Filename,Fingerprints,Suricata,Flow,Tags,Size,updated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now', 'localtime'))",
-		entry.Src_port, entry.Dst_port, entry.Src_ip, entry.Dst_ip, entry.Time, entry.Duration, entry.Num_packets, entry.Blocked, entry.Filename, Fingerprints, Suricata, Flow, Tags, entry.Size)
+	_, err = config.Db.Exec("INSERT INTO `0e7_pcap` (src_port,dst_port,src_ip,dst_ip,time,duration,num_packets,blocked,filename,fingerprints,suricata,flow,tags,size,updated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now', 'localtime'))",
+		entry.SrcPort, entry.DstPort, entry.SrcIp, entry.DstIp, entry.Time, entry.Duration, entry.NumPackets, entry.Blocked, entry.Filename, Fingerprints, Suricata, flowFile, Tags, entry.Size)
 
 	if err != nil {
 		log.Println("Insert Error:", err)
@@ -112,6 +121,14 @@ func ParsePcapfile(fname string) {
 	handlePcapUri(fname, bpf)
 }
 func WatchDir(watch_dir string) {
+	flowDir := "flow/"
+	if _, err := os.Stat(flowDir); os.IsNotExist(err) {
+		err := os.MkdirAll(flowDir, os.ModePerm)
+		if err != nil {
+			log.Println("Create flow dir failed:", err)
+			return
+		}
+	}
 
 	stat, err := os.Stat(watch_dir)
 	if err != nil {
