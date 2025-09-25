@@ -143,8 +143,18 @@ const formatTimestamp = (timestamp: number) => {
 // 解析标签
 const parseTags = (tagsStr: string) => {
   try {
-    return JSON.parse(tagsStr || '[]')
-  } catch {
+    if (!tagsStr || tagsStr === '[]') {
+      return []
+    }
+    
+    // 处理Unicode引号问题：将Unicode左右单引号替换为标准双引号
+    let normalizedStr = tagsStr
+      .replace(/[\u2018\u2019]/g, '"')  // 替换Unicode单引号为双引号
+      .replace(/[\u201c\u201d]/g, '"')  // 替换Unicode双引号为标准双引号
+    
+    return JSON.parse(normalizedStr)
+  } catch (error) {
+    console.warn('解析标签失败:', tagsStr, error)
     return []
   }
 }

@@ -242,8 +242,18 @@ const formatTimestamp = (timestamp: number) => {
 // 解析标签
 const parseTags = (tagsStr: string) => {
   try {
-    return JSON.parse(tagsStr || '[]')
-  } catch {
+    if (!tagsStr || tagsStr === '[]') {
+      return []
+    }
+    
+    // 处理Unicode引号问题：将Unicode左右单引号替换为标准双引号
+    let normalizedStr = tagsStr
+      .replace(/[\u2018\u2019]/g, '"')  // 替换Unicode单引号为双引号
+      .replace(/[\u201c\u201d]/g, '"')  // 替换Unicode双引号为标准双引号
+    
+    return JSON.parse(normalizedStr)
+  } catch (error) {
+    console.warn('解析标签失败:', tagsStr, error)
     return []
   }
 }
@@ -283,6 +293,28 @@ const formatSize = (sizeStr: string) => {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
   if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`
   return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
+// 复制到剪贴板
+const copyToClipboard = async (text: string, type: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElNotification({
+      title: '复制成功',
+      message: `${type}已复制到剪贴板: ${text}`,
+      type: 'success',
+      position: 'bottom-right',
+      duration: 2000
+    })
+  } catch (error) {
+    ElNotification({
+      title: '复制失败',
+      message: '无法复制到剪贴板',
+      type: 'error',
+      position: 'bottom-right',
+      duration: 2000
+    })
+  }
 }
 
 onMounted(() => {
@@ -338,9 +370,21 @@ onMounted(() => {
       <el-table-column label="流量方向" min-width="200" show-overflow-tooltip>
         <template #default="{ row }">
           <div class="flow-direction">
-            <span class="ip-port">{{ row.src_ip }}:{{ row.src_port }}</span>
+            <span 
+              class="ip-port clickable" 
+              @click.stop="copyToClipboard(`${row.src_ip}:${row.src_port}`, '源地址')"
+              :title="`点击复制源地址: ${row.src_ip}:${row.src_port}`"
+            >
+              {{ row.src_ip }}:{{ row.src_port }}
+            </span>
             <el-icon class="arrow-icon"><Right /></el-icon>
-            <span class="ip-port">{{ row.dst_ip }}:{{ row.dst_port }}</span>
+            <span 
+              class="ip-port clickable" 
+              @click.stop="copyToClipboard(`${row.dst_ip}:${row.dst_port}`, '目标地址')"
+              :title="`点击复制目标地址: ${row.dst_ip}:${row.dst_port}`"
+            >
+              {{ row.dst_ip }}:{{ row.dst_port }}
+            </span>
           </div>
         </template>
       </el-table-column>
@@ -494,6 +538,20 @@ onMounted(() => {
   border-radius: 3px;
   font-size: 12px;
   color: #606266;
+}
+
+.ip-port.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.ip-port.clickable:hover {
+  background: #e6f7ff;
+  border-color: #409eff;
+  color: #409eff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(64, 158, 255, 0.2);
 }
 
 .arrow-icon {
