@@ -3,6 +3,7 @@ package pcap
 import (
 	"0E7/service/config"
 	"0E7/service/database"
+	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -92,11 +93,32 @@ func reassemblyCallback(entry FlowEntry) {
 		log.Println("Flow Error:", err)
 		return
 	}
-	// TODO: 这里想用sha256做优化，但是time的时间有点问题，不知道该不该压缩
-	flowFile := filepath.Join("flow", uuid.New().String())
-	err = ioutil.WriteFile(flowFile, []byte(Flow), 0644)
+	// 使用gzip压缩保存flow数据，便于gin中间件直接使用
+	flowFile := filepath.Join("flow", uuid.New().String()+".gz")
+
+	// 创建gzip压缩文件
+	file, err := os.Create(flowFile)
 	if err != nil {
-		log.Println("Write flow file failed:", err)
+		log.Println("Create flow file failed:", err)
+		return
+	}
+	defer file.Close()
+
+	// 创建gzip writer
+	gzWriter := gzip.NewWriter(file)
+
+	// 写入压缩数据
+	_, err = gzWriter.Write([]byte(Flow))
+	if err != nil {
+		log.Println("Write compressed flow data failed:", err)
+		gzWriter.Close()
+		return
+	}
+
+	// 关闭gzip writer，这会写入gzip尾部
+	err = gzWriter.Close()
+	if err != nil {
+		log.Println("Close gzip writer failed:", err)
 		return
 	}
 

@@ -8,13 +8,17 @@ interface Action {
   name: string
   code: string
   output: string
+  error: string
   interval: number
-  updated: string
+  timeout: number
+  next_run: string
+  config?: string
 }
 
 const props = defineProps<{
   modelValue?: boolean
-  action: Action | null
+  action?: Action | null
+  actionId?: number | string
   isEditing: boolean
   standalone?: boolean
 }>()
@@ -34,28 +38,93 @@ const form = ref({
   name: '',
   code: '',
   output: '',
+  error: '',
   interval: 0,
-  code_language: 'python3'
+  timeout: 30,
+  code_language: 'python3',
+  next_run: '',
+  config_type: '',
+  config_num: 10
 })
 
 const loading = ref(false)
 
+// 根据actionId获取数据
+const fetchActionById = async (id: number | string) => {
+  try {
+    const formData = new FormData()
+    formData.append('id', id.toString())
+    
+    const response = await fetch('/webui/action_get_by_id', {
+      method: 'POST',
+      body: formData
+    })
+    
+    const result = await response.json()
+    
+    if (result.message === 'success' && result.result) {
+      return result.result
+    } else {
+      console.error('获取Action失败:', result.error)
+      return null
+    }
+  } catch (error) {
+    console.error('获取Action失败:', error)
+    return null
+  }
+}
+
+// 监听actionId变化，获取数据
+watch(() => props.actionId, async (newId) => {
+  if (newId && props.isEditing) {
+    const action = await fetchActionById(newId)
+    if (action) {
+      updateFormFromAction(action)
+    }
+  }
+}, { immediate: true })
+
 // 监听action变化，更新表单
 watch(() => props.action, (newAction) => {
   if (newAction) {
+    updateFormFromAction(newAction)
+  }
+}, { immediate: true })
+
+// 从Action数据更新表单的通用函数
+const updateFormFromAction = (action: Action) => {
+  if (action) {
+    // 解析config
+    let configType = ''
+    let configNum = 10
+    if (action.config) {
+      try {
+        const config = JSON.parse(action.config)
+        configType = config.type || ''
+        configNum = config.num || 10
+      } catch (error) {
+        console.error('解析config失败:', error)
+      }
+    }
+
     form.value = {
-      id: newAction.id,
-      name: newAction.name,
-      code: newAction.code,
-      output: newAction.output,
-      interval: newAction.interval,
-      code_language: 'python3'
+      id: action.id,
+      name: action.name,
+      code: action.code,
+      output: action.output,
+      error: action.error || '',
+      interval: action.interval,
+      timeout: action.timeout || 30,
+      code_language: 'python3',
+      next_run: action.next_run || '',
+      config_type: configType,
+      config_num: configNum
     }
     
     // 解析代码语言
-    if (newAction.code && newAction.code.startsWith('data:code/')) {
+    if (action.code && action.code.startsWith('data:code/')) {
       try {
-        const parts = newAction.code.split(';base64,')
+        const parts = action.code.split(';base64,')
         if (parts.length === 2) {
           const langPart = parts[0].split('/')
           if (langPart.length === 2) {
@@ -70,27 +139,27 @@ watch(() => props.action, (newAction) => {
         }
       } catch (error) {
         console.error('Base64解码失败:', error)
-        form.value.code = newAction.code
+        form.value.code = action.code
       }
-    } else if (newAction.code) {
+    } else if (action.code) {
       // 普通代码内容，尝试从代码内容推断语言
-      form.value.code = newAction.code
+      form.value.code = action.code
       
       // 简单的语言推断逻辑
-      if (newAction.code.includes('#!/usr/bin/env python2') || 
-          newAction.code.includes('#!/usr/bin/python2')) {
+      if (action.code.includes('#!/usr/bin/env python2') || 
+          action.code.includes('#!/usr/bin/python2')) {
         form.value.code_language = 'python2'
-      } else if (newAction.code.includes('#!/usr/bin/env python3') || 
-                 newAction.code.includes('#!/usr/bin/python3') ||
-                 newAction.code.includes('print(')) {
+      } else if (action.code.includes('#!/usr/bin/env python3') || 
+                 action.code.includes('#!/usr/bin/python3') ||
+                 action.code.includes('print(')) {
         form.value.code_language = 'python3'
-      } else if (newAction.code.includes('package main') || 
-                 newAction.code.includes('func main()')) {
+      } else if (action.code.includes('package main') || 
+                 action.code.includes('func main()')) {
         form.value.code_language = 'golang'
       }
     }
   }
-}, { immediate: true })
+}
 
 // 编码代码为base64格式
 const encodeCodeToBase64 = (code: string, language: string): string => {
@@ -122,6 +191,18 @@ const saveAction = async () => {
     formData.append('name', form.value.name)
     formData.append('output', form.value.output)
     formData.append('interval', form.value.interval.toString())
+    formData.append('timeout', form.value.timeout.toString())
+    
+    // 处理config
+    let configStr = '{}'
+    if (form.value.config_type) {
+      const config = {
+        type: form.value.config_type,
+        num: form.value.config_num
+      }
+      configStr = JSON.stringify(config)
+    }
+    formData.append('config', configStr)
     
     // 处理代码
     if (form.value.code.trim()) {
@@ -179,8 +260,38 @@ const resetForm = () => {
     name: '',
     code: '',
     output: '',
+    error: '',
     interval: 0,
-    code_language: 'python3'
+    timeout: 30,
+    code_language: 'python3',
+    next_run: '',
+    config_type: '',
+    config_num: 10
+  }
+}
+
+// 格式化下次执行时间显示
+const formatNextRunTime = (nextRun: string, interval: number) => {
+  if (interval === 0) {
+    return '不执行'
+  } else if (interval === -1) {
+    return '手动执行'
+  } else if (nextRun) {
+    try {
+      const date = new Date(nextRun)
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    } catch (error) {
+      return '时间格式错误'
+    }
+  } else {
+    return '未设置'
   }
 }
 </script>
@@ -216,7 +327,58 @@ const resetForm = () => {
                   style="width: 100%"
                 />
                 <div class="form-tip">
-                  -1: 手动执行, 0: 不执行, >0: 间隔秒数
+                  -1: 手动执行, 0: 不执行, >0: 间隔秒数（建议最低5秒）
+                </div>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          
+          <el-row :gutter="20">
+            <el-col :xs="24" :sm="12" :md="12" :lg="12" :xl="12">
+              <el-form-item label="超时时间">
+                <el-input-number
+                  v-model="form.timeout"
+                  :min="0"
+                  :max="60"
+                  placeholder="超时时间（秒）"
+                  style="width: 100%"
+                />
+                <div class="form-tip">
+                  任务执行超时时间，0-60秒
+                </div>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          
+          <el-row :gutter="20">
+            <el-col :xs="24" :sm="12" :md="12" :lg="12" :xl="12">
+              <el-form-item label="配置类型">
+                <el-select
+                  v-model="form.config_type"
+                  placeholder="选择配置类型"
+                  style="width: 100%"
+                  clearable
+                >
+                  <el-option label="无" value="" />
+                  <el-option label="Flag提交器" value="flag_submiter" />
+                </el-select>
+                <div class="form-tip">
+                  选择任务类型，用于特殊处理
+                </div>
+              </el-form-item>
+            </el-col>
+            
+            <el-col :xs="24" :sm="12" :md="12" :lg="12" :xl="12" v-if="form.config_type === 'flag_submiter'">
+              <el-form-item label="Flag数量">
+                <el-input-number
+                  v-model="form.config_num"
+                  :min="1"
+                  :max="100"
+                  placeholder="每次提交的flag数量"
+                  style="width: 100%"
+                />
+                <div class="form-tip">
+                  每次执行时提交的flag数量
                 </div>
               </el-form-item>
             </el-col>
@@ -243,6 +405,30 @@ const resetForm = () => {
               placeholder="输出内容（可选）"
               maxlength="10000"
               show-word-limit
+            />
+          </el-form-item>
+          
+          <h3>错误信息</h3>
+          <el-form-item label-width="0">
+            <el-input
+              v-model="form.error"
+              type="textarea"
+              :rows="3"
+              placeholder="错误信息（只读）"
+              maxlength="10000"
+              show-word-limit
+              readonly
+              class="error-input"
+            />
+          </el-form-item>
+          
+          <h3>下次执行时间</h3>
+          <el-form-item label-width="0">
+            <el-input
+              :value="formatNextRunTime(form.next_run, form.interval)"
+              placeholder="下次执行时间（只读）"
+              readonly
+              class="next-run-input"
             />
           </el-form-item>
         </div>
@@ -291,6 +477,30 @@ const resetForm = () => {
           show-word-limit
         />
       </el-form-item>
+      
+      <h3>错误信息</h3>
+      <el-form-item>
+        <el-input
+          v-model="form.error"
+          type="textarea"
+          :rows="3"
+          placeholder="错误信息（只读）"
+          maxlength="10000"
+          show-word-limit
+          readonly
+          class="error-input"
+        />
+      </el-form-item>
+      
+      <h3>下次执行时间</h3>
+      <el-form-item>
+        <el-input
+          :value="formatNextRunTime(form.next_run, form.interval)"
+          placeholder="下次执行时间（只读）"
+          readonly
+          class="next-run-input"
+        />
+      </el-form-item>
     </el-form>
     
     <template #footer>
@@ -323,6 +533,18 @@ const resetForm = () => {
 
 :deep(.el-form-item) {
   margin-bottom: 20px;
+}
+
+.error-input :deep(.el-textarea__inner) {
+  background-color: #fef0f0;
+  border-color: #f56c6c;
+  color: #f56c6c;
+}
+
+.next-run-input :deep(.el-input__inner) {
+  background-color: #f0f9ff;
+  border-color: #409eff;
+  color: #409eff;
 }
 
 :deep(.el-form-item__label) {

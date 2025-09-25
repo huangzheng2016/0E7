@@ -2,27 +2,18 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import ActionList from './ActionList.vue'
 import ExploitList from './ExploitList.vue'
+import PcapList from './PcapList.vue'
 import ActionEdit from './ActionEdit.vue'
 import ExploitEdit from './ExploitEdit.vue'
+import PcapDetail from './PcapDetail.vue'
 
 interface Tab {
   id: string
   title: string
-  type: 'action-list' | 'exploit-list' | 'action-edit' | 'exploit-edit'
-  data?: any
+  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
+  // 只保存ID，不保存完整数据
+  itemId?: number | string  // action的id、exploit的id或pcap的id
   closable: boolean
-  // 分页状态
-  pagination?: {
-    currentPage: number
-    pageSize: number
-    totalItems: number
-  }
-  // 搜索状态
-  search?: {
-    name?: string
-    platform?: string
-    arch?: string
-  }
 }
 
 const tabs = ref<Tab[]>([
@@ -37,6 +28,12 @@ const tabs = ref<Tab[]>([
     title: '执行脚本',
     type: 'exploit-list',
     closable: false
+  },
+  {
+    id: 'pcap-list',
+    title: '流量分析',
+    type: 'pcap-list',
+    closable: false
   }
 ])
 
@@ -44,13 +41,19 @@ const activeTabId = ref('action-list')
 const isCollapsed = ref(false)
 const isMobile = ref(false)
 
-// 标签页持久化相关
+// 标签页持久化相关 - 只保存基本信息
 const STORAGE_KEY = 'tab-manager-state'
 
 // 保存状态到 localStorage
 const saveState = () => {
   const state = {
-    tabs: tabs.value,
+    tabs: tabs.value.map(tab => ({
+      id: tab.id,
+      title: tab.title,
+      type: tab.type,
+      itemId: tab.itemId,
+      closable: tab.closable
+    })),
     activeTabId: activeTabId.value,
     isCollapsed: isCollapsed.value
   }
@@ -64,9 +67,42 @@ const loadState = () => {
     if (saved) {
       const state = JSON.parse(saved)
       
-      // 恢复标签页
+      // 恢复标签页基本信息，但保留默认的基础标签页
       if (state.tabs && Array.isArray(state.tabs)) {
-        tabs.value = state.tabs
+        // 确保基础标签页存在
+        const defaultTabs: Tab[] = [
+          {
+            id: 'action-list',
+            title: '定时计划',
+            type: 'action-list',
+            closable: false
+          },
+          {
+            id: 'exploit-list',
+            title: '执行脚本',
+            type: 'exploit-list',
+            closable: false
+          },
+          {
+            id: 'pcap-list',
+            title: '流量分析',
+            type: 'pcap-list',
+            closable: false
+          }
+        ]
+        
+        // 合并默认标签页和保存的标签页
+        const savedTabs = state.tabs || []
+        const mergedTabs = [...defaultTabs]
+        
+        // 添加保存的编辑标签页
+        savedTabs.forEach((savedTab: any) => {
+          if (savedTab.type === 'action-edit' || savedTab.type === 'exploit-edit' || savedTab.type === 'pcap-detail') {
+            mergedTabs.push(savedTab as Tab)
+          }
+        })
+        
+        tabs.value = mergedTabs
       }
       
       // 恢复活动标签页
@@ -99,6 +135,7 @@ const addTab = (tab: Omit<Tab, 'id'>) => {
 const closeTab = (tabId: string) => {
   const index = tabs.value.findIndex(tab => tab.id === tabId)
   if (index > -1 && tabs.value[index].closable) {
+    const closedTab = tabs.value[index]
     tabs.value.splice(index, 1)
     
     // 如果关闭的是当前活动选项卡，切换到其他选项卡
@@ -106,23 +143,34 @@ const closeTab = (tabId: string) => {
       if (tabs.value.length > 0) {
         activeTabId.value = tabs.value[Math.max(0, index - 1)].id
       }
+      
+      // 清理URL参数
+      const url = new URL(window.location.href)
+      if (closedTab.type === 'action-edit') {
+        url.searchParams.delete('action_id')
+      } else if (closedTab.type === 'exploit-edit') {
+        url.searchParams.delete('exploit_id')
+      }
+      window.history.pushState({ path: url.href }, '', url.href)
     }
   }
 }
 
 // 关闭所有标签页
 const closeAllTabs = () => {
-  // 保存当前标签页状态
-  saveCurrentTabState()
-  
   // 只保留不可关闭的标签页（通常是列表页面）
   tabs.value = tabs.value.filter(tab => !tab.closable)
   
   // 切换到第一个标签页
   if (tabs.value.length > 0) {
     activeTabId.value = tabs.value[0].id
-    restoreTabState(activeTabId.value)
   }
+  
+  // 清理URL参数，回到干净的状态
+  const url = new URL(window.location.href)
+  url.searchParams.delete('action_id')
+  url.searchParams.delete('exploit_uuid')
+  window.history.pushState({ path: url.href }, '', url.href)
 }
 
 // 暴露方法给父组件
@@ -132,52 +180,49 @@ defineExpose({
 
 // 切换到指定选项卡
 const switchTab = (tabId: string) => {
-  // 保存当前标签页的状态
-  saveCurrentTabState()
-  
-  // 切换到新标签页
+  // 直接切换标签页，不需要保存/恢复状态
   activeTabId.value = tabId
   
-  // 恢复新标签页的状态
-  restoreTabState(tabId)
+  // 更新URL以反映当前活动的编辑标签页
+  updateUrlForActiveTab()
 }
 
-// 保存当前标签页状态
-const saveCurrentTabState = () => {
-  const currentTab = tabs.value.find(tab => tab.id === activeTabId.value)
-  if (currentTab && (currentTab.type === 'action-list' || currentTab.type === 'exploit-list')) {
-    // 保存分页状态到 localStorage
-    const stateKey = `tab-state-${currentTab.id}`
-    const state = {
-      pagination: currentTab.pagination || { currentPage: 1, pageSize: 20, totalItems: 0 },
-      search: currentTab.search || {},
-      timestamp: Date.now()
-    }
-    localStorage.setItem(stateKey, JSON.stringify(state))
-  }
-}
-
-// 恢复标签页状态
-const restoreTabState = (tabId: string) => {
-  const tab = tabs.value.find(t => t.id === tabId)
-  if (tab && (tab.type === 'action-list' || tab.type === 'exploit-list')) {
-    // 从 localStorage 恢复状态
-    const stateKey = `tab-state-${tabId}`
-    const savedState = localStorage.getItem(stateKey)
-    if (savedState) {
-      try {
-        const state = JSON.parse(savedState)
-        // 检查状态是否过期（24小时）
-        if (Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
-          tab.pagination = state.pagination
-          tab.search = state.search
+// 根据当前活动标签页更新URL
+const updateUrlForActiveTab = () => {
+  const activeTab = tabs.value.find(tab => tab.id === activeTabId.value)
+  if (!activeTab) return
+  
+  const url = new URL(window.location.href)
+  
+      // 清除所有编辑相关的参数
+      url.searchParams.delete('action_id')
+      url.searchParams.delete('exploit_id')
+      url.searchParams.delete('pcap_id')
+      
+      // 根据标签页类型设置相应的参数
+      if (activeTab.type === 'action-edit') {
+        if (activeTab.itemId) {
+          url.searchParams.set('action_id', activeTab.itemId.toString())
+        } else {
+          url.searchParams.set('action_id', 'new')
         }
-      } catch (error) {
-        console.error('恢复标签页状态失败:', error)
+      } else if (activeTab.type === 'exploit-edit') {
+        if (activeTab.itemId) {
+          url.searchParams.set('exploit_id', activeTab.itemId.toString())
+        } else {
+          url.searchParams.set('exploit_id', 'new')
+        }
+      } else if (activeTab.type === 'pcap-detail') {
+        if (activeTab.itemId) {
+          url.searchParams.set('pcap_id', activeTab.itemId.toString())
+        }
       }
-    }
-  }
+  
+  window.history.pushState({ path: url.href }, '', url.href)
 }
+
+// 简化的状态管理 - 不再保存分页和搜索状态
+// 页面刷新时会重新从服务器获取数据
 
 // 获取当前活动选项卡
 const activeTab = computed(() => {
@@ -186,51 +231,123 @@ const activeTab = computed(() => {
 
 // 处理ActionList的事件
 const handleActionEdit = (action: any) => {
-  addTab({
-    title: `${action.name} - 编辑定时计划`,
-    type: 'action-edit',
-    data: action,
-    closable: true
-  })
+  // 检查是否已存在Action编辑标签页
+  const existingTab = tabs.value.find(tab => tab.type === 'action-edit')
+  
+  if (existingTab) {
+    // 如果存在，更新现有标签页并切换到它
+    existingTab.title = `${action.name} - 编辑定时计划`
+    existingTab.itemId = action.id
+    activeTabId.value = existingTab.id
+  } else {
+    // 如果不存在，创建新标签页
+    addTab({
+      title: `${action.name} - 编辑定时计划`,
+      type: 'action-edit',
+      itemId: action.id, // 只保存ID，不保存完整数据
+      closable: true
+    })
+  }
+  
+  // 更新URL以便分享
+  updateUrlForActiveTab()
 }
 
 const handleActionAdd = () => {
-  addTab({
-    title: '新增定时计划',
-    type: 'action-edit',
-    data: null,
-    closable: true
-  })
+  // 检查是否已存在Action编辑标签页
+  const existingTab = tabs.value.find(tab => tab.type === 'action-edit')
+  
+  if (existingTab) {
+    // 如果存在，更新现有标签页并切换到它
+    existingTab.title = '新增定时计划'
+    existingTab.itemId = undefined // 新增时没有ID
+    activeTabId.value = existingTab.id
+  } else {
+    // 如果不存在，创建新标签页
+    addTab({
+      title: '新增定时计划',
+      type: 'action-edit',
+      closable: true
+    })
+  }
+  
+  // 更新URL以便分享
+  updateUrlForActiveTab()
 }
 
 // 处理ExploitList的事件
 const handleExploitEdit = (exploit: any) => {
-  addTab({
-    title: `${exploit.exploit_uuid} - 编辑执行脚本`,
-    type: 'exploit-edit',
-    data: exploit,
-    closable: true
-  })
+  // 检查是否已存在Exploit编辑标签页
+  const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit')
+  
+  if (existingTab) {
+    // 如果存在，更新现有标签页并切换到它
+    existingTab.title = `编辑执行脚本 - ID: ${exploit.id}`
+    existingTab.itemId = exploit.id
+    activeTabId.value = existingTab.id
+  } else {
+    // 如果不存在，创建新标签页
+    addTab({
+      title: `编辑执行脚本 - ID: ${exploit.id}`,
+      type: 'exploit-edit',
+      itemId: exploit.id, // 只保存ID，不保存完整数据
+      closable: true
+    })
+  }
+  
+  // 更新URL以便分享
+  updateUrlForActiveTab()
+}
+
+// 处理PcapList的事件
+const handlePcapView = (pcap: any) => {
+  // 检查是否已存在Pcap详情标签页
+  const existingTab = tabs.value.find(tab => tab.type === 'pcap-detail')
+  
+  if (existingTab) {
+    // 如果存在，更新现有标签页并切换到它
+    existingTab.title = `流量详情 - ID: ${pcap.id}`
+    existingTab.itemId = pcap.id
+    activeTabId.value = existingTab.id
+  } else {
+    // 如果不存在，创建新标签页
+    addTab({
+      title: `流量详情 - ID: ${pcap.id}`,
+      type: 'pcap-detail',
+      itemId: pcap.id, // 只保存ID，不保存完整数据
+      closable: true
+    })
+  }
+  
+  // 更新URL以便分享
+  updateUrlForActiveTab()
 }
 
 const handleExploitAdd = () => {
-  addTab({
-    title: '新增执行脚本',
-    type: 'exploit-edit',
-    data: null,
-    closable: true
-  })
+  // 检查是否已存在Exploit编辑标签页
+  const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit')
+  
+  if (existingTab) {
+    // 如果存在，更新现有标签页并切换到它
+    existingTab.title = '新增执行脚本'
+    existingTab.itemId = undefined // 新增时没有ID
+    activeTabId.value = existingTab.id
+  } else {
+    // 如果不存在，创建新标签页
+    addTab({
+      title: '新增执行脚本',
+      type: 'exploit-edit',
+      closable: true
+    })
+  }
+  
+  // 更新URL以便分享
+  updateUrlForActiveTab()
 }
 
-// 处理状态变化事件
-const handleStateChange = (tabType: 'action-list' | 'exploit-list', state: any) => {
-  const tab = tabs.value.find(t => t.type === tabType)
-  if (tab) {
-    tab.pagination = state.pagination
-    tab.search = state.search
-    // 保存状态到 localStorage
-    saveCurrentTabState()
-  }
+// 简化的状态变化处理 - 不再需要保存分页和搜索状态
+const handleStateChange = (tabType: 'action-list' | 'exploit-list' | 'pcap-list', state: any) => {
+  // 状态变化时不需要特殊处理，数据会实时从服务器获取
 }
 
 // 处理保存成功事件
@@ -246,7 +363,7 @@ const handleSaveSuccess = () => {
 }
 
 // 导航到指定页面
-const navigateTo = (type: 'action-list' | 'exploit-list') => {
+const navigateTo = (type: 'action-list' | 'exploit-list' | 'pcap-list') => {
   const existingTab = tabs.value.find(tab => tab.type === type)
   if (existingTab) {
     switchTab(existingTab.id)
@@ -258,6 +375,9 @@ const navigateTo = (type: 'action-list' | 'exploit-list') => {
         break
       case 'exploit-list':
         title = '执行脚本'
+        break
+      case 'pcap-list':
+        title = '流量分析'
         break
     }
     
@@ -274,8 +394,15 @@ const hasExploitList = computed(() => tabs.value.some(tab => tab.type === 'explo
 
 // 检测屏幕大小
 const checkScreenSize = () => {
+  const wasMobile = isMobile.value
   isMobile.value = window.innerWidth < 768
-  if (isMobile.value) {
+  
+  // 如果从移动端切换到桌面端，自动展开侧边栏
+  if (wasMobile && !isMobile.value) {
+    isCollapsed.value = false
+  }
+  // 如果从桌面端切换到移动端，自动折叠侧边栏
+  else if (!wasMobile && isMobile.value) {
     isCollapsed.value = true
   }
 }
@@ -290,10 +417,103 @@ watch([tabs, activeTabId, isCollapsed], () => {
   saveState()
 }, { deep: true })
 
+// 根据URL参数自动打开对应的编辑标签页
+const openTabFromUrl = () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const actionId = urlParams.get('action_id')
+  const exploitId = urlParams.get('exploit_id')
+  const pcapId = urlParams.get('pcap_id')
+  
+  if (actionId) {
+    // 检查是否已存在Action编辑标签页
+    const existingTab = tabs.value.find(tab => tab.type === 'action-edit')
+    
+    if (existingTab) {
+      // 如果存在，更新现有标签页并切换到它
+      if (actionId === 'new') {
+        existingTab.title = '新增定时计划'
+        existingTab.itemId = undefined
+      } else {
+        existingTab.title = `编辑定时计划 - ID: ${actionId}`
+        existingTab.itemId = parseInt(actionId)
+      }
+      activeTabId.value = existingTab.id
+    } else {
+      // 如果不存在，创建新标签页
+      if (actionId === 'new') {
+        addTab({
+          title: '新增定时计划',
+          type: 'action-edit',
+          closable: true
+        })
+      } else {
+        addTab({
+          title: `编辑定时计划 - ID: ${actionId}`,
+          type: 'action-edit',
+          itemId: parseInt(actionId),
+          closable: true
+        })
+      }
+    }
+  } else if (exploitId) {
+    // 检查是否已存在Exploit编辑标签页
+    const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit')
+    
+    if (existingTab) {
+      // 如果存在，更新现有标签页并切换到它
+      if (exploitId === 'new') {
+        existingTab.title = '新增执行脚本'
+        existingTab.itemId = undefined
+      } else {
+        existingTab.title = `编辑执行脚本 - ID: ${exploitId}`
+        existingTab.itemId = parseInt(exploitId)
+      }
+      activeTabId.value = existingTab.id
+    } else {
+      // 如果不存在，创建新标签页
+      if (exploitId === 'new') {
+        addTab({
+          title: '新增执行脚本',
+          type: 'exploit-edit',
+          closable: true
+        })
+      } else {
+        addTab({
+          title: `编辑执行脚本 - ID: ${exploitId}`,
+          type: 'exploit-edit',
+          itemId: parseInt(exploitId),
+          closable: true
+        })
+      }
+    }
+  } else if (pcapId) {
+    // 检查是否已存在Pcap详情标签页
+    const existingTab = tabs.value.find(tab => tab.type === 'pcap-detail')
+    
+    if (existingTab) {
+      // 如果存在，更新现有标签页并切换到它
+      existingTab.title = `流量详情 - ID: ${pcapId}`
+      existingTab.itemId = parseInt(pcapId)
+      activeTabId.value = existingTab.id
+    } else {
+      // 如果不存在，创建新标签页
+      addTab({
+        title: `流量详情 - ID: ${pcapId}`,
+        type: 'pcap-detail',
+        itemId: parseInt(pcapId),
+        closable: true
+      })
+    }
+  }
+}
+
 // 监听窗口大小变化
 onMounted(() => {
   // 先加载保存的状态
   loadState()
+  
+  // 根据URL参数自动打开对应的编辑标签页
+  openTabFromUrl()
   
   checkScreenSize()
   window.addEventListener('resize', checkScreenSize)
@@ -360,8 +580,6 @@ onUnmounted(() => {
     <div class="tab-content">
       <div v-if="activeTab?.type === 'action-list'">
         <ActionList
-          :pagination-state="activeTab.pagination"
-          :search-state="activeTab.search"
           @edit="handleActionEdit"
           @add="handleActionAdd"
           @state-change="(state) => handleStateChange('action-list', state)"
@@ -370,18 +588,23 @@ onUnmounted(() => {
       
       <div v-else-if="activeTab?.type === 'exploit-list'">
         <ExploitList
-          :pagination-state="activeTab.pagination"
-          :search-state="activeTab.search"
           @edit="handleExploitEdit"
           @add="handleExploitAdd"
           @state-change="(state) => handleStateChange('exploit-list', state)"
         />
       </div>
       
+      <div v-else-if="activeTab?.type === 'pcap-list'">
+        <PcapList
+          @view="handlePcapView"
+          @state-change="(state) => handleStateChange('pcap-list', state)"
+        />
+      </div>
+      
       <div v-else-if="activeTab?.type === 'action-edit'">
         <ActionEdit
-          :action="activeTab.data"
-          :is-editing="!!activeTab.data"
+          :action-id="activeTab.itemId"
+          :is-editing="!!activeTab.itemId"
           :standalone="true"
           @save-success="handleSaveSuccess"
         />
@@ -389,10 +612,17 @@ onUnmounted(() => {
       
       <div v-else-if="activeTab?.type === 'exploit-edit'">
         <ExploitEdit
-          :exploit="activeTab.data"
-          :is-editing="!!activeTab.data"
+          :exploit-id="activeTab.itemId?.toString()"
+          :is-editing="!!activeTab.itemId"
           :standalone="true"
           @save-success="handleSaveSuccess"
+        />
+      </div>
+      
+      <div v-else-if="activeTab?.type === 'pcap-detail'">
+        <PcapDetail
+          :pcap-id="activeTab.itemId as number"
+          @close="closeTab(activeTab.id)"
         />
       </div>
       
@@ -601,7 +831,7 @@ onUnmounted(() => {
   }
   
   .tab-sidebar:not(.collapsed) {
-    width: 180px;
+    width: 180px !important;
     position: fixed;
     top: 0;
     left: 0;
@@ -616,6 +846,17 @@ onUnmounted(() => {
   
   .tab-manager:has(.tab-sidebar:not(.collapsed)) .tab-content {
     margin-left: 0;
+  }
+}
+
+/* 确保桌面端侧边栏正常显示 */
+@media (min-width: 769px) {
+  .tab-sidebar {
+    width: 180px !important;
+  }
+  
+  .tab-sidebar.collapsed {
+    width: 50px !important;
   }
 }
 </style>

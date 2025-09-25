@@ -7,8 +7,10 @@ interface Action {
   name: string
   code: string
   output: string
+  error: string
   interval: number
-  updated: string
+  status: string
+  next_run: string
 }
 
 interface PaginationState {
@@ -216,6 +218,47 @@ const editAction = (action: Action) => {
   emit('edit', action)
 }
 
+// 执行Action
+const executeAction = async (action: Action) => {
+  try {
+    const formData = new FormData()
+    formData.append('id', action.id.toString())
+    
+    const response = await fetch('/webui/action_execute', {
+      method: 'POST',
+      body: formData
+    })
+    
+    const result = await response.json()
+    
+    if (result.message === 'success') {
+      ElNotification({
+        title: '执行成功',
+        message: `定时计划 "${action.name}" 已加入执行队列`,
+        type: 'success',
+        position: 'bottom-right'
+      })
+      // 刷新列表
+      fetchActions()
+    } else {
+      ElNotification({
+        title: '执行失败',
+        message: result.error || '执行失败',
+        type: 'error',
+        position: 'bottom-right'
+      })
+    }
+  } catch (error) {
+    console.error('执行Action失败:', error)
+    ElNotification({
+      title: '执行失败',
+      message: '网络错误，请稍后重试',
+      type: 'error',
+      position: 'bottom-right'
+    })
+  }
+}
+
 // 新增Action
 const addAction = () => {
   emit('add')
@@ -282,6 +325,75 @@ const formatInterval = (interval: number) => {
   return `${Math.floor(interval / 3600)}小时`
 }
 
+// 格式化状态显示
+const formatStatus = (status: string) => {
+  const statusMap: Record<string, string> = {
+    'PENDING': '等待中',
+    'RUNNING': '运行中',
+    'SUCCESS': '成功',
+    'ERROR': '失败',
+    'TIMEOUT': '超时'
+  }
+  return statusMap[status] || status
+}
+
+// 获取状态标签类型
+const getStatusType = (status: string) => {
+  const typeMap: Record<string, string> = {
+    'PENDING': 'info',
+    'RUNNING': 'warning',
+    'SUCCESS': 'success',
+    'ERROR': 'danger',
+    'TIMEOUT': 'warning'
+  }
+  return typeMap[status] || 'info'
+}
+
+// 提取代码类型
+const getCodeType = (code: string) => {
+  if (!code) return '无代码'
+  
+  // 匹配格式：data:code/python2;base64,xxx 或 data:code/python3;base64,xxx 或 data:code/golang;base64,xxx
+  const match = code.match(/^data:code\/(python2|python3|golang);base64,/)
+  if (match) {
+    const type = match[1]
+    switch (type) {
+      case 'python2':
+        return 'Python 2'
+      case 'python3':
+        return 'Python 3'
+      case 'golang':
+        return 'Golang'
+      default:
+        return '未知类型'
+    }
+  }
+  
+  return '格式错误'
+}
+
+// 获取代码类型标签颜色
+const getCodeTypeTagType = (code: string) => {
+  if (!code) return 'info'
+  
+  const match = code.match(/^data:code\/(python2|python3|golang);base64,/)
+  if (match) {
+    const type = match[1]
+    switch (type) {
+      case 'python2':
+        return 'warning'
+      case 'python3':
+        return 'success'
+      case 'golang':
+        return 'primary'
+      default:
+        return 'info'
+    }
+  }
+  
+  return 'danger'
+}
+
 onMounted(() => {
   fetchActions()
 })
@@ -344,10 +456,18 @@ onMounted(() => {
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="code" label="代码" min-width="200" show-overflow-tooltip>
+      <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <span v-if="row.code">{{ row.code.substring(0, 100) }}{{ row.code.length > 100 ? '...' : '' }}</span>
-          <span v-else class="text-muted">无代码</span>
+          <el-tag :type="getStatusType(row.status)" size="small">
+            {{ formatStatus(row.status) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="代码类型" width="120">
+        <template #default="{ row }">
+          <el-tag :type="getCodeTypeTagType(row.code)" size="small">
+            {{ getCodeType(row.code) }}
+          </el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="output" label="输出" min-width="200" show-overflow-tooltip>
@@ -356,14 +476,26 @@ onMounted(() => {
           <span v-else class="text-muted">无输出</span>
         </template>
       </el-table-column>
-      <el-table-column label="更新时间" width="160">
+      <el-table-column prop="error" label="错误信息" min-width="200" show-overflow-tooltip>
         <template #default="{ row }">
-          {{ formatTime(row.updated) }}
+          <span v-if="row.error" class="text-error">{{ row.error.substring(0, 100) }}{{ row.error.length > 100 ? '...' : '' }}</span>
+          <span v-else class="text-muted">无错误</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="下次执行" width="160">
+        <template #default="{ row }">
+          <span v-if="row.interval > 0">{{ formatTime(row.next_run) }}</span>
+          <span v-else-if="row.interval === 0" class="text-muted">不执行</span>
+          <span v-else class="text-muted">手动执行</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
           <div class="action-buttons">
+            <el-button size="small" type="success" @click="executeAction(row)">
+              <el-icon><VideoPlay /></el-icon>
+              执行
+            </el-button>
             <el-button size="small" @click="editAction(row)">
               <el-icon><Edit /></el-icon>
               编辑
@@ -436,6 +568,11 @@ onMounted(() => {
 
 .text-muted {
   color: #909399;
+  font-style: italic;
+}
+
+.text-error {
+  color: #f56c6c;
   font-style: italic;
 }
 

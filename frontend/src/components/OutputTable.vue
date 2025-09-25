@@ -3,6 +3,11 @@ import type { ElTable } from 'element-plus';
 import { watch, ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useStore } from 'vuex';
 
+// 接收名称作为prop
+const props = defineProps<{
+  exploitName?: string
+}>()
+
 type chunk = {
     id: number,
     output: string,
@@ -23,7 +28,12 @@ const autoRefresh = ref(false);
 
 // 全量刷新函数
 const refreshAllData = () => {
-    store.dispatch('fetchResults', { page: currentPage.value, pageSize: pageSize.value }).then(() => {
+    const name = props.exploitName || new URLSearchParams(window.location.search).get('name');
+    store.dispatch('fetchResults', { 
+        page: currentPage.value, 
+        pageSize: pageSize.value,
+        name: name 
+    }).then(() => {
         // 刷新完成后确保分页状态同步
         totalItems.value = store.state.totalItems;
     }).catch(error => {
@@ -87,6 +97,13 @@ watch(autoRefresh, (newValue) => {
         stopAutoRefresh();
     }
 });
+
+// 监听名称变化，重新获取数据
+watch(() => props.exploitName, () => {
+    if (props.exploitName) {
+        refreshAllData();
+    }
+}, { immediate: true });
 
 onMounted(() => {
     // 初始加载数据

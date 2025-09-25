@@ -8,7 +8,7 @@ import (
 )
 
 func flag(c *gin.Context) {
-	exploit_uuid := c.PostForm("uuid")
+	exploit_name := c.PostForm("name")
 	exploit_flag := c.PostForm("flag")
 
 	var count int64
@@ -23,7 +23,7 @@ func flag(c *gin.Context) {
 
 	if count == 0 {
 		flag := database.Flag{
-			UUID:   exploit_uuid,
+			Name:   exploit_name,
 			Flag:   exploit_flag,
 			Status: "QUEUE",
 		}
@@ -41,7 +41,7 @@ func flag(c *gin.Context) {
 		})
 	} else {
 		flag := database.Flag{
-			UUID:   exploit_uuid,
+			Name:   exploit_name,
 			Flag:   exploit_flag,
 			Status: "SKIPPED",
 		}

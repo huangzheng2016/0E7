@@ -25,14 +25,14 @@ const store = createStore({
       }: {
         state: any;
       },
-      payload: { page?: number; pageSize?: number } = {}
+      payload: { page?: number; pageSize?: number; name?: string } = {}
     ) {
-      const { page = 1, pageSize = 20 } = payload;
-      const urlParams = new URLSearchParams(window.location.search);
-      const uuid = urlParams.get('uuid');
+      const { page = 1, pageSize = 20, name } = payload;
+      // 如果没有传入name，则从URL参数获取（向后兼容）
+      const finalName = name || new URLSearchParams(window.location.search).get('name');
       
-      // 当UUID为空时，不查询output，直接返回空结果
-      if (!uuid) {
+      // 当名称为空时，不查询output，直接返回空结果
+      if (!finalName) {
         state.workerQueue = [];
         state.totalItems = 0;
         return Promise.resolve({
@@ -42,7 +42,7 @@ const store = createStore({
         });
       }
       
-      let requestBody = `exploit_uuid=${uuid}`;
+      let requestBody = `name=${finalName}`;
       // 添加分页参数
       requestBody += `&page=${page}&page_size=${pageSize}`;
       

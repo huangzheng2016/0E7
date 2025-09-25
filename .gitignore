@@ -11,3 +11,5 @@ sqlite.db-wal
 /cert
 /dist
 /exploit
+/upload
+.DS_Store

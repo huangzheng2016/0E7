@@ -1,12 +1,18 @@
 package webui
 
 import (
+	"0E7/service/config"
+	"0E7/service/database"
 	"errors"
+	"io/ioutil"
+	"mime/multipart"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"mime/multipart"
-	"path/filepath"
-	"strings"
 )
 
 func pcap_upload(c *gin.Context) {
@@ -72,4 +78,170 @@ func savefile(file *multipart.FileHeader, c *gin.Context) error {
 	newFilename := strings.TrimSuffix(file.Filename, ext) + "_" + uuid.New().String() + ext
 	err := c.SaveUploadedFile(file, "pcap/"+newFilename)
 	return err
+}
+
+// flow_download 提供gzip压缩的flow JSON数据
+func flow_download(c *gin.Context) {
+	flowPath := c.PostForm("flow_path")
+	if flowPath == "" {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "flow_path parameter is required",
+		})
+		return
+	}
+
+	// 路径校验：确保只能访问flow目录下的文件，防止路径遍历攻击
+	cleanPath := filepath.Clean(flowPath)
+	flowDir := filepath.Clean("flow")
+
+	// 检查路径是否在flow目录下
+	relPath, err := filepath.Rel(flowDir, cleanPath)
+	if err != nil || strings.Contains(relPath, "..") {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "invalid flow path",
+		})
+		return
+	}
+
+	// 检查文件是否存在（支持有或没有.gz扩展名）
+	_, err = os.Stat(cleanPath)
+	if err != nil {
+		// 如果文件不存在，尝试添加.gz扩展名
+		cleanPathWithGz := cleanPath + ".gz"
+		_, err = os.Stat(cleanPathWithGz)
+		if err != nil {
+			c.JSON(404, gin.H{
+				"message": "fail",
+				"error":   "flow file not found",
+			})
+			return
+		}
+		cleanPath = cleanPathWithGz
+	}
+
+	// 检查是否是目录（通过检查文件信息）
+	fileInfo, err := os.Stat(cleanPath)
+	if err == nil && fileInfo.IsDir() {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "path is a directory, not a file",
+		})
+		return
+	}
+
+	// 直接读取gzip压缩的文件内容
+	compressedData, err := ioutil.ReadFile(cleanPath)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"message": "fail",
+			"error":   "failed to read flow file",
+		})
+		return
+	}
+
+	// 设置响应头，直接返回已压缩的数据
+	// 注意：设置Content-Encoding为gzip后，gin的gzip中间件会跳过压缩
+	c.Header("Content-Type", "application/json")
+	c.Header("Content-Encoding", "gzip")
+
+	// 直接返回已压缩的数据，避免重复压缩
+	c.Data(200, "application/json", compressedData)
+}
+
+// pcap_show 获取流量列表
+func pcap_show(c *gin.Context) {
+	page, _ := strconv.Atoi(c.PostForm("page"))
+	pageSize, _ := strconv.Atoi(c.PostForm("page_size"))
+
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	offset := (page - 1) * pageSize
+
+	// 构建查询条件
+	query := config.Db.Model(&database.Pcap{})
+
+	// 添加搜索条件
+	if srcIP := c.PostForm("src_ip"); srcIP != "" {
+		query = query.Where("src_ip LIKE ?", "%"+srcIP+"%")
+	}
+	if dstIP := c.PostForm("dst_ip"); dstIP != "" {
+		query = query.Where("dst_ip LIKE ?", "%"+dstIP+"%")
+	}
+	if tags := c.PostForm("tags"); tags != "" {
+		query = query.Where("tags LIKE ?", "%"+tags+"%")
+	}
+
+	// 获取总数
+	var total int64
+	err := query.Count(&total).Error
+	if err != nil {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "查询失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取数据
+	var pcaps []database.Pcap
+	err = query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&pcaps).Error
+	if err != nil {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "查询失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "success",
+		"result":  pcaps,
+		"total":   total,
+	})
+}
+
+// pcap_get_by_id 根据ID获取流量详情
+func pcap_get_by_id(c *gin.Context) {
+	idStr := c.PostForm("id")
+	if idStr == "" {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "ID参数不能为空",
+		})
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "无效的ID",
+		})
+		return
+	}
+
+	var pcap database.Pcap
+	err = config.Db.Where("id = ?", id).First(&pcap).Error
+	if err != nil {
+		c.JSON(404, gin.H{
+			"message": "fail",
+			"error":   "流量记录不存在",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "success",
+		"result":  pcap,
+	})
 }

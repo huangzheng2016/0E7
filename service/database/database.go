@@ -103,14 +103,16 @@ func init_database_client(db *gorm.DB, engine string) error {
 					Name:     "flag_submiter",
 					Code:     "",
 					Output:   "",
+					Error:    "",
 					Interval: -1,
 				},
 				{
 					ID:       2,
 					Name:     "ipbucket_default",
-					Code:     "127.0.0.1",
+					Code:     "import json\nteam = {}\nfor i in range(1,10):\n    team[f\"Team {i}\"] = f\"192.168.0.{i}\"\nprint(json.dumps(team))",
 					Output:   "",
-					Interval: -1,
+					Error:    "",
+					Interval: 300,
 				},
 			}
 			for _, action := range actions {

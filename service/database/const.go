@@ -27,7 +27,7 @@ func (Client) TableName() string {
 // Exploit 漏洞利用表
 type Exploit struct {
 	ID          uint   `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	UUID        string `json:"uuid" gorm:"column:uuid;type:varchar(255);not null;"`
+	Name        string `json:"name" gorm:"column:name;type:varchar(255);not null;"`
 	Filename    string `json:"filename" gorm:"column:filename;type:varchar(255);"`
 	Environment string `json:"environment" gorm:"column:environment;type:varchar(255);"`
 	Command     string `json:"command" gorm:"column:command;type:varchar(255);"`
@@ -51,7 +51,7 @@ func (Exploit) TableName() string {
 // Flag 标志表
 type Flag struct {
 	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	UUID      string    `json:"uuid" gorm:"column:uuid;type:varchar(255);not null;"`
+	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;"`
 	Flag      string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;"`
 	Status    string    `json:"status" gorm:"column:status;type:varchar(255);"`
 	Msg       string    `json:"msg" gorm:"column:msg;type:text;"` // 提交结果消息
@@ -66,7 +66,7 @@ func (Flag) TableName() string {
 // ExploitOutput 漏洞利用输出表
 type ExploitOutput struct {
 	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	UUID      string    `json:"uuid" gorm:"column:uuid;type:varchar(255);not null;"`
+	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;"`
 	Client    string    `json:"client" gorm:"column:client;type:varchar(255);not null;"`
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
 	Status    string    `json:"status" gorm:"column:status;type:varchar(255);"`
@@ -84,10 +84,12 @@ type Action struct {
 	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;unique;"`
 	Code      string    `json:"code" gorm:"column:code;type:text;"`
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
+	Error     string    `json:"error" gorm:"column:error;type:text;"`
 	Config    string    `json:"config" gorm:"column:config;type:text;"`
 	Interval  int       `json:"interval" gorm:"column:interval;type:int;"`
 	Timeout   int       `json:"timeout" gorm:"column:timeout;type:int;default:60;"`              // 超时时间（秒），默认60秒，最多60秒
 	Status    string    `json:"status" gorm:"column:status;type:varchar(50);default:'pending';"` // 任务状态：pending, running, completed, timeout, error
+	NextRun   time.Time `json:"next_run" gorm:"column:next_run;type:datetime;"`                  // 下次执行时间
 	IsDeleted bool      `json:"is_deleted" gorm:"column:is_deleted;type:boolean;default:false;"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`

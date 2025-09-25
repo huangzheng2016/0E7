@@ -19,6 +19,8 @@ func action(c *gin.Context) {
 	code := c.PostForm("code")
 	output := c.PostForm("output")
 	interval := c.PostForm("interval")
+	timeout := c.PostForm("timeout")
+	configStr := c.PostForm("config")
 
 	if code != "" {
 		match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(code)
@@ -33,11 +35,23 @@ func action(c *gin.Context) {
 	}
 
 	intervalInt, _ := strconv.Atoi(interval)
+	timeoutInt, _ := strconv.Atoi(timeout)
+
+	// 限制超时时间在 0-60 秒之间
+	if timeoutInt < 0 {
+		timeoutInt = 0
+	} else if timeoutInt > 60 {
+		timeoutInt = 60
+	}
+
 	actionRecord := database.Action{
 		Name:     name,
 		Code:     code,
 		Output:   output,
+		Config:   configStr,
+		Status:   "PENDING",
 		Interval: intervalInt,
+		Timeout:  timeoutInt,
 	}
 
 	if id == "" {
@@ -197,7 +211,12 @@ func action_show(c *gin.Context) {
 			"name":     action.Name,
 			"code":     code,
 			"output":   output,
+			"error":    action.Error,
+			"config":   action.Config,
 			"interval": action.Interval,
+			"timeout":  action.Timeout,
+			"status":   action.Status,
+			"next_run": action.NextRun.Format(time.DateTime),
 			"updated":  action.UpdatedAt.Format(time.DateTime),
 		}
 		ret = append(ret, element)
@@ -226,6 +245,43 @@ func action_delete(c *gin.Context) {
 
 	if result.RowsAffected == 0 {
 		c.JSON(404, gin.H{"message": "fail", "error": "action not found"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "success",
+		"error":   "",
+	})
+}
+
+func action_execute(c *gin.Context) {
+	action_id := c.PostForm("id")
+	if action_id == "" {
+		c.JSON(400, gin.H{"message": "fail", "error": "id is required"})
+		return
+	}
+
+	// 查找Action
+	var action database.Action
+	err := config.Db.Where("id = ? AND is_deleted = ?", action_id, false).First(&action).Error
+	if err != nil {
+		c.JSON(404, gin.H{"message": "fail", "error": "action not found"})
+		return
+	}
+
+	// 检查是否有代码
+	if action.Code == "" {
+		c.JSON(400, gin.H{"message": "fail", "error": "action has no code"})
+		return
+	}
+
+	// 设置next_run为1999年1月1日，这样会被立即执行
+	action.NextRun = time.Date(1999, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// 更新数据库
+	err = config.Db.Save(&action).Error
+	if err != nil {
+		c.JSON(500, gin.H{"message": "fail", "error": err.Error()})
 		return
 	}
 

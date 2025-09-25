@@ -21,7 +21,7 @@ import (
 
 var (
 	// 任务队列
-	taskQueue = make(chan database.Action, 100)
+	taskQueue = make(chan *database.Action, 100)
 	// 控制每个ID同时只有一个任务运行
 	runningTasks sync.Map // map[uint]*runningTaskInfo
 )
@@ -63,18 +63,20 @@ func StartActionScheduler() {
 // 检查并排队待执行的任务
 func checkAndQueueActions() {
 	var actions []database.Action
-	err := config.Db.Where("interval >= 0 AND code != '' AND status IN ('pending', 'completed') AND updated_at <= ?", time.Now()).Find(&actions).Error
+	// 查询条件：间隔>=0 且 有代码 且 (next_run <= 当前时间 或 next_run < 2000年)
+	year2000 := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	err := config.Db.Where("interval >= 0 AND code != '' AND (next_run <= ? OR next_run < ?)", time.Now(), year2000).Find(&actions).Error
 	if err != nil {
 		log.Println("查询Action失败:", err)
 		return
 	}
 
-	for _, action := range actions {
+	for i := range actions {
 		select {
-		case taskQueue <- action:
-			log.Printf("任务 %s 已加入队列", action.Name)
+		case taskQueue <- &actions[i]:
+			log.Printf("任务 %s 已加入队列", actions[i].Name)
 		default:
-			log.Printf("任务队列已满，跳过任务 %s", action.Name)
+			log.Printf("任务队列已满，跳过任务 %s", actions[i].Name)
 		}
 	}
 }
@@ -87,81 +89,71 @@ func taskExecutor() {
 }
 
 // 执行单个任务
-func executeTask(actionRecord database.Action) {
+func executeTask(actionRecord *database.Action) {
 	// 检查该ID是否已有任务在运行
 	if _, exists := runningTasks.Load(actionRecord.ID); exists {
 		log.Printf("任务 %s (ID: %d) 已在运行中，跳过执行", actionRecord.Name, actionRecord.ID)
 		return
 	}
 
-	// 检查任务是否已经超时
-	if actionRecord.Status == "timeout" {
-		log.Printf("任务 %s 已超时，跳过执行", actionRecord.Name)
-		return
-	}
-
-	// 创建带超时的上下文，限制最多60秒
 	timeout := time.Duration(actionRecord.Timeout) * time.Second
 	if timeout <= 0 {
-		timeout = 30 * time.Second // 默认30秒超时
+		timeout = 30 * time.Second
 	}
 	if timeout > 60*time.Second {
-		timeout = 60 * time.Second // 最多60秒超时
+		timeout = 60 * time.Second
 	}
 
 	taskCtx, taskCancel := context.WithTimeout(context.Background(), timeout)
 
 	// 创建运行任务信息
 	taskInfo := &runningTaskInfo{
-		Action: &actionRecord,
+		Action: actionRecord,
 		Ctx:    taskCtx,
 		Cancel: taskCancel,
 	}
 
-	// 标记该ID的任务为运行中
 	runningTasks.Store(actionRecord.ID, taskInfo)
 	defer func() {
-		// 清理运行任务记录
 		runningTasks.Delete(actionRecord.ID)
 		taskCancel()
 	}()
 
-	// 更新任务状态为运行中
-	actionRecord.Status = "running"
+	actionRecord.Status = "RUNNING"
 	actionRecord.UpdatedAt = time.Now()
-	config.Db.Save(&actionRecord)
+	config.Db.Save(actionRecord)
 
 	log.Printf("开始执行任务 %s (ID: %d)", actionRecord.Name, actionRecord.ID)
 
-	// 在goroutine中执行任务，以便可以取消
 	done := make(chan error, 1)
 	go func() {
 		done <- executeActionCode(actionRecord, taskCtx)
 	}()
 
-	// 等待任务完成或超时
 	select {
 	case err := <-done:
 		if err != nil {
 			log.Printf("任务 %s (ID: %d) 执行失败: %v", actionRecord.Name, actionRecord.ID, err)
-			actionRecord.Status = "error"
+			actionRecord.Status = "ERROR"
+			actionRecord.Error = err.Error()
 		} else {
 			log.Printf("任务 %s (ID: %d) 执行成功", actionRecord.Name, actionRecord.ID)
-			actionRecord.Status = "completed"
-			// 更新下次执行时间
-			actionRecord.UpdatedAt = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
+			actionRecord.Status = "SUCCESS"
+			actionRecord.Error = "" // 清空错误信息
+			actionRecord.NextRun = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
 		}
 	case <-taskCtx.Done():
 		log.Printf("任务 %s (ID: %d) 执行超时", actionRecord.Name, actionRecord.ID)
-		actionRecord.Status = "timeout"
+		actionRecord.Status = "TIMEOUT"
+		actionRecord.Error = "任务执行超时"
 	}
 
 	// 保存任务状态
-	config.Db.Save(&actionRecord)
+	config.Db.Save(actionRecord)
 }
 
 // 执行Action代码
-func executeActionCode(actionRecord database.Action, ctx context.Context) error {
+func executeActionCode(actionRecord *database.Action, ctx context.Context) error {
 	match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(actionRecord.Code)
 	if match == nil {
 		return fmt.Errorf("代码格式错误")
@@ -221,7 +213,7 @@ func executeActionCode(actionRecord database.Action, ctx context.Context) error 
 	// 如果输出有变化，更新数据库
 	if new_output != actionRecord.Output {
 		actionRecord.Output = new_output
-		config.Db.Save(&actionRecord)
+		config.Db.Save(actionRecord)
 		log.Printf("Action %s 输出更新: %s", actionRecord.Name, new_output)
 	}
 
@@ -258,7 +250,7 @@ func executePythonCode(code string, ctx context.Context, pythonVersion string, f
 
 	err := cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("Python执行错误: %v, stderr: %s", err, stderr.String())
+		return "", fmt.Errorf("python执行错误: %v, stderr: %s", err, stderr.String())
 	}
 
 	return stdout.String(), nil
@@ -287,7 +279,7 @@ func executeGolangCode(code string, ctx context.Context, flags []string) (string
 	if value, ok := programs.Load(md5); !ok {
 		program, err = goi.Compile(code)
 		if err != nil {
-			return "", fmt.Errorf("Go编译错误: %v", err)
+			return "", fmt.Errorf("go编译错误: %v", err)
 		}
 		programs.Store(md5, program)
 	} else {
@@ -304,11 +296,11 @@ func executeGolangCode(code string, ctx context.Context, flags []string) (string
 	select {
 	case err := <-done:
 		if err != nil {
-			return "", fmt.Errorf("Go运行时错误: %v", err)
+			return "", fmt.Errorf("go运行时错误: %v", err)
 		}
 		return goibuf.String(), nil
 	case <-ctx.Done():
-		return "", fmt.Errorf("Go代码执行超时")
+		return "", fmt.Errorf("go代码执行超时")
 	}
 }
 
@@ -359,13 +351,27 @@ func getFlagsForSubmission(num int) ([]string, error) {
 
 // 处理flag提交结果
 func processFlagSubmissionResults(output string, submittedFlags []string) error {
-	// 解析输出结果
+	// 首先尝试解析为数组格式
 	var results []FlagSubmitResult
 	err := json.Unmarshal([]byte(output), &results)
-	if err != nil {
-		return fmt.Errorf("解析提交结果失败: %v", err)
+	if err == nil {
+		// 数组格式解析成功
+		return processFlagResultsArray(results)
 	}
 
+	// 如果数组格式解析失败，尝试解析为对象格式
+	var resultMap map[string]string
+	err = json.Unmarshal([]byte(output), &resultMap)
+	if err != nil {
+		return fmt.Errorf("解析提交结果失败，既不是数组格式也不是对象格式: %v", err)
+	}
+
+	// 对象格式解析成功，转换为标准格式
+	return processFlagResultsMap(resultMap)
+}
+
+// 处理数组格式的flag提交结果
+func processFlagResultsArray(results []FlagSubmitResult) error {
 	// 更新数据库中的flag状态
 	for _, result := range results {
 		var flag database.Flag
@@ -385,6 +391,33 @@ func processFlagSubmissionResults(output string, submittedFlags []string) error 
 			log.Printf("更新flag %s 状态失败: %v", result.Flag, err)
 		} else {
 			log.Printf("更新flag %s 状态为: %s, 消息: %s", result.Flag, result.Status, result.Msg)
+		}
+	}
+
+	return nil
+}
+
+// 处理对象格式的flag提交结果
+func processFlagResultsMap(resultMap map[string]string) error {
+	// 更新数据库中的flag状态
+	for flagValue, status := range resultMap {
+		var flag database.Flag
+		err := config.Db.Where("flag = ?", flagValue).First(&flag).Error
+		if err != nil {
+			log.Printf("查找flag %s 失败: %v", flagValue, err)
+			continue
+		}
+
+		// 更新状态，对象格式通常没有详细消息
+		flag.Status = status
+		flag.Msg = "" // 对象格式通常没有消息
+		flag.UpdatedAt = time.Now()
+
+		err = config.Db.Save(&flag).Error
+		if err != nil {
+			log.Printf("更新flag %s 状态失败: %v", flagValue, err)
+		} else {
+			log.Printf("更新flag %s 状态为: %s", flagValue, status)
 		}
 	}
 
