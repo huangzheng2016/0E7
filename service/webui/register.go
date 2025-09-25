@@ -15,6 +15,7 @@ func Register(router *gin.Engine) {
 	router.POST("/webui/exploit_delete", exploit_delete)
 	router.POST("/webui/action", action)
 	router.POST("/webui/action_show", action_show)
+	router.POST("/webui/action_get_by_id", action_get_by_id)
 	router.POST("/webui/action_delete", action_delete)
 	router.POST("/webui/action_execute", action_execute)
 

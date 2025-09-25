@@ -40,19 +40,28 @@ func heartbeat() {
 		if err != nil {
 			log.Println("Failed to get cpuInfo:", err)
 		}
+		if len(cpuInfo) == 0 {
+			log.Println("No CPU info available")
+		}
+
 		memInfo, err := mem.VirtualMemory()
 		if err != nil {
 			log.Println("Failed to get memInfo:", err)
 		}
+
 		cpuPercent, err := cpu.Percent(time.Second, false)
 		if err != nil {
 			log.Println("Failed to get cpuPercent:", err)
 		}
+		if len(cpuPercent) == 0 {
+			log.Println("No CPU percent available")
+		}
+
 		hostname, err := host.Info()
 		if err != nil {
 			log.Println("Failed to get hostname:", err)
-			return
 		}
+
 		pcap := moniter_pcap_device()
 		values := url.Values{}
 		values.Set("uuid", config.Client_uuid)

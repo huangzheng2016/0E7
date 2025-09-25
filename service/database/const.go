@@ -7,15 +7,15 @@ import (
 // Client 客户端信息表
 type Client struct {
 	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	UUID      string    `json:"uuid" gorm:"column:uuid;type:varchar(255);not null;"`
-	Hostname  string    `json:"hostname" gorm:"column:hostname;type:varchar(255);not null;"`
-	Platform  string    `json:"platform" gorm:"column:platform;type:varchar(255);not null;"`
-	Arch      string    `json:"arch" gorm:"column:arch;type:varchar(255);not null;"`
-	CPU       string    `json:"cpu" gorm:"column:cpu;type:varchar(255);not null;"`
-	CPUUse    string    `json:"cpu_use" gorm:"column:cpu_use;type:varchar(255);not null;"`
-	MemoryUse string    `json:"memory_use" gorm:"column:memory_use;type:varchar(255);not null;"`
-	MemoryMax string    `json:"memory_max" gorm:"column:memory_max;type:varchar(255);not null;"`
-	Pcap      string    `json:"pcap" gorm:"column:pcap;type:varchar(255);not null;"`
+	UUID      string    `json:"uuid" gorm:"column:uuid;type:varchar(255);not null;default:'';"`
+	Hostname  string    `json:"hostname" gorm:"column:hostname;type:varchar(255);not null;default:'';"`
+	Platform  string    `json:"platform" gorm:"column:platform;type:varchar(255);not null;default:'';"`
+	Arch      string    `json:"arch" gorm:"column:arch;type:varchar(255);not null;default:'';"`
+	CPU       string    `json:"cpu" gorm:"column:cpu;type:varchar(255);not null;default:'';"`
+	CPUUse    string    `json:"cpu_use" gorm:"column:cpu_use;type:varchar(255);not null;default:'';"`
+	MemoryUse string    `json:"memory_use" gorm:"column:memory_use;type:varchar(255);not null;default:'';"`
+	MemoryMax string    `json:"memory_max" gorm:"column:memory_max;type:varchar(255);not null;default:'';"`
+	Pcap      string    `json:"pcap" gorm:"column:pcap;type:varchar(255);not null;default:'';"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
@@ -36,7 +36,7 @@ type Exploit struct {
 	Arch        string `json:"arch" gorm:"column:arch;type:varchar(255);"`
 	Filter      string `json:"filter" gorm:"column:filter;type:varchar(255);"`
 	Timeout     string `json:"timeout" gorm:"column:timeout;type:varchar(255);"`
-	Times       string `json:"times" gorm:"column:times;type:varchar(255);not null;"`
+	Times       string `json:"times" gorm:"column:times;type:varchar(255);not null;default:'0';"`
 	Flag        string `json:"flag" gorm:"column:flag;type:varchar(255);"`
 	IsDeleted   bool   `json:"is_deleted" gorm:"column:is_deleted;type:boolean;default:false;"`
 
@@ -51,8 +51,8 @@ func (Exploit) TableName() string {
 // Flag 标志表
 type Flag struct {
 	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;"`
-	Flag      string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;"`
+	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;default:'';"`
+	Flag      string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;default:'';"`
 	Status    string    `json:"status" gorm:"column:status;type:varchar(255);"`
 	Msg       string    `json:"msg" gorm:"column:msg;type:text;"` // 提交结果消息
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
@@ -66,8 +66,8 @@ func (Flag) TableName() string {
 // ExploitOutput 漏洞利用输出表
 type ExploitOutput struct {
 	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;"`
-	Client    string    `json:"client" gorm:"column:client;type:varchar(255);not null;"`
+	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;default:'';"`
+	Client    string    `json:"client" gorm:"column:client;type:varchar(255);not null;default:'';"`
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
 	Status    string    `json:"status" gorm:"column:status;type:varchar(255);"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
@@ -81,15 +81,15 @@ func (ExploitOutput) TableName() string {
 // Action 动作表
 type Action struct {
 	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;unique;"`
+	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;unique;default:'';"`
 	Code      string    `json:"code" gorm:"column:code;type:text;"`
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
 	Error     string    `json:"error" gorm:"column:error;type:text;"`
 	Config    string    `json:"config" gorm:"column:config;type:text;"`
 	Interval  int       `json:"interval" gorm:"column:interval;type:int;"`
-	Timeout   int       `json:"timeout" gorm:"column:timeout;type:int;default:60;"`              // 超时时间（秒），默认60秒，最多60秒
-	Status    string    `json:"status" gorm:"column:status;type:varchar(50);default:'pending';"` // 任务状态：pending, running, completed, timeout, error
-	NextRun   time.Time `json:"next_run" gorm:"column:next_run;type:datetime;"`                  // 下次执行时间
+	Timeout   int       `json:"timeout" gorm:"column:timeout;type:int;default:60;"`                       // 超时时间（秒），默认60秒，最多60秒
+	Status    string    `json:"status" gorm:"column:status;type:varchar(50);default:'pending';not null;"` // 任务状态：pending, running, completed, timeout, error
+	NextRun   time.Time `json:"next_run" gorm:"column:next_run;type:datetime;"`                           // 下次执行时间
 	IsDeleted bool      `json:"is_deleted" gorm:"column:is_deleted;type:boolean;default:false;"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`

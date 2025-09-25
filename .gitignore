@@ -13,3 +13,4 @@ sqlite.db-wal
 /exploit
 /upload
 .DS_Store
+test_build

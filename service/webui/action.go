@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func action(c *gin.Context) {
@@ -288,5 +289,60 @@ func action_execute(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message": "success",
 		"error":   "",
+	})
+}
+
+// action_get_by_id 根据ID获取Action详情
+func action_get_by_id(c *gin.Context) {
+	action_id := c.PostForm("id")
+	if action_id == "" {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "ID参数不能为空",
+		})
+		return
+	}
+
+	var action database.Action
+	err := config.Db.Where("id = ? AND is_deleted = ?", action_id, false).First(&action).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(404, gin.H{
+				"message": "fail",
+				"error":   "定时计划不存在",
+			})
+		} else {
+			c.JSON(500, gin.H{
+				"message": "fail",
+				"error":   "查询失败: " + err.Error(),
+			})
+		}
+		return
+	}
+
+	// 格式化next_run时间
+	var nextRunStr string
+	if !action.NextRun.IsZero() {
+		nextRunStr = action.NextRun.Format("2006-01-02 15:04:05")
+	}
+
+	element := map[string]interface{}{
+		"id":       action.ID,
+		"name":     action.Name,
+		"code":     action.Code,
+		"output":   action.Output,
+		"error":    action.Error,
+		"config":   action.Config,
+		"interval": action.Interval,
+		"timeout":  action.Timeout,
+		"status":   action.Status,
+		"next_run": nextRunStr,
+		"created_at": action.CreatedAt.Format("2006-01-02 15:04:05"),
+		"updated_at": action.UpdatedAt.Format("2006-01-02 15:04:05"),
+	}
+
+	c.JSON(200, gin.H{
+		"message": "success",
+		"result":  element,
 	})
 }
