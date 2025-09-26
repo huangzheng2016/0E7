@@ -19,6 +19,7 @@ func flag(c *gin.Context) {
 		return
 	}
 	exploit_flag := c.PostForm("flag")
+	team := c.PostForm("team")
 
 	var count int64
 	err = config.Db.Model(&database.Flag{}).Where("flag = ?", exploit_flag).Count(&count).Error
@@ -35,6 +36,7 @@ func flag(c *gin.Context) {
 			ExploitId: exploit_id,
 			Flag:      exploit_flag,
 			Status:    "QUEUE",
+			Team:      team,
 		}
 		err = config.Db.Create(&flag).Error
 		if err != nil {
@@ -53,6 +55,7 @@ func flag(c *gin.Context) {
 			ExploitId: exploit_id,
 			Flag:      exploit_flag,
 			Status:    "SKIPPED",
+			Team:      team,
 		}
 		err = config.Db.Create(&flag).Error
 		if err != nil {

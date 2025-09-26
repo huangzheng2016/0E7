@@ -111,7 +111,7 @@ const fetchFlowData = async (flowPath: string) => {
       // 按时间排序流量数据
       flowData.value = (result || []).sort((a: FlowItem, b: FlowItem) => a.t - b.t)
     } else {
-      console.error('获取flow数据失败')
+      console.error('获取flow数据失败:', response.status, response.statusText)
     }
   } catch (error) {
     console.error('获取flow数据失败:', error)

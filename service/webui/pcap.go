@@ -4,7 +4,6 @@ import (
 	"0E7/service/config"
 	"0E7/service/database"
 	"errors"
-	"io/ioutil"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -130,24 +129,8 @@ func flow_download(c *gin.Context) {
 		})
 		return
 	}
-
-	// 直接读取gzip压缩的文件内容
-	compressedData, err := ioutil.ReadFile(cleanPath)
-	if err != nil {
-		c.JSON(500, gin.H{
-			"message": "fail",
-			"error":   "failed to read flow file",
-		})
-		return
-	}
-
-	// 设置响应头，直接返回已压缩的数据
-	// 注意：设置Content-Encoding为gzip后，gin的gzip中间件会跳过压缩
-	c.Header("Content-Type", "application/json")
-	c.Header("Content-Encoding", "gzip")
-
-	// 直接返回已压缩的数据，避免重复压缩
-	c.Data(200, "application/json", compressedData)
+	
+	c.File(cleanPath)
 }
 
 // pcap_show 获取流量列表

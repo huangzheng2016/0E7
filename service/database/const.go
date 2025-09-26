@@ -53,6 +53,7 @@ func (Exploit) TableName() string {
 type Flag struct {
 	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
 	ExploitId int       `json:"exploit_id" gorm:"column:exploit_id;type:int;not null;default:0;"`
+	Team      string    `json:"team" gorm:"column:team;type:varchar(255);not null;default:'';"`
 	Flag      string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;default:'';"`
 	Status    string    `json:"status" gorm:"column:status;type:varchar(255);"`
 	Msg       string    `json:"msg" gorm:"column:msg;type:text;"` // 提交结果消息
