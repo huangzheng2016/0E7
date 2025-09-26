@@ -197,6 +197,7 @@ const updateUrlForActiveTab = () => {
       // 清除所有编辑相关的参数
       url.searchParams.delete('action_id')
       url.searchParams.delete('exploit_id')
+      url.searchParams.delete('name')
       url.searchParams.delete('pcap_id')
       
       // 根据标签页类型设置相应的参数
@@ -208,9 +209,10 @@ const updateUrlForActiveTab = () => {
         }
       } else if (activeTab.type === 'exploit-edit') {
         if (activeTab.itemId) {
-          url.searchParams.set('exploit_id', activeTab.itemId.toString())
+          // 对于exploit，使用name参数而不是exploit_id
+          url.searchParams.set('name', activeTab.itemId.toString())
         } else {
-          url.searchParams.set('exploit_id', 'new')
+          url.searchParams.set('name', 'new')
         }
       } else if (activeTab.type === 'pcap-detail') {
         if (activeTab.itemId) {
@@ -282,13 +284,13 @@ const handleExploitEdit = (exploit: any) => {
   
   if (existingTab) {
     // 如果存在，更新现有标签页并切换到它
-    existingTab.title = `编辑执行脚本 - ID: ${exploit.id}`
+    existingTab.title = `${exploit.name} - 编辑执行脚本`
     existingTab.itemId = exploit.id
     activeTabId.value = existingTab.id
   } else {
     // 如果不存在，创建新标签页
     addTab({
-      title: `编辑执行脚本 - ID: ${exploit.id}`,
+      title: `${exploit.name} - 编辑执行脚本`,
       type: 'exploit-edit',
       itemId: exploit.id, // 只保存ID，不保存完整数据
       closable: true
@@ -306,13 +308,13 @@ const handlePcapView = (pcap: any) => {
   
   if (existingTab) {
     // 如果存在，更新现有标签页并切换到它
-    existingTab.title = `流量详情 - ID: ${pcap.id}`
+    existingTab.title = `流量详情 -  ${pcap.id}`
     existingTab.itemId = pcap.id
     activeTabId.value = existingTab.id
   } else {
     // 如果不存在，创建新标签页
     addTab({
-      title: `流量详情 - ID: ${pcap.id}`,
+      title: `流量详情 -  ${pcap.id}`,
       type: 'pcap-detail',
       itemId: pcap.id, // 只保存ID，不保存完整数据
       closable: true
@@ -434,7 +436,7 @@ const openTabFromUrl = () => {
         existingTab.title = '新增定时计划'
         existingTab.itemId = undefined
       } else {
-        existingTab.title = `编辑定时计划 - ID: ${actionId}`
+        existingTab.title = `${actionId} - 编辑定时计划`
         existingTab.itemId = parseInt(actionId)
       }
       activeTabId.value = existingTab.id
@@ -448,7 +450,7 @@ const openTabFromUrl = () => {
         })
       } else {
         addTab({
-          title: `编辑定时计划 - ID: ${actionId}`,
+          title: `${actionId} - 编辑定时计划`,
           type: 'action-edit',
           itemId: parseInt(actionId),
           closable: true
@@ -465,7 +467,7 @@ const openTabFromUrl = () => {
         existingTab.title = '新增执行脚本'
         existingTab.itemId = undefined
       } else {
-        existingTab.title = `编辑执行脚本 - ID: ${exploitId}`
+        existingTab.title = `${exploitId} - 编辑执行脚本`
         existingTab.itemId = parseInt(exploitId)
       }
       activeTabId.value = existingTab.id
@@ -479,7 +481,7 @@ const openTabFromUrl = () => {
         })
       } else {
         addTab({
-          title: `编辑执行脚本 - ID: ${exploitId}`,
+          title: `${exploitId} - 编辑执行脚本`,
           type: 'exploit-edit',
           itemId: parseInt(exploitId),
           closable: true
@@ -492,13 +494,13 @@ const openTabFromUrl = () => {
     
     if (existingTab) {
       // 如果存在，更新现有标签页并切换到它
-      existingTab.title = `流量详情 - ID: ${pcapId}`
+      existingTab.title = `流量详情 -  ${pcapId}`
       existingTab.itemId = parseInt(pcapId)
       activeTabId.value = existingTab.id
     } else {
       // 如果不存在，创建新标签页
       addTab({
-        title: `流量详情 - ID: ${pcapId}`,
+        title: `流量详情 -  ${pcapId}`,
         type: 'pcap-detail',
         itemId: parseInt(pcapId),
         closable: true

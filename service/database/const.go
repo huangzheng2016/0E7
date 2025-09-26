@@ -38,6 +38,7 @@ type Exploit struct {
 	Timeout     string `json:"timeout" gorm:"column:timeout;type:varchar(255);"`
 	Times       string `json:"times" gorm:"column:times;type:varchar(255);not null;default:'0';"`
 	Flag        string `json:"flag" gorm:"column:flag;type:varchar(255);"`
+	Team        string `json:"team" gorm:"column:team;type:varchar(255);"`
 	IsDeleted   bool   `json:"is_deleted" gorm:"column:is_deleted;type:boolean;default:false;"`
 
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
