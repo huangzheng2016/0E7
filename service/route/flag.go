@@ -3,16 +3,25 @@ package route
 import (
 	"0E7/service/config"
 	"0E7/service/database"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
 func flag(c *gin.Context) {
-	exploit_name := c.PostForm("name")
+	exploit_id_str := c.PostForm("exploit_id")
+	exploit_id, err := strconv.Atoi(exploit_id_str)
+	if err != nil {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "exploit_id error",
+		})
+		return
+	}
 	exploit_flag := c.PostForm("flag")
 
 	var count int64
-	err := config.Db.Model(&database.Flag{}).Where("flag = ?", exploit_flag).Count(&count).Error
+	err = config.Db.Model(&database.Flag{}).Where("flag = ?", exploit_flag).Count(&count).Error
 	if err != nil {
 		c.JSON(400, gin.H{
 			"message": "fail",
@@ -23,9 +32,9 @@ func flag(c *gin.Context) {
 
 	if count == 0 {
 		flag := database.Flag{
-			Name:   exploit_name,
-			Flag:   exploit_flag,
-			Status: "QUEUE",
+			ExploitId: exploit_id,
+			Flag:      exploit_flag,
+			Status:    "QUEUE",
 		}
 		err = config.Db.Create(&flag).Error
 		if err != nil {
@@ -41,9 +50,9 @@ func flag(c *gin.Context) {
 		})
 	} else {
 		flag := database.Flag{
-			Name:   exploit_name,
-			Flag:   exploit_flag,
-			Status: "SKIPPED",
+			ExploitId: exploit_id,
+			Flag:      exploit_flag,
+			Status:    "SKIPPED",
 		}
 		err = config.Db.Create(&flag).Error
 		if err != nil {

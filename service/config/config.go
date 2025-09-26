@@ -31,7 +31,8 @@ var (
 	Server_url              string
 	Server_flag             string
 	Client_mode             bool
-	Client_uuid             string
+	Client_name             string
+	Client_id               int
 	Client_pypi             string
 	Client_update           bool
 	Client_worker           int
@@ -123,10 +124,10 @@ func Init_conf() error {
 				section.Key("server_url").SetValue(Server_url)
 			}
 		}
-		Client_uuid = section.Key("uuid").String()
-		if Client_uuid == "" {
-			Client_uuid = uuid.New().String()
-			section.Key("uuid").SetValue(Client_uuid)
+		Client_name = section.Key("name").String()
+		if Client_name == "" {
+			Client_name = uuid.New().String()
+			section.Key("name").SetValue(Client_name)
 		}
 
 		Client_pypi = section.Key("pypi").String()

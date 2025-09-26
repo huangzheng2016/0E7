@@ -3,13 +3,15 @@ package route
 import (
 	"0E7/service/config"
 	"0E7/service/database"
+	"log"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
 func monitor(c *gin.Context) {
-	uuid := c.PostForm("uuid")
-	if uuid == "" {
+	client_id_str := c.PostForm("client_id")
+	if client_id_str == "" {
 		c.JSON(400, gin.H{
 			"message": "fail",
 			"error":   "missing parameters",
@@ -18,8 +20,22 @@ func monitor(c *gin.Context) {
 		c.Abort()
 		return
 	}
+
+	// 转换uuid为int
+	client_id, err := strconv.Atoi(client_id_str)
+	if err != nil {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "invalid uuid: " + err.Error(),
+			"result":  "",
+		})
+		log.Println("Invalid uuid:", err)
+		c.Abort()
+		return
+	}
+
 	var monitors []database.Monitor
-	err := config.Db.Where("uuid = ?", uuid).Find(&monitors).Error
+	err = config.Db.Where("client_id = ?", client_id).Find(&monitors).Error
 	if err != nil {
 		c.JSON(400, gin.H{
 			"message": "fail",
@@ -41,7 +57,7 @@ func monitor(c *gin.Context) {
 		ret = append(ret, element)
 		found = true
 	}
-	if found == false {
+	if !found {
 		c.JSON(202, gin.H{
 			"message": "success",
 			"error":   "",

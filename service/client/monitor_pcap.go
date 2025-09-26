@@ -4,9 +4,9 @@ import (
 	"0E7/service/config"
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -95,7 +95,7 @@ func capture(device string, desc string, bpf string, timeout time.Duration, wg *
 		case <-ctx.Done():
 			body := &bytes.Buffer{}
 			writer_file := multipart.NewWriter(body)
-			fileWriter, err := writer_file.CreateFormFile("file", config.Client_uuid+"_"+desc+"_"+strconv.Itoa(int(time.Now().Unix()))+".pcap")
+			fileWriter, err := writer_file.CreateFormFile("file", fmt.Sprint("%d", config.Client_id)+"_"+desc+"_"+strconv.Itoa(int(time.Now().Unix()))+".pcap")
 			if err != nil {
 				log.Println(err)
 				return err

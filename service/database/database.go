@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -99,17 +100,34 @@ func init_database_client(db *gorm.DB, engine string) error {
 		if count == 0 {
 			actions := []Action{
 				{
-					ID:       1,
-					Name:     "flag_submiter",
-					Code:     "",
-					Output:   "",
+					ID:   1,
+					Name: "flag_submiter",
+					Code: CodeToBase64("code/python3", "import sys\n"+
+						"import json\n"+
+						"if len(sys.argv) != 2:\n"+
+						"    print(json.dumps([]))\n"+
+						"    sys.exit(0)\n"+
+						"    \n"+
+						"data = json.loads(sys.argv[1])\n"+
+						"result = []\n"+
+						"for item in data:\n"+
+						"    result.append({\n"+
+						"        \"flag\": item,\n"+
+						"        \"status\": \"SUCCESS\",\n"+
+						"        \"msg\": \"\"\n"+
+						"    })\nprint(json.dumps(result))"),
+					Output:   "{\"type\":\"flag_submiter\",\"num\":20}",
 					Error:    "",
-					Interval: -1,
+					Interval: 5,
 				},
 				{
-					ID:       2,
-					Name:     "ipbucket_default",
-					Code:     "import json\nteam = {}\nfor i in range(1,10):\n    team[f\"Team {i}\"] = f\"192.168.0.{i}\"\nprint(json.dumps(team))",
+					ID:   2,
+					Name: "ipbucket_default",
+					Code: CodeToBase64("code/python3", "import json\n"+
+						"team = {}\n"+
+						"for i in range(1,10):\n"+
+						"    team[f\"Team {i}\"] = f\"192.168.0.{i}\"\n"+
+						"print(json.dumps(team))"),
 					Output:   "",
 					Error:    "",
 					Interval: 300,
@@ -123,4 +141,8 @@ func init_database_client(db *gorm.DB, engine string) error {
 
 	log.Println("Database tables migrated successfully.")
 	return nil
+}
+
+func CodeToBase64(codeType string, code string) string {
+	return fmt.Sprintf("data:%s;base64,%s", codeType, base64.StdEncoding.EncodeToString([]byte(code)))
 }

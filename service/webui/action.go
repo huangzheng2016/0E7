@@ -59,7 +59,7 @@ func action(c *gin.Context) {
 		err = config.Db.Create(&actionRecord).Error
 	} else {
 		idInt, _ := strconv.Atoi(id)
-		actionRecord.ID = uint(idInt)
+		actionRecord.ID = idInt
 		err = config.Db.Save(&actionRecord).Error
 	}
 
@@ -327,16 +327,16 @@ func action_get_by_id(c *gin.Context) {
 	}
 
 	element := map[string]interface{}{
-		"id":       action.ID,
-		"name":     action.Name,
-		"code":     action.Code,
-		"output":   action.Output,
-		"error":    action.Error,
-		"config":   action.Config,
-		"interval": action.Interval,
-		"timeout":  action.Timeout,
-		"status":   action.Status,
-		"next_run": nextRunStr,
+		"id":         action.ID,
+		"name":       action.Name,
+		"code":       action.Code,
+		"output":     action.Output,
+		"error":      action.Error,
+		"config":     action.Config,
+		"interval":   action.Interval,
+		"timeout":    action.Timeout,
+		"status":     action.Status,
+		"next_run":   nextRunStr,
 		"created_at": action.CreatedAt.Format("2006-01-02 15:04:05"),
 		"updated_at": action.UpdatedAt.Format("2006-01-02 15:04:05"),
 	}

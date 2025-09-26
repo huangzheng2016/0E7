@@ -4,6 +4,7 @@ import (
 	"0E7/service/config"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -21,7 +22,7 @@ func monitor() {
 		return
 	}
 	values := url.Values{}
-	values.Set("uuid", config.Client_uuid)
+	values.Set("client_id", fmt.Sprintf("%d", config.Client_id))
 	requestBody := bytes.NewBufferString(values.Encode())
 	request, err := http.NewRequest("POST", config.Server_url+"/api/monitor", requestBody)
 	if err != nil {

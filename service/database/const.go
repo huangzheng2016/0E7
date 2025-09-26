@@ -6,8 +6,8 @@ import (
 
 // Client 客户端信息表
 type Client struct {
-	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	UUID      string    `json:"uuid" gorm:"column:uuid;type:varchar(255);not null;default:'';"`
+	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;default:'';"`
 	Hostname  string    `json:"hostname" gorm:"column:hostname;type:varchar(255);not null;default:'';"`
 	Platform  string    `json:"platform" gorm:"column:platform;type:varchar(255);not null;default:'';"`
 	Arch      string    `json:"arch" gorm:"column:arch;type:varchar(255);not null;default:'';"`
@@ -26,7 +26,7 @@ func (Client) TableName() string {
 
 // Exploit 漏洞利用表
 type Exploit struct {
-	ID          uint   `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	ID          int    `json:"id" gorm:"column:id;primary_key;auto_increment;"`
 	Name        string `json:"name" gorm:"column:name;type:varchar(255);not null;"`
 	Filename    string `json:"filename" gorm:"column:filename;type:varchar(255);"`
 	Environment string `json:"environment" gorm:"column:environment;type:varchar(255);"`
@@ -50,8 +50,8 @@ func (Exploit) TableName() string {
 
 // Flag 标志表
 type Flag struct {
-	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;default:'';"`
+	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	ExploitId int       `json:"exploit_id" gorm:"column:exploit_id;type:int;not null;default:0;"`
 	Flag      string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;default:'';"`
 	Status    string    `json:"status" gorm:"column:status;type:varchar(255);"`
 	Msg       string    `json:"msg" gorm:"column:msg;type:text;"` // 提交结果消息
@@ -65,9 +65,9 @@ func (Flag) TableName() string {
 
 // ExploitOutput 漏洞利用输出表
 type ExploitOutput struct {
-	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;default:'';"`
-	Client    string    `json:"client" gorm:"column:client;type:varchar(255);not null;default:'';"`
+	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	ExploitId int       `json:"exploit_id" gorm:"column:exploit_id;type:int;not null;default:0;"`
+	ClientId  int       `json:"client_id" gorm:"column:client_id;type:int;not null;default:0;"`
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
 	Status    string    `json:"status" gorm:"column:status;type:varchar(255);"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
@@ -80,7 +80,7 @@ func (ExploitOutput) TableName() string {
 
 // Action 动作表
 type Action struct {
-	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
 	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;unique;default:'';"`
 	Code      string    `json:"code" gorm:"column:code;type:text;"`
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
@@ -101,7 +101,7 @@ func (Action) TableName() string {
 
 // PcapFile PCAP文件表
 type PcapFile struct {
-	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
 	Filename  string    `json:"filename" gorm:"column:filename;type:varchar(255);"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
@@ -113,8 +113,9 @@ func (PcapFile) TableName() string {
 
 // Monitor 监控表
 type Monitor struct {
-	ID        uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	UUID      string    `json:"uuid" gorm:"column:uuid;type:varchar(255);"`
+	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	ClientId  int       `json:"client_id" gorm:"column:client_id;type:int;not null;default:0;"`
+	Name      string    `json:"name" gorm:"column:name;type:varchar(255);"`
 	Types     string    `json:"types" gorm:"column:types;type:varchar(255);"`
 	Data      string    `json:"data" gorm:"column:data;type:text;"`
 	Interval  int       `json:"interval" gorm:"column:interval;type:int;"`
@@ -128,7 +129,7 @@ func (Monitor) TableName() string {
 
 // Pcap PCAP数据表
 type Pcap struct {
-	ID           uint      `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	ID           int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
 	SrcPort      string    `json:"src_port" gorm:"column:src_port;type:varchar(255);"`
 	DstPort      string    `json:"dst_port" gorm:"column:dst_port;type:varchar(255);"`
 	SrcIP        string    `json:"src_ip" gorm:"column:src_ip;type:varchar(255);"`

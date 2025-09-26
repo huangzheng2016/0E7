@@ -6,11 +6,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"runtime"
-	"strconv"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -63,14 +63,15 @@ func heartbeat() {
 
 		pcap := moniter_pcap_device()
 		values := url.Values{}
-		values.Set("uuid", config.Client_uuid)
+		values.Set("client_id", fmt.Sprintf("%d", config.Client_id))
+		values.Set("name", config.Client_name)
 		values.Set("hostname", hostname.Hostname)
 		values.Set("platform", runtime.GOOS)
 		values.Set("arch", runtime.GOARCH)
 		values.Set("cpu", cpuInfo[0].ModelName)
-		values.Set("cpu_use", strconv.FormatFloat(cpuPercent[0], 'f', 2, 64))
-		values.Set("memory_use", strconv.Itoa(int(memInfo.Used/1024/1024)))
-		values.Set("memory_max", strconv.Itoa(int(memInfo.Total/1024/1024)))
+		values.Set("cpu_use", fmt.Sprintf("%.2f", cpuPercent[0]))
+		values.Set("memory_use", fmt.Sprintf("%d", memInfo.Used/1024/1024))
+		values.Set("memory_max", fmt.Sprintf("%d", memInfo.Total/1024/1024))
 		values.Set("pcap", pcap)
 
 		requestBody := bytes.NewBufferString(values.Encode())
@@ -92,6 +93,14 @@ func heartbeat() {
 			if err != nil {
 				log.Println(err)
 			}
+
+			// 更新本地client_id
+			if result["id"] != nil {
+				if newId, ok := result["id"].(float64); ok {
+					config.Client_id = int(newId)
+				}
+			}
+
 			found := false
 			if result["sha256"] == nil {
 				found = true

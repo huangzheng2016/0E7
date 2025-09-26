@@ -334,8 +334,8 @@ Record the output of the exploit task
 | Parameter | Type   | Required | Description                                                          |
 |-----------|--------|----------|----------------------------------------------------------------------|
 | `id`      | int    | no       | the task unique id,if it is empty,it will return one for you         |
-| `uuid`    | string | yes      | the `exploit_uuid` of the task                                       |
-| `client`  | string | yes      | the `client_uuid` of the client that run the task                    |
+| `exploit_id` | string | yes      | the `exploit_id` of the task                                       |
+| `client_id`  | string | yes      | the `client_id` of the client that run the task                    |
 | `output`  | string | yes      | arch of the client,including `386`,`amd64`,`arm64`                   |
 | `status`  | string | yes      | the running status of the task,including `RUNNING`,`ERROR`,`SUCCESS` |
 
@@ -366,7 +366,7 @@ Record the output of the exploit task
 POST /api/exploit_output HTTP/1.1
 Host: 0e7.cn
 
-id=&uuid=2ed62949-0825-4a6d-a3bf-26f782b07305&client=1ac5bb86-cda9-44b9-b7d5-acb59b498852&output=flag{Hello,ZhengTai!}&status=SUCCESS
+id=&exploit_id=2ed62949-0825-4a6d-a3bf-26f782b07305&client_id=1ac5bb86-cda9-44b9-b7d5-acb59b498852&output=flag{Hello,ZhengTai!}&status=SUCCESS
 ```
 
 ##### Response Example
@@ -793,8 +793,8 @@ show the output of the exploit task,including the live view
 | `id`           | int    | no       | if not empty,show the task match `id`           |
 | `page`    | int    | no       | default 20,show `page` task a page         |
 | `page_num`     | int    | no       | default 1,show the `page_num` page              |
-| `exploit_uuid` | string | no       | if not empty,show the task match `exploit_uuid` |
-| `client_uuid`  | string | no       | if not empty,show the task match `client_uuid`  |
+| `exploit_id` | string | yes      | the exploit ID to show output for |
+| `client_id`  | string | no       | if not empty,show the task match `client_id`  |
 | `platform`     | string | no       | if not empty,show the task match `platform`     |
 | `arch`         | string | no       | if not empty,show the task match `arch`         |
 
@@ -815,10 +815,12 @@ show the output of the exploit task,including the live view
 | `page`    | int      |          | the number of the task one pages show                                |
 | `result`       | []object |          | a result object                                                      |
 | `id`           | int      | `result` | the id of the task                                                   |                                          |
-| `exploit_uuid` | string   | `result` | the exploit_uuid of the task                                         |
-| `client_uuid`  | string   | `result` | the client_uuid of the client that run the task                      | 
+| `exploit_id`   | int      | `result` | the exploit_id of the task                                           |
+| `client_id`    | int      | `result` | the client_id of the client that run the task                        |
+| `client_name`  | string   | `result` | the name of the client that run the task                             |
 | `output`       | string   | `result` | the output of the task                                               |
 | `status`       | string   | `result` | the running status of the task,including `RUNNING`,`ERROR`,`SUCCESS` |
+| `update_time`  | string   | `result` | the update time of the task                                          |
 
 ##### Response Status Codes
 

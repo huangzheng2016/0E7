@@ -28,11 +28,11 @@ const autoRefresh = ref(false);
 
 // 全量刷新函数
 const refreshAllData = () => {
-    const name = props.exploitName || new URLSearchParams(window.location.search).get('name');
+    const exploitId = props.exploitName || new URLSearchParams(window.location.search).get('exploit_id');
     store.dispatch('fetchResults', { 
         page: currentPage.value, 
         pageSize: pageSize.value,
-        name: name 
+        exploit_id: exploitId 
     }).then(() => {
         // 刷新完成后确保分页状态同步
         totalItems.value = store.state.totalItems;
@@ -154,6 +154,12 @@ watch (() => store.state.totalItems, (newVal) => {
                     </el-tag>
                 </template>
             </ElTableColumn>
+            <ElTableColumn label="执行客户端" prop="client_name" width="120">
+                <template #default="{ row }">
+                    <span v-if="row.client_name">{{ row.client_name }}</span>
+                    <span v-else class="text-muted">未知</span>
+                </template>
+            </ElTableColumn>
             <ElTableColumn label="更新时间" width="160">
                 <template #default="{ row }">
                     {{ formatTime(row.update_time) }}
@@ -257,5 +263,10 @@ watch (() => store.state.totalItems, (newVal) => {
 
 .el-table :deep(.cell) {
     line-height: 1.4;
+}
+
+.text-muted {
+    color: #909399;
+    font-style: italic;
 }
 </style>
