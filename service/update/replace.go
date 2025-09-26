@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+var client = &http.Client{Timeout: time.Duration(config.Global_timeout_http) * time.Second,
+	Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+
 func downloadFile(filepath string) error {
 	values := url.Values{}
 	values.Set("platform", runtime.GOOS)
@@ -24,8 +27,6 @@ func downloadFile(filepath string) error {
 		return err
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	client := &http.Client{Timeout: time.Duration(config.Global_timeout_download) * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 	response, err := client.Do(request)
 	if err != nil {
 		return err

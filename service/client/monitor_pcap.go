@@ -116,8 +116,6 @@ func capture(device string, desc string, bpf string, timeout time.Duration, wg *
 				return err
 			}
 			request.Header.Set("Content-Type", writer_file.FormDataContentType())
-			client := &http.Client{Timeout: time.Duration(config.Global_timeout_http) * time.Second,
-				Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 			response, err := client.Do(request)
 			if err != nil {
 				log.Println(err)

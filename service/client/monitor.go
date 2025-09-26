@@ -3,7 +3,6 @@ package client
 import (
 	"0E7/service/config"
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -30,8 +29,6 @@ func monitor() {
 		return
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	client := &http.Client{Timeout: time.Duration(config.Global_timeout_http) * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 	response, err := client.Do(request)
 	if err != nil {
 		log.Println(err)
