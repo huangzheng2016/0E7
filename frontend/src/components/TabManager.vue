@@ -316,13 +316,11 @@ const handleExploitEdit = (exploit: any) => {
 
 // 处理PcapList的事件
 const handlePcapView = (pcap: any) => {
-  // 检查是否已存在Pcap详情标签页
-  const existingTab = tabs.value.find(tab => tab.type === 'pcap-detail')
+  // 检查是否已存在相同ID的Pcap详情标签页
+  const existingTab = tabs.value.find(tab => tab.type === 'pcap-detail' && tab.itemId === pcap.id)
   
   if (existingTab) {
-    // 如果存在，更新现有标签页并切换到它
-    existingTab.title = `流量详情 -  ${pcap.id}`
-    existingTab.itemId = pcap.id
+    // 如果存在相同ID的标签页，切换到它
     activeTabId.value = existingTab.id
   } else {
     // 如果不存在，创建新标签页

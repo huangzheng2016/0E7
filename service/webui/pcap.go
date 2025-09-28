@@ -89,6 +89,9 @@ func flow_download(c *gin.Context) {
 	download := c.PostForm("d") // 下载参数
 	info := c.PostForm("i")     // 信息参数
 
+	// 调试信息
+	fmt.Printf("flow_download 参数: flow_path=%s, d=%s, i=%s\n", flowPath, download, info)
+
 	if flowPath == "" {
 		c.JSON(400, gin.H{
 			"message": "fail",

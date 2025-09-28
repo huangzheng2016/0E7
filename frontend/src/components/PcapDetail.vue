@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { ElNotification, ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 
@@ -158,9 +158,21 @@ const fetchFlowData = async (flowPath: string) => {
     })
     
     if (response.ok) {
-      const result = await response.json()
-      // 按时间排序流量数据
-      flowData.value = (result || []).sort((a: FlowItem, b: FlowItem) => a.t - b.t)
+      const text = await response.text()
+      try {
+        const result = JSON.parse(text)
+        console.log('flow_download 返回的数据:', result)
+        console.log('数据类型:', Array.isArray(result) ? '数组' : typeof result)
+        console.log('数据长度:', Array.isArray(result) ? result.length : 'N/A')
+        
+        // 按时间排序流量数据
+        flowData.value = (result || []).sort((a: FlowItem, b: FlowItem) => a.t - b.t)
+        console.log('设置后的 flowData:', flowData.value)
+        console.log('flowData 长度:', flowData.value.length)
+      } catch (error) {
+        console.error('解析flow数据失败:', error)
+        console.error('原始数据:', text.substring(0, 200) + '...')
+      }
     } else {
       console.error('获取flow数据失败:', response.status, response.statusText)
     }
@@ -546,6 +558,22 @@ onMounted(() => {
   // 添加全局鼠标事件监听
   document.addEventListener('mouseup', endDragSelection)
   document.addEventListener('mouseleave', endDragSelection)
+})
+
+// 监听 pcapId 变化，当切换标签页时重新获取数据
+watch(() => props.pcapId, (newPcapId, oldPcapId) => {
+  if (newPcapId !== oldPcapId) {
+    // 重置状态
+    pcapDetail.value = null
+    flowData.value = []
+    flowSize.value = 0
+    showSizeWarning.value = false
+    showDownloadOption.value = false
+    flowSizeInfo.value = null
+    
+    // 重新获取数据
+    fetchPcapDetail()
+  }
 })
 
 // 组件卸载时清理事件监听
