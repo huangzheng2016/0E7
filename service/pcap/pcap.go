@@ -3,6 +3,7 @@ package pcap
 import (
 	"0E7/service/config"
 	"0E7/service/database"
+	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -92,10 +93,15 @@ func reassemblyCallback(entry FlowEntry) {
 		log.Println("Flow Error:", err)
 		return
 	}
-	// 使用gzip压缩保存flow数据，便于gin中间件直接使用
-	flowFile := filepath.Join("flow", uuid.New().String()+".gz")
 
-	// 创建gzip压缩文件，使用标准gzip格式
+	flowFile := filepath.Join("flow", uuid.New().String())
+	if config.Server_pcap_zip {
+		flowFile = flowFile + ".gz"
+
+	} else {
+		flowFile = flowFile + ".json"
+	}
+
 	file, err := os.Create(flowFile)
 	if err != nil {
 		log.Println("Create flow file failed:", err)
@@ -103,10 +109,21 @@ func reassemblyCallback(entry FlowEntry) {
 	}
 	defer file.Close()
 
-	err = ioutil.WriteFile(flowFile, Flow, 0644)
-	if err != nil {
-		log.Println("Write flow file failed:", err)
-		return
+	if config.Server_pcap_zip {
+		gzipWriter := gzip.NewWriter(file)
+		defer gzipWriter.Close()
+
+		_, err = gzipWriter.Write(Flow)
+		if err != nil {
+			log.Println("Write gzip file failed:", err)
+			return
+		}
+	} else {
+		_, err = file.Write(Flow)
+		if err != nil {
+			log.Println("Write file failed:", err)
+			return
+		}
 	}
 
 	Tags, err := json.Marshal(entry.Tags)
@@ -283,16 +300,26 @@ func WatchDir(watch_dir string) {
 	}
 */
 func checkfile(fname string, status bool) bool {
-	var count int64
-	err := config.Db.Model(&database.PcapFile{}).Where("filename = ?", fname).Count(&count).Error
+	// 获取文件信息
+	fileInfo, err := os.Stat(fname)
 	if err != nil {
-		log.Println("Failed to query database:", err)
+		log.Println("Failed to get file info:", err)
 		return false
 	}
-	if count == 0 {
+
+	fileModTime := fileInfo.ModTime()
+	fileSize := fileInfo.Size()
+
+	// 查询数据库中是否存在该文件记录
+	var pcapFile database.PcapFile
+	err = config.Db.Where("filename = ?", fname).First(&pcapFile).Error
+	if err != nil {
+		// 如果数据库中没有记录，需要处理
 		if status {
 			pcapFile := database.PcapFile{
 				Filename: fname,
+				ModTime:  fileModTime,
+				FileSize: fileSize,
 			}
 			err = config.Db.Create(&pcapFile).Error
 			if err != nil {
@@ -300,9 +327,26 @@ func checkfile(fname string, status bool) bool {
 			}
 		}
 		return true
-	} else {
-		return false
 	}
+
+	// 检查修改时间和文件大小是否匹配
+	if !pcapFile.ModTime.Equal(fileModTime) || pcapFile.FileSize != fileSize {
+		// 文件已修改，需要重新处理
+		if status {
+			// 更新数据库中的文件信息
+			err = config.Db.Model(&pcapFile).Updates(map[string]interface{}{
+				"mod_time":  fileModTime,
+				"file_size": fileSize,
+			}).Error
+			if err != nil {
+				log.Println("Failed to update pcap file info:", err)
+			}
+		}
+		return true
+	}
+
+	// 文件未修改，不需要重新处理
+	return false
 }
 func handlePcapUri(fname string, bpf string) {
 	var handle *pcap.Handle

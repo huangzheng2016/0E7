@@ -26,7 +26,8 @@ Initiate a heartbeat request to the server
 
 | Parameter    | Type   | Required | Description                                                           |
 |--------------|--------|----------|-----------------------------------------------------------------------|
-| `uuid`       | string | yes      | UUID from config.ini,usually unique                                   |
+| `client_id`  | string | no       | client ID, if provided will try to find existing client by ID        |
+| `name`       | string | no       | client name, used to find existing client if client_id not found     |
 | `hostname`   | string | yes      | hostname of the client                                                |
 | `platform`   | string | yes      | platform of the client,including `windows`,`linux`,`darwin`,`freebsd` |
 | `arch`       | string | yes      | arch of the client,including `386`,`amd64`,`arm64`                    |
@@ -34,6 +35,7 @@ Initiate a heartbeat request to the server
 | `cpu_use`    | double | yes      | cpu usage of the client,between 0-100                                 |
 | `memory_use` | int    | yes      | memory usage of the client                                            |
 | `memory_max` | int    | yes      | maximum memory of the client                                          |
+| `pcap`       | string | no       | pcap information of the client                                        |
 
 #### Response
 
@@ -62,7 +64,7 @@ Initiate a heartbeat request to the server
 POST /api/heartbeat HTTP/1.1
 Host: 0e7.cn
 
-uuid=1ac5bb86-cda9-44b9-b7d5-acb59b498852&hostname=0e7&platform=windows&arch=amd64&cpu=12th%20Gen%20Intel(R)%20Core(TM)%20i7-12700KF&cpu_use=10.00&memory_use=1024&memory_max=4096
+client_id=1&name=client1&hostname=0e7&platform=windows&arch=amd64&cpu=12th%20Gen%20Intel(R)%20Core(TM)%20i7-12700KF&cpu_use=10.00&memory_use=1024&memory_max=4096&pcap=enabled
 ```
 
 ##### Response Example
@@ -175,11 +177,11 @@ Get the latest exploit tasks from server
 
 ##### Query Parameters
 
-| Parameter  | Type   | Required | Description                                                           |
-|------------|--------|----------|-----------------------------------------------------------------------|
-| `uuid`     | string | yes      | UUID from config.ini,usually unique                                   |
-| `platform` | string | yes      | platform of the client,including `windows`,`linux`,`darwin`,`freebsd` |
-| `arch`     | string | yes      | arch of the client,including `386`,`amd64`,`arm64`                    |
+| Parameter   | Type   | Required | Description                                                           |
+|-------------|--------|----------|-----------------------------------------------------------------------|
+| `client_id` | string | yes      | client ID from heartbeat response                                     |
+| `platform`  | string | yes      | platform of the client,including `windows`,`linux`,`darwin`,`freebsd` |
+| `arch`      | string | yes      | arch of the client,including `386`,`amd64`,`arm64`                    |
 
 #### Response
 
@@ -193,13 +195,14 @@ Get the latest exploit tasks from server
 |----------------|--------|--------|----------------------------------------------------------------------------------------------------------------------------------|
 | `message`      | string |        | operation status,including `success`,`fail`                                                                                      |
 | `error`        | string |        | `fail` only,error message                                                                                                        |
-| `exploit_uuid` | string |        | `exploit_uuid` of the exploit task,usually unique                                                                                |
+| `name`         | string |        | name of the exploit task                                                                                                         |
 | `filename`     | string |        | filename of the task,empty when file not exist                                                                                   |
 | `environment`  | string |        | the running environment of the task                                                                                              |
 | `command`      | string |        | the command that start the task                                                                                                  |
 | `argv`         | string |        | the argv that start the task                                                                                                     |
 | `timeout`      | string |        | the timeout of task                                                                                                              |
 | `flag`         | string |        | the flag format of the task,usually a regular expression. if not empty client will try to match output and return to `/api/flag` |
+| `team`         | string |        | team information for the task                                                                                                    |
 
 ##### Response Status Codes
 
@@ -215,7 +218,7 @@ Get the latest exploit tasks from server
 POST /api/exploit HTTP/1.1
 Host: 0e7.cn
 
-uuid=1ac5bb86-cda9-44b9-b7d5-acb59b498852&platform=windows&arch=amd64
+client_id=1&platform=windows&arch=amd64
 ```
 
 ##### Response Example
@@ -225,14 +228,15 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 
 {
-    "message":      "success",
-    "error":        "",
-    "exploit_uuid": "2ed62949-0825-4a6d-a3bf-26f782b07305",
-    "filename":     "poc.py",
-    "environment":  "auto_pipreqs=True;",
-    "command":      "",
-    "argv":         "",
-    "flag":         "flag{.*}",
+    "message":     "success",
+    "error":       "",
+    "name":        "test_exploit",
+    "filename":    "poc.py",
+    "environment": "auto_pipreqs=True;",
+    "command":     "",
+    "argv":        "",
+    "flag":        "flag{.*}",
+    "team":        "Team1"
 }
 ```
 
@@ -413,10 +417,11 @@ Record the flag of the exploit task
 
 ##### Query Parameters
 
-| Parameter | Type   | Required | Description                                        |
-|-----------|--------|----------|----------------------------------------------------|
-| `uuid`    | string | yes      | the `exploit_uuid` of the task which find the flag |
-| `flag`    | string | yes      | the flag which match the `flag` format             |
+| Parameter    | Type   | Required | Description                                        |
+|--------------|--------|----------|----------------------------------------------------|
+| `exploit_id` | string | yes      | the exploit ID of the task which find the flag    |
+| `flag`       | string | yes      | the flag which match the `flag` format             |
+| `team`       | string | no       | team information                                   |
 
 #### Response
 
@@ -445,7 +450,7 @@ Record the flag of the exploit task
 POST /api/flag HTTP/1.1
 Host: 0e7.cn
 
-uuid=2ed62949-0825-4a6d-a3bf-26f782b07305&flag=flag{Hello,ZhengTai!}
+exploit_id=1&flag=flag{Hello,ZhengTai!}&team=Team1
 ```
 
 ##### Response Example
@@ -465,6 +470,85 @@ Content-Type: application/json
 if sha256 not match the latest version and update in config.ini enabled, the client should download the latest version
 from the server through the `/api/update` .
 
+### monitor
+
+Get monitor tasks for client
+
+#### Endpoint
+
+`/api/monitor`
+
+#### HTTP Method
+
+`POST`
+
+#### Request
+
+##### Content-Type
+
+`application/x-www-form-urlencoded`
+
+##### Query Parameters
+
+| Parameter   | Type   | Required | Description                    |
+|-------------|--------|----------|--------------------------------|
+| `client_id` | string | yes      | client ID from heartbeat       |
+
+#### Response
+
+##### Content-Type
+
+`application/json`
+
+##### Response Parameters
+
+| Parameter | Type     | Parent | Description                                 |
+|-----------|----------|--------|---------------------------------------------|
+| `message` | string   |        | operation status,including `success`,`fail` |
+| `error`   | string   |        | error message                               |
+| `result`  | []object |        | monitor tasks array                         |
+| `id`      | int      | result | monitor task ID                             |
+| `types`   | string   | result | monitor task type                           |
+| `data`    | string   | result | monitor task data                           |
+| `interval`| int      | result | monitor interval                            |
+
+##### Response Status Codes
+
+- 200: OK
+- 202: No Tasks
+- 400: Bad Request
+
+#### Example
+
+##### Request Example
+
+```http
+POST /api/monitor HTTP/1.1
+Host: 0e7.cn
+
+client_id=1
+```
+
+##### Response Example
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+    "message": "success",
+    "error": "",
+    "result": [
+        {
+            "id": 1,
+            "types": "cpu",
+            "data": "cpu_usage",
+            "interval": 60
+        }
+    ]
+}
+```
+
 ## WEBUI
 
 Can be accessed by all applications, interface designed for the frontend
@@ -475,7 +559,7 @@ Create a exploit task
 
 #### Endpoint
 
-`/webui/exploid`
+`/webui/exploit`
 
 #### HTTP Method
 
@@ -491,15 +575,18 @@ Create a exploit task
 
 | Parameter      | Type   | Required             | Description                                                                                                               |
 |----------------|--------|----------------------|---------------------------------------------------------------------------------------------------------------------------|
-| `exploit_uuid` | string | no                   | automatically generated if empty, update all parameters if exist                                                          |
+| `name`         | string | no                   | name of the exploit task, automatically generated if empty                                                               |
 | `environment`  | string | no                   | the running environment ot the task,format is `key1=value1;key2=value2;`,use in the `;` divide (include the end)          |
 | `command`      | string | yes(or file,code)    | the command to start exploit task                                                                                         |
 | `argv`         | string | no                   | the argv to start exploit task                                                                                            |
+| `filename`     | string | no                   | filename of the exploit file                                                                                              |
 | `platform`     | string | no                   | the platform to run exploit task,format is `windows,linux,darwin,freebsd`,if empty means all,use in the middle `,` divide |
 | `arch`         | string | no                   | the arch to run exploit task,format is `386,amd64,arm64`,if empty means all,use in the middle `,` divide                  |
 | `timeout`      | int    | no                   | the timeout of exploit,default 15 secend                                                                                  |
 | `times`        | int    | no                   | the number of times the script was run,if empty default -2(running forever),especially -1(stop)                           |
 | `filter`       | string | no                   | the filter to run exploit task,which `filter` match `client_id` ,if empty means all                                       |
+| `flag`         | string | no                   | flag format for the task                                                                                                  |
+| `team`         | string | no                   | team information                                                                                                           |
 | `file`         | file   | yes(or command,code) | the file that exploit run (or command only)                                                                               |
 | `code`         | string | yes(or command,file) | the code that run with golang or python                                                                                   |
 
@@ -511,11 +598,12 @@ Create a exploit task
 
 ##### Response Parameters
 
-| Parameter      | Type   | Parent | Description                                 |
-|----------------|--------|--------|---------------------------------------------|
-| `message`      | string |        | operation status,including `success`,`fail` |
-| `error`        | string |        | error message                               |
-| `exploit_uuid` | string |        | the `exploit_uuid` of the task              |
+| Parameter | Type   | Parent | Description                                 |
+|-----------|--------|--------|---------------------------------------------|
+| `message` | string |        | operation status,including `success`,`fail` |
+| `error`   | string |        | error message                               |
+| `name`    | string |        | the name of the task                        |
+| `id`      | int    |        | the ID of the task                          |
 
 ##### Response Status Codes
 
@@ -528,10 +616,22 @@ Create a exploit task
 ##### Request Example
 
 ```http
-POST /webui/exploid HTTP/1.1
+POST /webui/exploit HTTP/1.1
 Host: 0e7.cn
 
 
+------WebKitFormBoundarysxcf7YiPbFrA3rQm
+Content-Disposition: form-data; name="name"
+
+test_exploit
+------WebKitFormBoundarysxcf7YiPbFrA3rQm
+Content-Disposition: form-data; name="filename"
+
+poc.py
+------WebKitFormBoundarysxcf7YiPbFrA3rQm
+Content-Disposition: form-data; name="team"
+
+Team1
 ------WebKitFormBoundarysxcf7YiPbFrA3rQm
 Content-Disposition: form-data; name="exploit_uuid"
 

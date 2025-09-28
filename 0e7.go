@@ -71,12 +71,12 @@ func main() {
 		log.Printf("Server listening on port: %s", config.Server_port)
 
 		route.Register(r_server)
-		fp, _ := fs.Sub(f, "dist")
-		r_server.StaticFS("/", http.FS(fp))
-
 		webui.Register(r_server)
 		update.Register(r_server)
 		server.Register(r_server)
+
+		fp, _ := fs.Sub(f, "dist")
+		r_server.StaticFS("/", http.FS(fp))
 
 		if config.Server_tls == true {
 			r_server.RedirectTrailingSlash = true

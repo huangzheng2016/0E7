@@ -126,7 +126,10 @@ func init_database_client(db *gorm.DB, engine string) error {
 					Code: CodeToBase64("code/python3", "import json\n"+
 						"team = {}\n"+
 						"for i in range(1,10):\n"+
-						"    team[f\"Team {i}\"] = f\"192.168.0.{i}\"\n"+
+						"    team.append({\n"+
+						"        \"team\": f\"Team {i}\",\n"+
+						"        \"value\": f\"192.168.1.{i}\"\n"+
+						"    })"+
 						"print(json.dumps(team))"),
 					Output:   "",
 					Error:    "",

@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -30,6 +31,7 @@ var (
 	Server_port             string
 	Server_url              string
 	Server_flag             string
+	Server_pcap_zip         bool
 	Client_mode             bool
 	Client_name             string
 	Client_id               int
@@ -91,13 +93,21 @@ func Init_conf() error {
 		if err != nil {
 			Server_tls = true
 		}
-		if Server_tls == true {
+		if Server_tls {
 			generator_key()
 			Server_url = strings.Replace(Server_url, "http://", "https://", 1)
 		} else {
 			Server_url = strings.Replace(Server_url, "https://", "http://", 1)
 		}
+		Server_pcap_zip, err = section.Key("pcap_zip").Bool()
+		if err != nil {
+			Server_pcap_zip = true
+		}
 		Db, err = database.Init_database(section)
+		if err != nil {
+			log.Println("Failed to init database:", err)
+			os.Exit(1)
+		}
 	}
 
 	section = cfg.Section("client")
@@ -206,4 +216,32 @@ func encodePrivateKeyToPEM(privateKey *rsa.PrivateKey) []byte {
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	}
 	return pem.EncodeToMemory(privateKeyPEM)
+}
+
+// UpdateConfigClientId 更新config.ini文件中的client_id，如果ID发生变化则更新
+func UpdateConfigClientId(clientId int) error {
+	// 检查ID是否发生变化
+	if Client_id == clientId {
+		return nil // ID没有变化，不需要更新
+	}
+	log.Printf("Updated client_id: %d", clientId)
+	cfg, err := ini.Load("config.ini")
+	if err != nil {
+		return fmt.Errorf("failed to load config.ini: %v", err)
+	}
+
+	// 更新client section中的id值
+	clientSection := cfg.Section("client")
+	clientSection.Key("id").SetValue(fmt.Sprintf("%d", clientId))
+
+	// 保存文件
+	err = cfg.SaveTo("config.ini")
+	if err != nil {
+		return fmt.Errorf("failed to save config.ini: %v", err)
+	}
+
+	// 更新内存中的Client_id
+	Client_id = clientId
+
+	return nil
 }

@@ -105,6 +105,8 @@ func (Action) TableName() string {
 type PcapFile struct {
 	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
 	Filename  string    `json:"filename" gorm:"column:filename;type:varchar(255);"`
+	ModTime   time.Time `json:"mod_time" gorm:"column:mod_time;type:datetime;"`
+	FileSize  int64     `json:"file_size" gorm:"column:file_size;type:bigint;"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }

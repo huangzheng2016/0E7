@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { ElNotification, ElMessage } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
 
 interface FlowItem {
   f: string  // from: 'c' for client, 's' for server
@@ -42,6 +43,12 @@ const activeTab = ref('text')
 // 为每个流量维护独立的选择状态
 const flowSelections = ref<Map<number, { selectedByte: number, selectedRange: { start: number, end: number } | null }>>(new Map())
 
+// 流量大小相关状态
+const flowSize = ref<number>(0)
+const showSizeWarning = ref(false)
+const showDownloadOption = ref(false)
+const flowSizeInfo = ref<{ size: number, path: string } | null>(null)
+
 // 拖拽选择状态
 const dragSelection = ref<{ flowIndex: number, startByte: number, isDragging: boolean } | null>(null)
 
@@ -70,9 +77,9 @@ const fetchPcapDetail = async () => {
     if (result.message === 'success' && result.result) {
       pcapDetail.value = result.result
       
-      // 获取flow数据
+      // 获取flow文件信息并决定加载策略
       if (result.result.flow) {
-        await fetchFlowData(result.result.flow)
+        await fetchFlowInfo(result.result.flow)
       }
     } else {
       ElNotification({
@@ -92,6 +99,50 @@ const fetchPcapDetail = async () => {
     })
   } finally {
     loading.value = false
+  }
+}
+
+// 获取flow文件信息
+const fetchFlowInfo = async (flowPath: string) => {
+  try {
+    const formData = new FormData()
+    formData.append('flow_path', flowPath)
+    formData.append('i', 'true') // 添加信息参数
+
+    const response = await fetch('/webui/flow_download', {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      if (result.message === 'success' && result.result) {
+        flowSizeInfo.value = result.result
+        flowSize.value = result.result.size
+        
+        // 根据文件大小决定显示策略
+        const sizeKB = result.result.size / 1024
+        
+        if (sizeKB > 30) {
+          // 大于30KB，显示下载选项
+          showDownloadOption.value = true
+          showSizeWarning.value = false
+        } else if (sizeKB > 10) {
+          // 10KB-30KB，显示警告但不默认加载
+          showSizeWarning.value = true
+          showDownloadOption.value = false
+        } else {
+          // 小于10KB，正常加载
+          showSizeWarning.value = false
+          showDownloadOption.value = false
+          await fetchFlowData(flowPath)
+        }
+      }
+    } else {
+      console.error('获取flow文件信息失败:', response.status, response.statusText)
+    }
+  } catch (error) {
+    console.error('获取flow文件信息失败:', error)
   }
 }
 
@@ -116,6 +167,56 @@ const fetchFlowData = async (flowPath: string) => {
   } catch (error) {
     console.error('获取flow数据失败:', error)
   }
+}
+
+// 强制加载流量数据
+const forceLoadFlowData = async () => {
+  if (pcapDetail.value?.flow) {
+    showSizeWarning.value = false
+    await fetchFlowData(pcapDetail.value.flow)
+  }
+}
+
+// 下载流量文件
+const downloadFlowFile = async () => {
+  if (!pcapDetail.value?.flow || !flowSizeInfo.value) return
+  
+  try {
+    const formData = new FormData()
+    formData.append('flow_path', pcapDetail.value.flow)
+    formData.append('pcap_id', props.pcapId.toString())
+    formData.append('d', 'true') // 添加下载参数
+
+    const response = await fetch('/webui/flow_download', {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (response.ok) {
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `pcap_${props.pcapId}.json${pcapDetail.value.flow.endsWith('.gz') ? '.gz' : ''}`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } else {
+      console.error('下载flow文件失败:', response.status, response.statusText)
+    }
+  } catch (error) {
+    console.error('下载flow文件失败:', error)
+  }
+}
+
+// 格式化文件大小
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 // 格式化时间戳
@@ -297,7 +398,7 @@ const getHexRows = (data: string) => {
 
 // 防抖函数
 const debounce = (func: Function, wait: number) => {
-  let timeout: NodeJS.Timeout
+  let timeout: ReturnType<typeof setTimeout>
   return function executedFunction(...args: any[]) {
     const later = () => {
       clearTimeout(timeout)
@@ -516,6 +617,45 @@ onUnmounted(() => {
             {{ tag }}
           </el-tag>
         </div>
+      </div>
+
+      <!-- 流量大小警告 -->
+      <div class="flow-warning-section" v-if="showSizeWarning">
+        <el-alert
+          title="流量文件较大"
+          type="warning"
+          :description="`流量文件大小为 ${formatFileSize(flowSize)}，加载可能需要较长时间。是否继续加载？`"
+          show-icon
+          :closable="false"
+        >
+          <template #default>
+            <div class="warning-actions">
+              <el-button type="primary" @click="forceLoadFlowData">继续加载</el-button>
+              <el-button @click="showSizeWarning = false">取消</el-button>
+            </div>
+          </template>
+        </el-alert>
+      </div>
+
+      <!-- 流量下载选项 -->
+      <div class="flow-download-section" v-if="showDownloadOption">
+        <el-alert
+          title="流量文件过大"
+          type="info"
+          :description="`流量文件大小为 ${formatFileSize(flowSize)}，建议下载到本地查看。`"
+          show-icon
+          :closable="false"
+        >
+          <template #default>
+            <div class="download-actions">
+              <el-button type="primary" @click="downloadFlowFile">
+                <el-icon><Download /></el-icon>
+                下载流量文件
+              </el-button>
+              <el-button @click="forceLoadFlowData">仍要在线查看</el-button>
+            </div>
+          </template>
+        </el-alert>
       </div>
 
       <!-- 流量数据 -->
@@ -1199,6 +1339,24 @@ onUnmounted(() => {
   justify-content: center;
   padding-top: 20px;
   border-top: 1px solid #e6e8eb;
+}
+
+/* 流量大小警告和下载选项样式 */
+.flow-warning-section,
+.flow-download-section {
+  margin: 20px 0;
+}
+
+.warning-actions,
+.download-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+}
+
+.warning-actions .el-button,
+.download-actions .el-button {
+  margin: 0;
 }
 
 </style>

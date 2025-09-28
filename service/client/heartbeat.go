@@ -94,10 +94,13 @@ func heartbeat() {
 				log.Println(err)
 			}
 
-			// 更新本地client_id
+			// 更新client_id
 			if result["id"] != nil {
 				if newId, ok := result["id"].(float64); ok {
-					config.Client_id = int(newId)
+					err := config.UpdateConfigClientId(int(newId))
+					if err != nil {
+						log.Printf("Failed to update config file: %v", err)
+					}
 				}
 			}
 

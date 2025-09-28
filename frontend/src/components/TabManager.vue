@@ -6,11 +6,12 @@ import PcapList from './PcapList.vue'
 import ActionEdit from './ActionEdit.vue'
 import ExploitEdit from './ExploitEdit.vue'
 import PcapDetail from './PcapDetail.vue'
+import FlagList from './FlagList.vue'
 
 interface Tab {
   id: string
   title: string
-  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
+  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
   // 只保存ID，不保存完整数据
   itemId?: number | string  // action的id、exploit的id或pcap的id
   closable: boolean
@@ -33,6 +34,12 @@ const tabs = ref<Tab[]>([
     id: 'pcap-list',
     title: '流量分析',
     type: 'pcap-list',
+    closable: false
+  },
+  {
+    id: 'flag-list',
+    title: 'Flag管理',
+    type: 'flag-list',
     closable: false
   }
 ])
@@ -87,6 +94,12 @@ const loadState = () => {
             id: 'pcap-list',
             title: '流量分析',
             type: 'pcap-list',
+            closable: false
+          },
+          {
+            id: 'flag-list',
+            title: 'Flag管理',
+            type: 'flag-list',
             closable: false
           }
         ]
@@ -348,7 +361,7 @@ const handleExploitAdd = () => {
 }
 
 // 简化的状态变化处理 - 不再需要保存分页和搜索状态
-const handleStateChange = (tabType: 'action-list' | 'exploit-list' | 'pcap-list', state: any) => {
+const handleStateChange = (tabType: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list', state: any) => {
   // 状态变化时不需要特殊处理，数据会实时从服务器获取
 }
 
@@ -365,7 +378,7 @@ const handleSaveSuccess = () => {
 }
 
 // 导航到指定页面
-const navigateTo = (type: 'action-list' | 'exploit-list' | 'pcap-list') => {
+const navigateTo = (type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list') => {
   const existingTab = tabs.value.find(tab => tab.type === type)
   if (existingTab) {
     switchTab(existingTab.id)
@@ -380,6 +393,9 @@ const navigateTo = (type: 'action-list' | 'exploit-list' | 'pcap-list') => {
         break
       case 'pcap-list':
         title = '流量分析'
+        break
+      case 'flag-list':
+        title = 'Flag管理'
         break
     }
     
@@ -600,6 +616,12 @@ onUnmounted(() => {
         <PcapList
           @view="handlePcapView"
           @state-change="(state) => handleStateChange('pcap-list', state)"
+        />
+      </div>
+      
+      <div v-else-if="activeTab?.type === 'flag-list'">
+        <FlagList
+          @state-change="(state: any) => handleStateChange('flag-list', state)"
         />
       </div>
       

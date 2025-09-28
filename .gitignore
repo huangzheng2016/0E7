@@ -1,5 +1,5 @@
 0e7.log
-0e7_*_*
+0e7_*
 sqlite.db
 sqlite.db-shm
 sqlite.db-wal
@@ -13,4 +13,4 @@ sqlite.db-wal
 /exploit
 /upload
 .DS_Store
-test_build
+/test_*

@@ -3,7 +3,10 @@ package webui
 import (
 	"0E7/service/config"
 	"0E7/service/database"
+	"compress/gzip"
 	"errors"
+	"fmt"
+	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -79,9 +82,12 @@ func savefile(file *multipart.FileHeader, c *gin.Context) error {
 	return err
 }
 
-// flow_download 提供gzip压缩的flow JSON数据
+// flow_download 提供gzip压缩的flow JSON数据、下载文件或获取文件信息
 func flow_download(c *gin.Context) {
 	flowPath := c.PostForm("flow_path")
+	download := c.PostForm("d") // 下载参数
+	info := c.PostForm("i")     // 信息参数
+
 	if flowPath == "" {
 		c.JSON(400, gin.H{
 			"message": "fail",
@@ -104,33 +110,98 @@ func flow_download(c *gin.Context) {
 		return
 	}
 
-	// 检查文件是否存在（支持有或没有.gz扩展名）
-	_, err = os.Stat(cleanPath)
+	// 检查文件是否存在
+	fileInfo, err := os.Stat(cleanPath)
 	if err != nil {
-		// 如果文件不存在，尝试添加.gz扩展名
-		cleanPathWithGz := cleanPath + ".gz"
-		_, err = os.Stat(cleanPathWithGz)
-		if err != nil {
-			c.JSON(404, gin.H{
-				"message": "fail",
-				"error":   "flow file not found",
-			})
-			return
-		}
-		cleanPath = cleanPathWithGz
+		c.JSON(404, gin.H{
+			"message": "fail",
+			"error":   "flow file not found",
+		})
+		return
 	}
 
-	// 检查是否是目录（通过检查文件信息）
-	fileInfo, err := os.Stat(cleanPath)
-	if err == nil && fileInfo.IsDir() {
+	if fileInfo.IsDir() {
 		c.JSON(400, gin.H{
 			"message": "fail",
 			"error":   "path is a directory, not a file",
 		})
 		return
 	}
-	
-	c.File(cleanPath)
+
+	// 如果请求文件信息
+	if info == "true" {
+		c.JSON(200, gin.H{
+			"message": "success",
+			"result": gin.H{
+				"size": fileInfo.Size(),
+				"path": cleanPath,
+			},
+		})
+		return
+	}
+
+	// 如果请求下载文件
+	if download == "true" {
+		pcapId := c.PostForm("pcap_id")
+		// 设置下载文件名
+		filename := fmt.Sprintf("pcap_%s.json", pcapId)
+		if filepath.Ext(cleanPath) == ".gz" {
+			filename = fmt.Sprintf("pcap_%s.json.gz", pcapId)
+		}
+
+		// 设置响应头
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+		c.Header("Content-Type", "application/octet-stream")
+
+		// 直接传输文件
+		c.File(cleanPath)
+		return
+	}
+
+	// 默认行为：返回JSON数据
+	if filepath.Ext(cleanPath) == ".gz" {
+		file, err := os.Open(cleanPath)
+		if err != nil {
+			c.JSON(400, gin.H{
+				"message": "fail",
+				"error":   "read file failed",
+			})
+		}
+		defer file.Close()
+		reader, err := gzip.NewReader(file)
+		if err != nil {
+			c.JSON(400, gin.H{
+				"message": "fail",
+				"error":   "read file failed",
+			})
+		}
+		defer reader.Close()
+		fileData, err := io.ReadAll(reader)
+		if err != nil {
+			c.JSON(400, gin.H{
+				"message": "fail",
+				"error":   "read file failed",
+			})
+		}
+		c.Data(200, "application/json", fileData)
+	} else {
+		file, err := os.Open(cleanPath)
+		if err != nil {
+			c.JSON(400, gin.H{
+				"message": "fail",
+				"error":   "read file failed",
+			})
+		}
+		defer file.Close()
+		fileData, err := io.ReadAll(file)
+		if err != nil {
+			c.JSON(400, gin.H{
+				"message": "fail",
+				"error":   "read file failed",
+			})
+		}
+		c.Data(200, "application/json", fileData)
+	}
 }
 
 // pcap_show 获取流量列表

@@ -16,7 +16,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/webui': {
-        target: 'https://localhost:6102',
+        target: 'http://localhost:6102',
         changeOrigin: true,
         secure: false
       }
