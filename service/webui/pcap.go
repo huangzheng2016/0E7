@@ -84,6 +84,7 @@ func savefile(file *multipart.FileHeader, c *gin.Context) error {
 
 // flow_download 提供gzip压缩的flow JSON数据、下载文件或获取文件信息
 func flow_download(c *gin.Context) {
+	var err error
 	flowPath := c.PostForm("flow_path")
 	download := c.PostForm("d") // 下载参数
 	info := c.PostForm("i")     // 信息参数
@@ -140,24 +141,7 @@ func flow_download(c *gin.Context) {
 		return
 	}
 
-	// 如果请求下载文件
-	if download == "true" {
-		pcapId := c.PostForm("pcap_id")
-		// 设置下载文件名
-		filename := fmt.Sprintf("pcap_%s.json", pcapId)
-		if filepath.Ext(cleanPath) == ".gz" {
-			filename = fmt.Sprintf("pcap_%s.json.gz", pcapId)
-		}
-
-		// 设置响应头
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-		c.Header("Content-Type", "application/octet-stream")
-
-		// 直接传输文件
-		c.File(cleanPath)
-		return
-	}
-
+	var fileData []byte
 	// 默认行为：返回JSON数据
 	if filepath.Ext(cleanPath) == ".gz" {
 		file, err := os.Open(cleanPath)
@@ -176,14 +160,7 @@ func flow_download(c *gin.Context) {
 			})
 		}
 		defer reader.Close()
-		fileData, err := io.ReadAll(reader)
-		if err != nil {
-			c.JSON(400, gin.H{
-				"message": "fail",
-				"error":   "read file failed",
-			})
-		}
-		c.Data(200, "application/json", fileData)
+		fileData, err = io.ReadAll(reader)
 	} else {
 		file, err := os.Open(cleanPath)
 		if err != nil {
@@ -193,13 +170,23 @@ func flow_download(c *gin.Context) {
 			})
 		}
 		defer file.Close()
-		fileData, err := io.ReadAll(file)
-		if err != nil {
-			c.JSON(400, gin.H{
-				"message": "fail",
-				"error":   "read file failed",
-			})
-		}
+		fileData, err = io.ReadAll(file)
+	}
+
+	if err != nil {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "read file failed",
+		})
+	}
+	// 如果请求下载文件
+	if download == "true" {
+		pcapId := c.PostForm("pcap_id")
+		filename := fmt.Sprintf("pcap_%s.json", pcapId)
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+		c.Data(200, "application/octet-stream", fileData)
+		return
+	} else {
 		c.Data(200, "application/json", fileData)
 	}
 }
