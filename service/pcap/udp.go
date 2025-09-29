@@ -21,6 +21,8 @@ type udpStream struct {
 	last_seen          time.Time
 	timeout            time.Duration
 	reassemblyCallback func(FlowEntry)
+	// 保存所有原始数据包，用于Wireshark分析
+	originalPackets []string
 	sync.Mutex
 }
 
@@ -119,6 +121,10 @@ func (s *udpStream) addPacket(packet gopacket.Packet, udp *layers.UDP) {
 		return
 	}
 
+	// 保存原始数据包到流中
+	originalPacketB64 := base64.StdEncoding.EncodeToString(packet.Data())
+	s.originalPackets = append(s.originalPackets, originalPacketB64)
+
 	// 创建FlowItem
 	flowItem := FlowItem{
 		B64:  base64.StdEncoding.EncodeToString(payload),
@@ -176,19 +182,20 @@ func (s *udpStream) finalize() {
 
 	// 创建FlowEntry
 	entry := FlowEntry{
-		SrcPort:    int(s.src_port),
-		DstPort:    int(s.dst_port),
-		SrcIp:      src.String(),
-		DstIp:      dst.String(),
-		Time:       time,
-		Duration:   duration,
-		NumPackets: s.num_packets,
-		Blocked:    false,
-		Tags:       make([]string, 0),
-		Suricata:   make([]int, 0),
-		Filename:   s.source,
-		Flow:       s.FlowItems,
-		Size:       s.total_size,
+		SrcPort:         int(s.src_port),
+		DstPort:         int(s.dst_port),
+		SrcIp:           src.String(),
+		DstIp:           dst.String(),
+		Time:            time,
+		Duration:        duration,
+		NumPackets:      s.num_packets,
+		Blocked:         false,
+		Tags:            make([]string, 0),
+		Suricata:        make([]int, 0),
+		Filename:        s.source,
+		Flow:            s.FlowItems,
+		Size:            s.total_size,
+		OriginalPackets: s.originalPackets,
 	}
 
 	// 调用重组回调函数

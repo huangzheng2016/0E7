@@ -81,18 +81,26 @@ type FlowEntry struct {
 	Flow         []FlowItem
 	Tags         []string
 	Size         int
+	// 保存所有原始数据包，用于Wireshark分析
+	OriginalPackets []string `json:"op,omitempty"` // 原始数据包的base64编码列表
 }
 
 // SaveFlowAsPcap 将TCP流数据保存为pcap格式文件
 func SaveFlowAsPcap(entry FlowEntry) string {
 	flowUUID := uuid.New().String()
 
+	// 创建包含流信息的文件名，便于在Wireshark中识别
+	flowInfo := fmt.Sprintf("%s_%d_to_%s_%d", entry.SrcIp, entry.SrcPort, entry.DstIp, entry.DstPort)
+	// 清理文件名中的特殊字符
+	flowInfo = strings.ReplaceAll(flowInfo, ":", "_")
+	flowInfo = strings.ReplaceAll(flowInfo, ".", "_")
+
 	// 根据压缩设置确定文件扩展名
 	var pcapFile string
 	if config.Server_pcap_zip {
-		pcapFile = filepath.Join("flow", flowUUID+".pcap.gz")
+		pcapFile = filepath.Join("flow", fmt.Sprintf("flow_%s_%s.pcap.gz", flowInfo, flowUUID))
 	} else {
-		pcapFile = filepath.Join("flow", flowUUID+".pcap")
+		pcapFile = filepath.Join("flow", fmt.Sprintf("flow_%s_%s.pcap", flowInfo, flowUUID))
 	}
 
 	// 创建pcap文件
@@ -128,7 +136,41 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 		return ""
 	}
 
-	// 为每个FlowItem创建数据包
+	// 优先使用原始数据包列表（如果可用）
+	if len(entry.OriginalPackets) > 0 {
+		// 使用原始数据包列表，保留所有原始layers信息
+		for i, originalPacketB64 := range entry.OriginalPackets {
+			packetData, err := base64.StdEncoding.DecodeString(originalPacketB64)
+			if err != nil {
+				log.Printf("Failed to decode original packet %d B64 data: %v", i, err)
+				continue
+			}
+
+			// 创建数据包元数据（使用第一个FlowItem的时间戳作为基准）
+			var timestamp time.Time
+			if len(entry.Flow) > 0 {
+				timestamp = time.Unix(int64(entry.Flow[0].Time/1000), int64((entry.Flow[0].Time%1000)*1000000))
+			} else {
+				timestamp = time.Now()
+			}
+
+			ci := gopacket.CaptureInfo{
+				Timestamp:     timestamp,
+				CaptureLength: len(packetData),
+				Length:        len(packetData),
+			}
+
+			// 写入pcap文件
+			err = writer.WritePacket(ci, packetData)
+			if err != nil {
+				log.Printf("Write original packet %d to pcap failed: %v", i, err)
+				continue
+			}
+		}
+		return pcapFile
+	}
+
+	// 如果没有原始数据包列表，则使用FlowItem重建数据包
 	for _, flowItem := range entry.Flow {
 		// 创建以太网层
 		ethernet := &layers.Ethernet{
@@ -195,16 +237,18 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 			continue
 		}
 
+		packetData := buf.Bytes()
+
 		// 创建数据包元数据
 		timestamp := time.Unix(int64(flowItem.Time/1000), int64((flowItem.Time%1000)*1000000))
 		ci := gopacket.CaptureInfo{
 			Timestamp:     timestamp,
-			CaptureLength: len(buf.Bytes()),
-			Length:        len(buf.Bytes()),
+			CaptureLength: len(packetData),
+			Length:        len(packetData),
 		}
 
 		// 写入pcap文件
-		err = writer.WritePacket(ci, buf.Bytes())
+		err = writer.WritePacket(ci, packetData)
 		if err != nil {
 			log.Println("Write packet to pcap failed:", err)
 			continue
@@ -685,7 +729,8 @@ func processPcapHandle(handle *pcap.Handle, fname string, check bool) {
 		case layers.LayerTypeTCP:
 			tcp := transport.(*layers.TCP)
 			c := Context{
-				CaptureInfo: packet.Metadata().CaptureInfo,
+				CaptureInfo:    packet.Metadata().CaptureInfo,
+				OriginalPacket: packet,
 			}
 			assembler.AssembleWithContext(packet.NetworkLayer().NetworkFlow(), tcp, &c)
 			tcpCount++

@@ -65,6 +65,8 @@ func (factory *tcpStreamFactory) WaitGoRoutines() {
  */
 type Context struct {
 	CaptureInfo gopacket.CaptureInfo
+	// 保存原始数据包信息
+	OriginalPacket gopacket.Packet
 }
 
 func (c *Context) GetCaptureInfo() gopacket.CaptureInfo {
@@ -90,6 +92,8 @@ type tcpStream struct {
 	dst_port           layers.TCPPort
 	total_size         int
 	num_packets        int
+	// 保存所有原始数据包，用于Wireshark分析
+	originalPackets []string
 }
 
 func (t *tcpStream) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassembly.TCPFlowDirection, nextSeq reassembly.Sequence, start *bool, ac reassembly.AssemblerContext) bool {
@@ -101,6 +105,12 @@ func (t *tcpStream) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassem
 		if !nonstrict {
 			return false
 		}
+	}
+
+	// 保存原始数据包信息
+	if context, ok := ac.(*Context); ok && context.OriginalPacket != nil {
+		originalPacketB64 := base64.StdEncoding.EncodeToString(context.OriginalPacket.Data())
+		t.originalPackets = append(t.originalPackets, originalPacketB64)
 	}
 
 	// We just ignore the Checksum
@@ -204,19 +214,20 @@ func (t *tcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 	duration = t.FlowItems[len(t.FlowItems)-1].Time - time
 
 	entry := FlowEntry{
-		SrcPort:    int(t.src_port),
-		DstPort:    int(t.dst_port),
-		SrcIp:      src.String(),
-		DstIp:      dst.String(),
-		Time:       time,
-		Duration:   duration,
-		NumPackets: t.num_packets,
-		Blocked:    false,
-		Tags:       make([]string, 0),
-		Suricata:   make([]int, 0),
-		Filename:   t.source,
-		Flow:       t.FlowItems,
-		Size:       t.total_size,
+		SrcPort:         int(t.src_port),
+		DstPort:         int(t.dst_port),
+		SrcIp:           src.String(),
+		DstIp:           dst.String(),
+		Time:            time,
+		Duration:        duration,
+		NumPackets:      t.num_packets,
+		Blocked:         false,
+		Tags:            make([]string, 0),
+		Suricata:        make([]int, 0),
+		Filename:        t.source,
+		Flow:            t.FlowItems,
+		Size:            t.total_size,
+		OriginalPackets: t.originalPackets,
 	}
 
 	t.reassemblyCallback(entry)
