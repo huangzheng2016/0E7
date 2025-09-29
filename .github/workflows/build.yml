@@ -24,7 +24,24 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libpcap-dev
         
-    - name: Get dependencies
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+        
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+        
+    - name: Get Go dependencies
       run: go mod download
       
     - name: Build for Linux AMD64
@@ -63,7 +80,24 @@ jobs:
       run: |
         brew install libpcap
         
-    - name: Get dependencies
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+        
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+        
+    - name: Get Go dependencies
       run: go mod download
       
     - name: Build for Darwin
@@ -98,7 +132,24 @@ jobs:
         Invoke-WebRequest -Uri "https://www.winpcap.org/install/bin/WinPcap_4_1_3.exe" -OutFile "WinPcap_4_1_3.exe"
         Start-Process -FilePath "WinPcap_4_1_3.exe" -ArgumentList "/S" -Wait
         
-    - name: Get dependencies
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+        
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+        
+    - name: Get Go dependencies
       run: go mod download
       
     - name: Build for Windows AMD64
