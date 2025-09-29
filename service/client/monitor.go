@@ -33,7 +33,9 @@ func monitor() {
 	response, err := client.Do(request)
 	if err != nil {
 		log.Println(err)
+		return
 	}
+	defer response.Body.Close() // 确保关闭响应体
 	if response.StatusCode == 200 {
 		var result map[string]interface{}
 		err = json.NewDecoder(response.Body).Decode(&result)

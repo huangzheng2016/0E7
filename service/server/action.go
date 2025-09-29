@@ -12,6 +12,7 @@ import (
 	"log"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 
@@ -23,7 +24,7 @@ var (
 	// 任务队列
 	taskQueue = make(chan *database.Action, 100)
 	// 控制每个ID同时只有一个任务运行
-	runningTasks sync.Map // map[uint]*runningTaskInfo
+	runningTasks sync.Map
 )
 
 // 运行中的任务信息
@@ -35,8 +36,9 @@ type runningTaskInfo struct {
 
 // Action配置结构体
 type ActionConfig struct {
-	Type string `json:"type"`
-	Num  int    `json:"num"`
+	Type     string `json:"type"`
+	Num      int    `json:"num"`
+	ScriptID int    `json:"script_id"`
 }
 
 // Flag提交结果结构体
@@ -65,7 +67,7 @@ func checkAndQueueActions() {
 	var actions []database.Action
 	// 查询条件：间隔>=0 且 有代码 且 (next_run <= 当前时间 或 next_run < 2000年)
 	year2000 := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	err := config.Db.Where("interval >= 0 AND code != '' AND (next_run <= ? OR next_run < ?)", time.Now(), year2000).Find(&actions).Error
+	err := config.Db.Where("interval >= 0 AND (next_run <= ? OR next_run < ?)", time.Now(), year2000).Find(&actions).Error
 	if err != nil {
 		log.Println("查询Action失败:", err)
 		return
@@ -154,6 +156,33 @@ func executeTask(actionRecord *database.Action) {
 
 // 执行Action代码
 func executeActionCode(actionRecord *database.Action, ctx context.Context) error {
+	// 解析配置
+	var actionConfig ActionConfig
+	if actionRecord.Config != "" {
+		err := json.Unmarshal([]byte(actionRecord.Config), &actionConfig)
+		if err != nil {
+			log.Printf("解析Action配置失败: %v", err)
+		}
+	}
+
+	// 如果是exec_script类型，直接处理脚本运行次数增加，不需要执行代码
+	if actionConfig.Type == "exec_script" {
+		if actionConfig.ScriptID > 0 && actionConfig.Num > 0 {
+			err := increaseExploitRunTimes(actionConfig.ScriptID, actionConfig.Num)
+			if err != nil {
+				// 将错误信息写入Action的Error字段
+				actionRecord.Error = err.Error()
+				config.Db.Save(actionRecord)
+				return fmt.Errorf("增加exploit运行次数失败: %v", err)
+			}
+			// 成功时清空错误信息
+			actionRecord.Error = ""
+			config.Db.Save(actionRecord)
+		}
+		return nil
+	}
+
+	// 其他类型需要执行代码
 	match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(actionRecord.Code)
 	if match == nil {
 		return fmt.Errorf("代码格式错误")
@@ -166,15 +195,6 @@ func executeActionCode(actionRecord *database.Action, ctx context.Context) error
 		return fmt.Errorf("Base64解码错误: %v", err)
 	}
 	code := string(code_decode)
-
-	// 解析配置
-	var actionConfig ActionConfig
-	if actionRecord.Config != "" {
-		err = json.Unmarshal([]byte(actionRecord.Config), &actionConfig)
-		if err != nil {
-			log.Printf("解析Action配置失败: %v", err)
-		}
-	}
 
 	var new_output string
 	var flags []string
@@ -304,35 +324,6 @@ func executeGolangCode(code string, ctx context.Context, flags []string) (string
 	}
 }
 
-// 获取当前运行的任务列表
-func GetRunningTasks() map[uint]*runningTaskInfo {
-	result := make(map[uint]*runningTaskInfo)
-	runningTasks.Range(func(key, value interface{}) bool {
-		id := key.(uint)
-		taskInfo := value.(*runningTaskInfo)
-		result[id] = taskInfo
-		return true
-	})
-	return result
-}
-
-// 取消指定ID的任务
-func CancelTask(id uint) bool {
-	if value, exists := runningTasks.Load(id); exists {
-		taskInfo := value.(*runningTaskInfo)
-		taskInfo.Cancel()
-		log.Printf("已取消任务 %s (ID: %d)", taskInfo.Action.Name, id)
-		return true
-	}
-	return false
-}
-
-// 获取任务运行状态
-func IsTaskRunning(id uint) bool {
-	_, exists := runningTasks.Load(id)
-	return exists
-}
-
 // 获取待提交的flags
 func getFlagsForSubmission(num int) ([]string, error) {
 	var flags []database.Flag
@@ -421,5 +412,39 @@ func processFlagResultsMap(resultMap map[string]string) error {
 		}
 	}
 
+	return nil
+}
+
+// 增加exploit的运行次数
+func increaseExploitRunTimes(exploitID int, increaseNum int) error {
+	var exploit database.Exploit
+	err := config.Db.Where("id = ? AND is_deleted = ?", exploitID, false).First(&exploit).Error
+	if err != nil {
+		return fmt.Errorf("找不到ID为%d的执行脚本，可能已被删除或不存在", exploitID)
+	}
+
+	// 解析当前运行次数
+	currentTimes, err := strconv.Atoi(exploit.Times)
+	if err != nil {
+		// 如果解析失败，默认为-2（无限运行）
+		currentTimes = -2
+	}
+
+	// 如果当前是无限运行(-2)或停止(-1)，则保持原状态
+	if currentTimes == -2 || currentTimes == -1 {
+		log.Printf("Exploit %s (ID: %d) 当前状态为 %d，不增加运行次数", exploit.Name, exploitID, currentTimes)
+		return nil
+	}
+
+	// 增加运行次数
+	newTimes := currentTimes + increaseNum
+	exploit.Times = strconv.Itoa(newTimes)
+
+	err = config.Db.Save(&exploit).Error
+	if err != nil {
+		return fmt.Errorf("更新exploit运行次数失败: %v", err)
+	}
+
+	log.Printf("Exploit %s (ID: %d) 运行次数从 %d 增加到 %d", exploit.Name, exploitID, currentTimes, newTimes)
 	return nil
 }

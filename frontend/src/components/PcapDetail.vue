@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
-import { ElNotification, ElMessage } from 'element-plus'
+import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 
 interface FlowItem {
   f: string  // from: 'c' for client, 's' for server
-  d: string  // data
-  b: string  // base64
+  b: string  // base64 data
   t: number  // time
 }
 
@@ -23,9 +22,10 @@ interface PcapDetail {
   filename: string
   fingerprints: string
   suricata: string
-  flow: string
+  flow_file: string
+  pcap_file: string
   tags: string
-  size: string
+  size: number
   created_at: string
   updated_at: string
 }
@@ -47,16 +47,26 @@ const flowSelections = ref<Map<number, { selectedByte: number, selectedRange: { 
 const flowSize = ref<number>(0)
 const showSizeWarning = ref(false)
 const showDownloadOption = ref(false)
-const flowSizeInfo = ref<{ size: number, path: string } | null>(null)
+const flowSizeInfo = ref<{ raw_size?: number, flow_size?: number, parsed_size?: number } | null>(null)
 
 // 拖拽选择状态
 const dragSelection = ref<{ flowIndex: number, startByte: number, isDragging: boolean } | null>(null)
+
+// 解码base64数据的辅助函数
+const decodeBase64 = (b64: string): string => {
+  try {
+    return atob(b64)
+  } catch (error) {
+    console.error('Failed to decode base64:', error)
+    return ''
+  }
+}
 
 // 计算属性：为每个flow项预计算十六进制行数据
 const flowHexData = computed(() => {
   return flowData.value.map(flow => ({
     ...flow,
-    hexRows: getHexRows(flow.d)
+    hexRows: getHexRows(decodeBase64(flow.b))
   }))
 })
 
@@ -78,8 +88,8 @@ const fetchPcapDetail = async () => {
       pcapDetail.value = result.result
       
       // 获取flow文件信息并决定加载策略
-      if (result.result.flow) {
-        await fetchFlowInfo(result.result.flow)
+      if (result.result.flow_file) {
+        await fetchFlowInfo()
       }
     } else {
       ElNotification({
@@ -103,13 +113,14 @@ const fetchPcapDetail = async () => {
 }
 
 // 获取flow文件信息
-const fetchFlowInfo = async (flowPath: string) => {
+const fetchFlowInfo = async () => {
   try {
     const formData = new FormData()
-    formData.append('flow_path', flowPath)
+    formData.append('pcap_id', props.pcapId.toString())
+    formData.append('type', 'parsed')
     formData.append('i', 'true') // 添加信息参数
 
-    const response = await fetch('/webui/flow_download', {
+    const response = await fetch('/webui/pcap_download', {
       method: 'POST',
       body: formData
     })
@@ -118,10 +129,10 @@ const fetchFlowInfo = async (flowPath: string) => {
       const result = await response.json()
       if (result.message === 'success' && result.result) {
         flowSizeInfo.value = result.result
-        flowSize.value = result.result.size
+        flowSize.value = result.result.parsed_size || 0
         
         // 根据文件大小决定显示策略
-        const sizeKB = result.result.size / 1024
+        const sizeKB = flowSize.value / 1024
         
         if (sizeKB > 30) {
           // 大于30KB，显示下载选项
@@ -135,7 +146,7 @@ const fetchFlowInfo = async (flowPath: string) => {
           // 小于10KB，正常加载
           showSizeWarning.value = false
           showDownloadOption.value = false
-          await fetchFlowData(flowPath)
+          await fetchFlowData()
         }
       }
     } else {
@@ -147,12 +158,13 @@ const fetchFlowInfo = async (flowPath: string) => {
 }
 
 // 获取flow数据
-const fetchFlowData = async (flowPath: string) => {
+const fetchFlowData = async () => {
   try {
     const formData = new FormData()
-    formData.append('flow_path', flowPath)
+    formData.append('pcap_id', props.pcapId.toString())
+    formData.append('type', 'parsed')
 
-    const response = await fetch('/webui/flow_download', {
+    const response = await fetch('/webui/pcap_download', {
       method: 'POST',
       body: formData
     })
@@ -161,12 +173,13 @@ const fetchFlowData = async (flowPath: string) => {
       const text = await response.text()
       try {
         const result = JSON.parse(text)
-        console.log('flow_download 返回的数据:', result)
+        console.log('pcap_download 返回的数据:', result)
         console.log('数据类型:', Array.isArray(result) ? '数组' : typeof result)
         console.log('数据长度:', Array.isArray(result) ? result.length : 'N/A')
         
-        // 按时间排序流量数据
-        flowData.value = (result || []).sort((a: FlowItem, b: FlowItem) => a.t - b.t)
+        // 从返回的对象中提取Flow数组，然后按时间排序
+        const flowArray = result.Flow || []
+        flowData.value = flowArray.sort((a: FlowItem, b: FlowItem) => a.t - b.t)
         console.log('设置后的 flowData:', flowData.value)
         console.log('flowData 长度:', flowData.value.length)
       } catch (error) {
@@ -183,23 +196,47 @@ const fetchFlowData = async (flowPath: string) => {
 
 // 强制加载流量数据
 const forceLoadFlowData = async () => {
-  if (pcapDetail.value?.flow) {
+  if (pcapDetail.value?.flow_file) {
     showSizeWarning.value = false
-    await fetchFlowData(pcapDetail.value.flow)
+    await fetchFlowData()
   }
 }
 
-// 下载流量文件
-const downloadFlowFile = async () => {
-  if (!pcapDetail.value?.flow || !flowSizeInfo.value) return
+
+// 下载原始文件（未解析的原始pcap文件）
+const downloadOriginalFile = async () => {
+  if (!pcapDetail.value) return
+  
+  // 获取原始文件大小
+  let fileSize = '未知大小'
+  if (flowSizeInfo.value && flowSizeInfo.value.raw_size) {
+    fileSize = formatFileSize(flowSizeInfo.value.raw_size)
+  } else if (pcapDetail.value.size) {
+    fileSize = formatFileSize(pcapDetail.value.size)
+  }
+  
+  // 二次确认
+  try {
+    await ElMessageBox.confirm(
+      `原始文件大小为 ${fileSize}，确定要下载吗？`,
+      '确认下载',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return // 用户取消
+  }
   
   try {
     const formData = new FormData()
-    formData.append('flow_path', pcapDetail.value.flow)
     formData.append('pcap_id', props.pcapId.toString())
-    formData.append('d', 'true') // 添加下载参数
+    formData.append('type', 'raw')
+    formData.append('d', 'true')
 
-    const response = await fetch('/webui/flow_download', {
+    const response = await fetch('/webui/pcap_download', {
       method: 'POST',
       body: formData
     })
@@ -209,16 +246,53 @@ const downloadFlowFile = async () => {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `pcap_${props.pcapId}.json${pcapDetail.value.flow.endsWith('.gz') ? '.gz' : ''}`
+      a.download = `raw_${props.pcapId}.pcap`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } else {
-      console.error('下载flow文件失败:', response.status, response.statusText)
+      console.error('下载原始文件失败:', response.status, response.statusText)
+      ElMessage.error('下载原始文件失败')
     }
   } catch (error) {
-    console.error('下载flow文件失败:', error)
+    console.error('下载原始文件失败:', error)
+    ElMessage.error('下载原始文件失败')
+  }
+}
+
+// 下载pcap文件
+const downloadPcapFile = async (type: 'original' | 'parsed') => {
+  if (!pcapDetail.value) return
+  
+  try {
+    const formData = new FormData()
+    formData.append('pcap_id', props.pcapId.toString())
+    formData.append('type', type)
+
+    const response = await fetch('/webui/pcap_download', {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (response.ok) {
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const fileName = type === 'original' ? `flow_${props.pcapId}.pcap` : `parsed_${props.pcapId}.json`
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } else {
+      console.error(`下载${type}文件失败:`, response.status, response.statusText)
+      ElMessage.error(`下载${type === 'original' ? '流量' : '解析'}文件失败`)
+    }
+  } catch (error) {
+    console.error(`下载${type}文件失败:`, error)
+    ElMessage.error(`下载${type === 'original' ? '流量' : '解析'}文件失败`)
   }
 }
 
@@ -300,8 +374,7 @@ const getTagType = (tag: string) => {
 }
 
 // 格式化文件大小
-const formatSize = (sizeStr: string) => {
-  const size = parseInt(sizeStr || '0')
+const formatSize = (size: number) => {
   if (size === 0) return '0 B'
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
@@ -521,11 +594,11 @@ const copySelectedBytes = async (flowIndex: number) => {
       // 复制范围
       const start = selection.selectedRange.start
       const end = selection.selectedRange.end
-      selectedData = flow.d.slice(start, end + 1)
+      selectedData = decodeBase64(flow.b).slice(start, end + 1)
       selectedHex = textToHex(selectedData)
     } else {
       // 复制单个字节
-      selectedData = flow.d[selection.selectedByte]
+      selectedData = decodeBase64(flow.b)[selection.selectedByte]
       selectedHex = textToHex(selectedData)
     }
     
@@ -588,7 +661,38 @@ onUnmounted(() => {
     <div v-if="pcapDetail" class="detail-content">
       <!-- 基本信息 -->
       <div class="info-section">
-        <h2 class="section-title">流量基本信息</h2>
+        <div class="section-header">
+          <h2 class="section-title">流量基本信息</h2>
+          <div class="download-buttons">
+            <el-button 
+              type="warning" 
+              size="small" 
+              @click="downloadOriginalFile"
+              :disabled="!pcapDetail.filename"
+            >
+              <el-icon><Download /></el-icon>
+              下载原始文件
+            </el-button>
+            <el-button 
+              type="primary" 
+              size="small" 
+              @click="downloadPcapFile('original')"
+              :disabled="!pcapDetail.pcap_file"
+            >
+              <el-icon><Download /></el-icon>
+              下载流量文件
+            </el-button>
+            <el-button 
+              type="success" 
+              size="small" 
+              @click="downloadPcapFile('parsed')"
+              :disabled="!pcapDetail.flow_file"
+            >
+              <el-icon><Download /></el-icon>
+              下载解析文件
+            </el-button>
+          </div>
+        </div>
         <div class="info-grid">
           <div class="info-item">
             <label>流量ID:</label>
@@ -676,10 +780,6 @@ onUnmounted(() => {
         >
           <template #default>
             <div class="download-actions">
-              <el-button type="primary" @click="downloadFlowFile">
-                <el-icon><Download /></el-icon>
-                下载流量文件
-              </el-button>
               <el-button @click="forceLoadFlowData">仍要在线查看</el-button>
             </div>
           </template>
@@ -688,7 +788,9 @@ onUnmounted(() => {
 
       <!-- 流量数据 -->
       <div class="flow-section" v-if="flowData.length > 0">
-        <h3 class="section-title">流量数据</h3>
+        <div class="section-header">
+          <h3 class="section-title">流量数据</h3>
+        </div>
         <div class="flow-list">
           <div
             v-for="(flow, index) in flowHexData"
@@ -724,7 +826,7 @@ onUnmounted(() => {
                   </el-button>
                 </template>
                 <!-- 复制全部按钮在所有标签页都显示 -->
-                <el-button size="small" @click="copyToClipboard(flow.d)">
+                <el-button size="small" @click="copyToClipboard(decodeBase64(flow.b))">
                   <el-icon><CopyDocument /></el-icon>
                   复制全部
                 </el-button>
@@ -772,11 +874,11 @@ onUnmounted(() => {
                 
                 <div class="tab-content">
                   <div v-if="activeTab === 'text'" class="content-display">
-                    <div class="text-content" v-html="highlightHTML(flow.d)"></div>
+                    <div class="text-content" v-html="highlightHTML(decodeBase64(flow.b))"></div>
                   </div>
                   
                   <div v-if="activeTab === 'hex'" class="content-display">
-                    <div class="hex-content">{{ textToHex(flow.d) }}</div>
+                    <div class="hex-content">{{ textToHex(decodeBase64(flow.b)) }}</div>
                   </div>
                   
                   <div v-if="activeTab === 'compare'" class="hex-editor-display">
@@ -881,6 +983,18 @@ onUnmounted(() => {
   margin: 0 0 15px 0;
   padding-bottom: 8px;
   border-bottom: 2px solid #409eff;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.download-buttons {
+  display: flex;
+  gap: 8px;
 }
 
 .info-section {
@@ -1380,6 +1494,29 @@ onUnmounted(() => {
   margin-top: 12px;
   display: flex;
   gap: 12px;
+}
+
+.pcap-download-links {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.download-label {
+  font-size: 14px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.download-link {
+  font-size: 14px;
+}
+
+.flow-download-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .warning-actions .el-button,

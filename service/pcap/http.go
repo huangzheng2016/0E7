@@ -3,6 +3,7 @@ package pcap
 import (
 	"bufio"
 	"compress/gzip"
+	"encoding/base64"
 	"hash/crc32"
 	"io"
 	"net/http"
@@ -36,7 +37,12 @@ func ParseHttpFlow(flow *FlowEntry) {
 
 	for idx := 0; idx < len(flow.Flow); idx++ {
 		flowItem := &flow.Flow[idx]
-		reader := bufio.NewReader(strings.NewReader(flowItem.Data))
+		// 从B64解码数据
+		data, err := base64.StdEncoding.DecodeString(flowItem.B64)
+		if err != nil {
+			continue
+		}
+		reader := bufio.NewReader(strings.NewReader(string(data)))
 
 		if flowItem.From == "c" {
 			// HTTP Request
@@ -103,9 +109,9 @@ func ParseHttpFlow(flow *FlowEntry) {
 				}
 				// This can exceed the mongo document limit, so we need to make sure
 				// the replacement will fit
-				new_size := flow.Size + (len(replacement) - len(flowItem.Data))
+				new_size := flow.Size + (len(replacement) - len(data))
 				if new_size <= streamdoc_limit {
-					flowItem.Data = string(replacement)
+					flowItem.B64 = base64.StdEncoding.EncodeToString(replacement)
 					flow.Size = new_size
 				}
 			}

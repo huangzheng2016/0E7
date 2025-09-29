@@ -81,9 +81,19 @@ func main() {
 		if config.Server_tls == true {
 			r_server.RedirectTrailingSlash = true
 			r_server.RedirectFixedPath = true
-			go r_server.RunTLS(":"+config.Server_port, "cert/certificate.crt", "cert/private.key")
+			log.Printf("Starting TLS server on port: %s", config.Server_port)
+			go func() {
+				if err := r_server.RunTLS(":"+config.Server_port, "cert/certificate.crt", "cert/private.key"); err != nil {
+					log.Fatalf("Failed to start TLS server on port %s: %v", config.Server_port, err)
+				}
+			}()
 		} else {
-			go r_server.Run(":" + config.Server_port)
+			log.Printf("Starting HTTP server on port: %s", config.Server_port)
+			go func() {
+				if err := r_server.Run(":" + config.Server_port); err != nil {
+					log.Fatalf("Failed to start HTTP server on port %s: %v", config.Server_port, err)
+				}
+			}()
 		}
 		go udpcast.Udp_sent(config.Server_tls, config.Server_port)
 

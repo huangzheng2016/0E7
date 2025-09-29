@@ -91,54 +91,81 @@ func init_database_client(db *gorm.DB, engine string) error {
 		log.Println("Failed to migrate database tables:", err)
 		return err
 	}
+	// 插入默认的 action 数据
+	var count int64
+	db.Model(&Action{}).Count(&count)
+	if count == 0 {
+		actions := []Action{
+			{
+				ID:   1,
+				Name: "flag_submiter",
+				Code: CodeToBase64("code/python3",
+					`import sys
+import json
+if len(sys.argv) != 2:
+	print(json.dumps([]))
+	sys.exit(0)
+	
+data = json.loads(sys.argv[1])
+result = []
+for item in data:
+	result.append({
+		"flag": item,
+		"status": "SUCCESS",
+		"msg": ""
+	})
+print(json.dumps(result))`),
+				Output:   "{\"type\":\"flag_submiter\",\"num\":20}",
+				Interval: 5,
+			},
+			{
+				ID:   2,
+				Name: "ipbucket_default",
+				Code: CodeToBase64("code/python3",
+					`import json
+team = []
+for i in range(1,254):
+    team.append({
+        "team": f"Team {i}",
+        "value": f"192.168.1.{i}"
+    })
+print(json.dumps(team))`),
+				Interval: 60,
+			},
+		}
+		for _, action := range actions {
+			db.Create(&action)
+		}
+	}
 
-	// 初始化默认数据
-	if engine == "sqlite" {
-		// 插入默认的 action 数据
-		var count int64
-		db.Model(&Action{}).Count(&count)
-		if count == 0 {
-			actions := []Action{
-				{
-					ID:   1,
-					Name: "flag_submiter",
-					Code: CodeToBase64("code/python3", "import sys\n"+
-						"import json\n"+
-						"if len(sys.argv) != 2:\n"+
-						"    print(json.dumps([]))\n"+
-						"    sys.exit(0)\n"+
-						"    \n"+
-						"data = json.loads(sys.argv[1])\n"+
-						"result = []\n"+
-						"for item in data:\n"+
-						"    result.append({\n"+
-						"        \"flag\": item,\n"+
-						"        \"status\": \"SUCCESS\",\n"+
-						"        \"msg\": \"\"\n"+
-						"    })\nprint(json.dumps(result))"),
-					Output:   "{\"type\":\"flag_submiter\",\"num\":20}",
-					Error:    "",
-					Interval: 5,
-				},
-				{
-					ID:   2,
-					Name: "ipbucket_default",
-					Code: CodeToBase64("code/python3", "import json\n"+
-						"team = {}\n"+
-						"for i in range(1,10):\n"+
-						"    team.append({\n"+
-						"        \"team\": f\"Team {i}\",\n"+
-						"        \"value\": f\"192.168.1.{i}\"\n"+
-						"    })"+
-						"print(json.dumps(team))"),
-					Output:   "",
-					Error:    "",
-					Interval: 300,
-				},
-			}
-			for _, action := range actions {
-				db.Create(&action)
-			}
+	// exploit
+	// import sys
+	//import uuid
+	//ip = "127.0.0.1"
+	//if len(sys.argv) == 2:
+	//    ip = sys.argv[1]
+	//print(f"ip:{ip} \nflag{{{str(uuid.uuid4())}}}")
+	db.Model(&Exploit{}).Count(&count)
+	if count == 0 {
+		exploits := []Exploit{
+			{
+				ID:   1,
+				Name: "rand_flag",
+				Filename: CodeToBase64("code/python3",
+					`import sys
+import uuid
+ip = "127.0.0.1"
+if len(sys.argv) == 2:
+    ip = sys.argv[1]
+print(f"ip:{ip} \nflag{{{str(uuid.uuid4())}}}")`),
+				Timeout:   "15",
+				Times:     "0",
+				Flag:      "flag{.*}",
+				IsDeleted: false,
+			},
+		}
+		for _, exploit := range exploits {
+			db.Create(&exploit)
 		}
 	}
 

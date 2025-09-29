@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { ElNotification } from 'element-plus'
 import CodeEditor from './CodeEditor.vue'
 
@@ -44,10 +44,40 @@ const form = ref({
   code_language: 'python3',
   next_run: '',
   config_type: '',
-  config_num: 10
+  config_num: 1,
+  config_script_id: null
 })
 
 const loading = ref(false)
+const exploitList = ref<Array<{id: number, name: string}>>([])
+
+// 获取exploit列表
+const fetchExploitList = async () => {
+  try {
+    const formData = new FormData()
+    formData.append('page_size', '1000') // 获取所有exploit
+    
+    const response = await fetch('/webui/exploit_show', {
+      method: 'POST',
+      body: formData
+    })
+    
+    const result = await response.json()
+    
+    if (result.message === 'success' && result.result) {
+      exploitList.value = result.result.map((item: any) => ({
+        id: item.id,
+        name: item.name
+      }))
+    } else {
+      console.error('获取exploit列表失败:', result.error)
+      exploitList.value = []
+    }
+  } catch (error) {
+    console.error('获取exploit列表失败:', error)
+    exploitList.value = []
+  }
+}
 
 // 根据actionId获取数据
 const fetchActionById = async (id: number | string) => {
@@ -91,17 +121,24 @@ watch(() => props.action, (newAction) => {
   }
 }, { immediate: true })
 
+// 组件挂载时获取exploit列表
+onMounted(() => {
+  fetchExploitList()
+})
+
 // 从Action数据更新表单的通用函数
 const updateFormFromAction = (action: Action) => {
   if (action) {
     // 解析config
     let configType = ''
-    let configNum = 10
+    let configNum = 1
+    let configScriptId = null
     if (action.config) {
       try {
         const config = JSON.parse(action.config)
         configType = config.type || ''
-        configNum = config.num || 10
+        configNum = config.num || 1
+        configScriptId = config.script_id || null
       } catch (error) {
         console.error('解析config失败:', error)
       }
@@ -118,7 +155,8 @@ const updateFormFromAction = (action: Action) => {
       code_language: 'python3',
       next_run: action.next_run || '',
       config_type: configType,
-      config_num: configNum
+      config_num: configNum,
+      config_script_id: configScriptId
     }
     
     // 解析代码语言
@@ -180,6 +218,28 @@ const saveAction = async () => {
     return
   }
 
+  // 如果是exec_script类型，验证必须选择脚本
+  if (form.value.config_type === 'exec_script') {
+    if (!form.value.config_script_id) {
+      ElNotification({
+        title: '验证失败',
+        message: '请选择要执行的脚本',
+        type: 'error',
+        position: 'bottom-right'
+      })
+      return
+    }
+    if (!form.value.config_num || form.value.config_num <= 0) {
+      ElNotification({
+        title: '验证失败',
+        message: '请输入有效的增加次数',
+        type: 'error',
+        position: 'bottom-right'
+      })
+      return
+    }
+  }
+
   loading.value = true
   try {
     const formData = new FormData()
@@ -196,16 +256,23 @@ const saveAction = async () => {
     // 处理config
     let configStr = '{}'
     if (form.value.config_type) {
-      const config = {
+      const config: any = {
         type: form.value.config_type,
         num: form.value.config_num
+      }
+      // 如果是exec_script类型，添加script_id
+      if (form.value.config_type === 'exec_script') {
+        config.script_id = form.value.config_script_id
       }
       configStr = JSON.stringify(config)
     }
     formData.append('config', configStr)
     
     // 处理代码
-    if (form.value.code.trim()) {
+    if (form.value.config_type === 'exec_script') {
+      // exec_script类型不需要代码
+      formData.append('code', '')
+    } else if (form.value.code.trim()) {
       const encodedCode = encodeCodeToBase64(form.value.code, form.value.code_language)
       formData.append('code', encodedCode)
     } else {
@@ -266,7 +333,8 @@ const resetForm = () => {
     code_language: 'python3',
     next_run: '',
     config_type: '',
-    config_num: 10
+    config_num: 1,
+    config_script_id: null
   }
 }
 
@@ -361,6 +429,7 @@ const formatNextRunTime = (nextRun: string, interval: number) => {
                 >
                   <el-option label="无" value="" />
                   <el-option label="Flag提交器" value="flag_submiter" />
+                  <el-option label="执行脚本" value="exec_script" />
                 </el-select>
                 <div class="form-tip">
                   选择任务类型，用于特殊处理
@@ -373,7 +442,7 @@ const formatNextRunTime = (nextRun: string, interval: number) => {
                 <el-input-number
                   v-model="form.config_num"
                   :min="1"
-                  :max="100"
+                  :max="999"
                   placeholder="每次提交的flag数量"
                   style="width: 100%"
                 />
@@ -382,10 +451,46 @@ const formatNextRunTime = (nextRun: string, interval: number) => {
                 </div>
               </el-form-item>
             </el-col>
+            
+            <el-col :xs="24" :sm="12" :md="12" :lg="12" :xl="12" v-if="form.config_type === 'exec_script'">
+              <el-form-item label="执行脚本">
+                <el-select
+                  v-model="form.config_script_id"
+                  placeholder="选择要执行的脚本"
+                  style="width: 100%"
+                  clearable
+                >
+                  <el-option
+                    v-for="exploit in exploitList"
+                    :key="exploit.id"
+                    :label="exploit.name"
+                    :value="exploit.id"
+                  />
+                </el-select>
+                <div class="form-tip">
+                  选择要增加运行次数的执行脚本
+                </div>
+              </el-form-item>
+            </el-col>
+            
+            <el-col :xs="24" :sm="12" :md="12" :lg="12" :xl="12" v-if="form.config_type === 'exec_script'">
+              <el-form-item label="增加次数">
+                <el-input-number
+                  v-model="form.config_num"
+                  :min="1"
+                  :max="1000"
+                  placeholder="增加的运行次数"
+                  style="width: 100%"
+                />
+                <div class="form-tip">
+                  每次执行时增加的脚本运行次数
+                </div>
+              </el-form-item>
+            </el-col>
           </el-row>
         </div>
         
-        <div class="form-section">
+        <div class="form-section" v-if="form.config_type !== 'exec_script'">
           <h3>代码内容</h3>
           <el-form-item label-width="0">
             <CodeEditor
@@ -407,7 +512,26 @@ const formatNextRunTime = (nextRun: string, interval: number) => {
               show-word-limit
             />
           </el-form-item>
-          
+        </div>
+        
+        <div class="form-section" v-if="form.config_type === 'exec_script'">
+          <h3>执行说明</h3>
+          <el-form-item label-width="0">
+            <el-alert
+              title="执行脚本类型说明"
+              type="info"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <p>此类型的定时计划不需要编写代码，系统会自动增加指定执行脚本的运行次数。</p>
+                <p>请在上方选择要操作的执行脚本和增加次数。</p>
+              </template>
+            </el-alert>
+          </el-form-item>
+        </div>
+        
+        <div class="form-section">
           <h3>错误信息</h3>
           <el-form-item label-width="0">
             <el-input

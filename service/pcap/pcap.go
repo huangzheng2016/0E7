@@ -4,11 +4,15 @@ import (
 	"0E7/service/config"
 	"0E7/service/database"
 	"compress/gzip"
+	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -20,6 +24,7 @@ import (
 	"github.com/google/gopacket/ip4defrag"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/reassembly"
 	"github.com/google/uuid"
 )
@@ -39,9 +44,24 @@ var (
 	flushAfter   = ""
 )
 
+// calculateFileMD5 计算文件的MD5值
+func calculateFileMD5(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := md5.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
 type FlowItem struct {
 	From string `json:"f"`
-	Data string `json:"d"`
 	B64  string `json:"b"`
 	Time int    `json:"t"`
 }
@@ -63,21 +83,187 @@ type FlowEntry struct {
 	Size         int
 }
 
+// SaveFlowAsPcap 将TCP流数据保存为pcap格式文件
+func SaveFlowAsPcap(entry FlowEntry) string {
+	flowUUID := uuid.New().String()
+
+	// 根据压缩设置确定文件扩展名
+	var pcapFile string
+	if config.Server_pcap_zip {
+		pcapFile = filepath.Join("flow", flowUUID+".pcap.gz")
+	} else {
+		pcapFile = filepath.Join("flow", flowUUID+".pcap")
+	}
+
+	// 创建pcap文件
+	file, err := os.Create(pcapFile)
+	if err != nil {
+		log.Println("Create pcap file failed:", err)
+		return ""
+	}
+	defer file.Close()
+
+	var writer *pcapgo.Writer
+	if config.Server_pcap_zip {
+		// 创建gzip writer
+		gzWriter := gzip.NewWriter(file)
+		defer gzWriter.Close()
+		writer = pcapgo.NewWriter(gzWriter)
+	} else {
+		writer = pcapgo.NewWriter(file)
+	}
+
+	// 写入pcap文件头
+	err = writer.WriteFileHeader(65536, layers.LinkTypeEthernet)
+	if err != nil {
+		log.Println("Write pcap file header failed:", err)
+		return ""
+	}
+
+	// 解析源IP和目标IP
+	srcIP := net.ParseIP(entry.SrcIp)
+	dstIP := net.ParseIP(entry.DstIp)
+	if srcIP == nil || dstIP == nil {
+		log.Println("Invalid IP address:", entry.SrcIp, entry.DstIp)
+		return ""
+	}
+
+	// 为每个FlowItem创建数据包
+	for _, flowItem := range entry.Flow {
+		// 创建以太网层
+		ethernet := &layers.Ethernet{
+			SrcMAC:       net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x01},
+			DstMAC:       net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x02},
+			EthernetType: layers.EthernetTypeIPv4,
+		}
+
+		// 创建IP层
+		ip := &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Protocol: layers.IPProtocolTCP,
+		}
+
+		// 创建TCP层
+		tcp := &layers.TCP{
+			Window: 65535,
+		}
+
+		// 根据数据方向设置源和目标
+		if flowItem.From == "c" {
+			// 客户端到服务器
+			ip.SrcIP = srcIP
+			ip.DstIP = dstIP
+			tcp.SrcPort = layers.TCPPort(entry.SrcPort)
+			tcp.DstPort = layers.TCPPort(entry.DstPort)
+		} else {
+			// 服务器到客户端
+			ip.SrcIP = dstIP
+			ip.DstIP = srcIP
+			tcp.SrcPort = layers.TCPPort(entry.DstPort)
+			tcp.DstPort = layers.TCPPort(entry.SrcPort)
+		}
+
+		// 设置TCP数据 - 从B64解码
+		data, err := base64.StdEncoding.DecodeString(flowItem.B64)
+		if err != nil {
+			log.Println("Failed to decode B64 data:", err)
+			continue
+		}
+		tcp.Payload = data
+
+		// 计算校验和
+		tcp.SetNetworkLayerForChecksum(ip)
+
+		// 创建数据包缓冲区
+		buf := gopacket.NewSerializeBuffer()
+		opts := gopacket.SerializeOptions{
+			ComputeChecksums: true,
+			FixLengths:       true,
+		}
+
+		// 序列化数据包
+		err = gopacket.SerializeLayers(buf, opts,
+			ethernet,
+			ip,
+			tcp,
+			gopacket.Payload(tcp.Payload),
+		)
+		if err != nil {
+			log.Println("Serialize packet failed:", err)
+			continue
+		}
+
+		// 创建数据包元数据
+		timestamp := time.Unix(int64(flowItem.Time/1000), int64((flowItem.Time%1000)*1000000))
+		ci := gopacket.CaptureInfo{
+			Timestamp:     timestamp,
+			CaptureLength: len(buf.Bytes()),
+			Length:        len(buf.Bytes()),
+		}
+
+		// 写入pcap文件
+		err = writer.WritePacket(ci, buf.Bytes())
+		if err != nil {
+			log.Println("Write packet to pcap failed:", err)
+			continue
+		}
+	}
+
+	return pcapFile
+}
+
+// SaveFlowAsJson 将流量数据保存为JSON格式文件
+func SaveFlowAsJson(entry FlowEntry) string {
+	flowUUID := uuid.New().String()
+
+	// 根据压缩设置确定文件扩展名
+	var jsonFile string
+	if config.Server_pcap_zip {
+		jsonFile = filepath.Join("flow", flowUUID+".json.gz")
+	} else {
+		jsonFile = filepath.Join("flow", flowUUID+".json")
+	}
+
+	// 将FlowEntry转换为JSON
+	jsonData, err := json.Marshal(entry)
+	if err != nil {
+		log.Println("Marshal JSON failed:", err)
+		return ""
+	}
+
+	// 创建文件
+	file, err := os.Create(jsonFile)
+	if err != nil {
+		log.Println("Create JSON file failed:", err)
+		return ""
+	}
+	defer file.Close()
+
+	if config.Server_pcap_zip {
+		// 创建gzip writer
+		gzWriter := gzip.NewWriter(file)
+		defer gzWriter.Close()
+		_, err = gzWriter.Write(jsonData)
+	} else {
+		_, err = file.Write(jsonData)
+	}
+
+	if err != nil {
+		log.Println("Write JSON file failed:", err)
+		return ""
+	}
+
+	return jsonFile
+}
+
 func reassemblyCallback(entry FlowEntry) {
 	ParseHttpFlow(&entry)
 	if flag_regex != "" {
 		ApplyFlagTags(&entry, flag_regex)
 	}
-	for idx := 0; idx < len(entry.Flow); idx++ {
-		flowItem := &entry.Flow[idx]
-		flowItem.B64 = base64.StdEncoding.EncodeToString([]byte(flowItem.Data))
-		flowItem.Data = strings.Map(func(r rune) rune {
-			if r < 128 {
-				return r
-			}
-			return -1
-		}, flowItem.Data)
-	}
+	// B64字段已经在tcp.go中设置，这里不需要额外处理
 	Fingerprints, err := json.Marshal(entry.Fingerprints)
 	if err != nil {
 		log.Println("Fingerprints Error:", err)
@@ -88,42 +274,18 @@ func reassemblyCallback(entry FlowEntry) {
 		log.Println("Suricata Error:", err)
 		return
 	}
-	Flow, err := json.Marshal(entry.Flow)
-	if err != nil {
-		log.Println("Flow Error:", err)
+
+	// 保存流量数据为JSON格式
+	jsonFile := SaveFlowAsJson(entry)
+	if jsonFile == "" {
+		log.Println("Failed to save JSON file for flow")
 		return
 	}
 
-	flowFile := filepath.Join("flow", uuid.New().String())
-	if config.Server_pcap_zip {
-		flowFile = flowFile + ".gz"
-
-	} else {
-		flowFile = flowFile + ".json"
-	}
-
-	file, err := os.Create(flowFile)
-	if err != nil {
-		log.Println("Create flow file failed:", err)
-		return
-	}
-	defer file.Close()
-
-	if config.Server_pcap_zip {
-		gzipWriter := gzip.NewWriter(file)
-		defer gzipWriter.Close()
-
-		_, err = gzipWriter.Write(Flow)
-		if err != nil {
-			log.Println("Write gzip file failed:", err)
-			return
-		}
-	} else {
-		_, err = file.Write(Flow)
-		if err != nil {
-			log.Println("Write file failed:", err)
-			return
-		}
+	// 保存TCP流为pcap格式
+	pcapFile := SaveFlowAsPcap(entry)
+	if pcapFile == "" {
+		log.Println("Failed to save pcap file for flow")
 	}
 
 	Tags, err := json.Marshal(entry.Tags)
@@ -144,14 +306,15 @@ func reassemblyCallback(entry FlowEntry) {
 		Filename:     entry.Filename,
 		Fingerprints: string(Fingerprints),
 		Suricata:     string(Suricata),
-		Flow:         flowFile,
+		FlowFile:     jsonFile, // JSON文件路径
+		PcapFile:     pcapFile, // PCAP文件路径
 		Tags:         string(Tags),
-		Size:         fmt.Sprintf("%d", entry.Size),
+		Size:         entry.Size,
 	}
 	err = config.Db.Create(&pcapRecord).Error
 
 	if err != nil {
-		log.Println("Insert Error:", err)
+		log.Fatalf("Failed to insert pcap record into database: %v", err)
 	}
 }
 
@@ -299,6 +462,18 @@ func WatchDir(watch_dir string) {
 		}
 	}
 */
+// checkFileByMD5 检查数据库中是否已存在相同MD5的文件
+func checkFileByMD5(fileMD5 string) bool {
+	var pcapFile database.PcapFile
+	err := config.Db.Where("md5 = ?", fileMD5).First(&pcapFile).Error
+	if err != nil {
+		// 数据库中没有找到相同MD5的文件
+		return false
+	}
+	log.Printf("File with MD5 %s already exists in database: %s", fileMD5, pcapFile.Filename)
+	return true
+}
+
 func checkfile(fname string, status bool) bool {
 	// 获取文件信息
 	fileInfo, err := os.Stat(fname)
@@ -310,6 +485,18 @@ func checkfile(fname string, status bool) bool {
 	fileModTime := fileInfo.ModTime()
 	fileSize := fileInfo.Size()
 
+	// 计算文件MD5
+	fileMD5, err := calculateFileMD5(fname)
+	if err != nil {
+		log.Println("Failed to calculate file MD5:", err)
+		return false
+	}
+
+	// 首先检查数据库中是否已存在相同MD5的文件
+	if checkFileByMD5(fileMD5) {
+		return false // 已存在相同MD5的文件，跳过处理
+	}
+
 	// 查询数据库中是否存在该文件记录
 	var pcapFile database.PcapFile
 	err = config.Db.Where("filename = ?", fname).First(&pcapFile).Error
@@ -320,6 +507,7 @@ func checkfile(fname string, status bool) bool {
 				Filename: fname,
 				ModTime:  fileModTime,
 				FileSize: fileSize,
+				MD5:      fileMD5,
 			}
 			err = config.Db.Create(&pcapFile).Error
 			if err != nil {
@@ -327,6 +515,12 @@ func checkfile(fname string, status bool) bool {
 			}
 		}
 		return true
+	}
+
+	// 检查MD5是否匹配，如果MD5相同则不需要重新处理
+	if pcapFile.MD5 == fileMD5 {
+		log.Printf("File %s has same MD5 (%s), skipping processing", fname, fileMD5)
+		return false
 	}
 
 	// 检查修改时间和文件大小是否匹配
@@ -337,6 +531,7 @@ func checkfile(fname string, status bool) bool {
 			err = config.Db.Model(&pcapFile).Updates(map[string]interface{}{
 				"mod_time":  fileModTime,
 				"file_size": fileSize,
+				"md5":       fileMD5,
 			}).Error
 			if err != nil {
 				log.Println("Failed to update pcap file info:", err)
@@ -378,7 +573,6 @@ func processPcapHandle(handle *pcap.Handle, fname string) {
 	switch linktype {
 	case layers.LinkTypeIPv4:
 		source = gopacket.NewPacketSource(handle, layers.LayerTypeIPv4)
-		break
 	default:
 		source = gopacket.NewPacketSource(handle, linktype)
 	}
@@ -387,11 +581,17 @@ func processPcapHandle(handle *pcap.Handle, fname string) {
 	source.NoCopy = true
 	count := 0
 	bytes := int64(0)
+	tcpCount := 0
+	udpCount := 0
+	otherCount := 0
 	defragger := ip4defrag.NewIPv4Defragmenter()
 
 	streamFactory := &tcpStreamFactory{source: fname, reassemblyCallback: reassemblyCallback}
 	streamPool := reassembly.NewStreamPool(streamFactory)
 	assembler := reassembly.NewAssembler(streamPool)
+
+	// 创建UDP流工厂
+	udpFactory := newUDPStreamFactory(fname, reassemblyCallback)
 
 	var nextFlush time.Time
 	var flushDuration time.Duration
@@ -424,25 +624,43 @@ func processPcapHandle(handle *pcap.Handle, fname string) {
 			}
 		}
 
+		// 定期清理超时的UDP流
+		if count%1000 == 0 { // 每1000个数据包清理一次
+			udpFactory.cleanupExpiredStreams()
+		}
+
 		// defrag the IPv4 packet if required
-		// (UNTODO; IPv6 will not be defragged)
 		ip4Layer := packet.Layer(layers.LayerTypeIPv4)
 		if !nodefrag && ip4Layer != nil {
 			ip4 := ip4Layer.(*layers.IPv4)
 			l := ip4.Length
 			newip4, err := defragger.DefragIPv4(ip4)
 			if err != nil {
-				log.Fatalln("Error while de-fragmenting", err)
+				log.Printf("Error while de-fragmenting IPv4: %v", err)
+				continue
 			} else if newip4 == nil {
 				continue // packet fragment, we don't have whole packet yet.
 			}
 			if newip4.Length != l {
 				pb, ok := packet.(gopacket.PacketBuilder)
 				if !ok {
-					panic("Not a PacketBuilder")
+					log.Printf("Packet is not a PacketBuilder, skipping")
+					continue
 				}
 				nextDecoder := newip4.NextLayerType()
 				nextDecoder.Decode(newip4.Payload, pb)
+			}
+		}
+
+		// 处理IPv6分片（简化版本）
+		ip6Layer := packet.Layer(layers.LayerTypeIPv6)
+		if !nodefrag && ip6Layer != nil {
+			ip6 := ip6Layer.(*layers.IPv6)
+			// 检查是否是分片
+			if ip6.NextHeader == layers.IPProtocolIPv6Fragment {
+				// 对于IPv6分片，我们暂时跳过，因为需要更复杂的重组逻辑
+				log.Printf("IPv6 fragment detected, skipping for now")
+				continue
 			}
 		}
 
@@ -458,9 +676,14 @@ func processPcapHandle(handle *pcap.Handle, fname string) {
 				CaptureInfo: packet.Metadata().CaptureInfo,
 			}
 			assembler.AssembleWithContext(packet.NetworkLayer().NetworkFlow(), tcp, &c)
-			break
+			tcpCount++
+		case layers.LayerTypeUDP:
+			// 处理UDP数据包
+			udpFactory.ProcessPacket(packet)
+			udpCount++
 		default:
-			// pass
+			// 其他协议暂时忽略
+			otherCount++
 		}
 
 		select {
@@ -477,5 +700,17 @@ func processPcapHandle(handle *pcap.Handle, fname string) {
 
 	assembler.FlushAll()
 	streamFactory.WaitGoRoutines()
+
+	// 完成所有UDP流处理
+	udpFactory.FlushAll()
+
+	// 输出统计信息
+	log.Printf("PCAP processing completed for %s:", fname)
+	log.Printf("  Total packets: %d", count)
+	log.Printf("  TCP packets: %d", tcpCount)
+	log.Printf("  UDP packets: %d", udpCount)
+	log.Printf("  Other packets: %d", otherCount)
+	log.Printf("  Total bytes: %d", bytes)
+
 	checkfile(fname, true)
 }

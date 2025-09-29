@@ -83,7 +83,9 @@ func heartbeat() {
 		response, err := client.Do(request)
 		if err != nil {
 			log.Println(err)
+			continue
 		}
+		defer response.Body.Close() // 确保关闭响应体
 		if response.StatusCode == 200 || response.StatusCode == 400 {
 			if response.StatusCode == 400 {
 				log.Println("Try to update manually")

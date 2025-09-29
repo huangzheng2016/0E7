@@ -9,6 +9,7 @@
 package pcap
 
 import (
+	"encoding/base64"
 	"sync"
 	"time"
 
@@ -146,7 +147,12 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 	l := len(t.FlowItems)
 	if l > 0 {
 		if t.FlowItems[l-1].From == from {
-			t.FlowItems[l-1].Data += string_data
+			// 解码现有的B64数据，添加新数据，然后重新编码
+			existingData, err := base64.StdEncoding.DecodeString(t.FlowItems[l-1].B64)
+			if err == nil {
+				combinedData := string(existingData) + string_data
+				t.FlowItems[l-1].B64 = base64.StdEncoding.EncodeToString([]byte(combinedData))
+			}
 			// All done, no need to add a new item
 			return
 		}
@@ -154,7 +160,7 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 
 	// Add a FlowItem based on the data we just reassembled
 	t.FlowItems = append(t.FlowItems, FlowItem{
-		Data: string_data,
+		B64:  base64.StdEncoding.EncodeToString([]byte(string_data)),
 		From: from,
 		Time: int(timestamp.UnixNano() / 1000000), // UNTODO; maybe use int64?
 	})

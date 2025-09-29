@@ -314,6 +314,34 @@ const handleExploitEdit = (exploit: any) => {
   updateUrlForActiveTab()
 }
 
+// 通过ID处理Exploit编辑（从FlagList调用）
+const handleExploitEditById = async (exploitId: number) => {
+  // 检查是否已存在相同ID的Exploit编辑标签页
+  const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit' && tab.itemId === exploitId)
+  
+  if (existingTab) {
+    // 如果存在相同ID的标签页，直接切换到它
+    activeTabId.value = existingTab.id
+  } else {
+    // 如果不存在，需要先获取exploit信息，然后创建新标签页
+    try {
+      // 这里可以调用API获取exploit信息，或者直接使用ID创建标签页
+      // 为了简化，我们直接使用ID创建标签页，ExploitEdit组件会自己获取数据
+      addTab({
+        title: `执行脚本 #${exploitId} - 编辑`,
+        type: 'exploit-edit',
+        itemId: exploitId,
+        closable: true
+      })
+    } catch (error) {
+      console.error('获取exploit信息失败:', error)
+    }
+  }
+  
+  // 更新URL以便分享
+  updateUrlForActiveTab()
+}
+
 // 处理PcapList的事件
 const handlePcapView = (pcap: any) => {
   // 检查是否已存在相同ID的Pcap详情标签页
@@ -620,6 +648,7 @@ onUnmounted(() => {
       <div v-else-if="activeTab?.type === 'flag-list'">
         <FlagList
           @state-change="(state: any) => handleStateChange('flag-list', state)"
+          @open-exploit-edit="handleExploitEditById"
         />
       </div>
       

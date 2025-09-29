@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import { ElNotification, ElMessageBox } from 'element-plus'
+import { ElNotification, ElMessageBox, ElUpload, ElProgress } from 'element-plus'
+import { Upload, UploadFilled } from '@element-plus/icons-vue'
 
 interface PcapItem {
   id: number
@@ -17,7 +18,7 @@ interface PcapItem {
   suricata: string
   flow: string
   tags: string
-  size: string
+  size: number
   created_at: string
   updated_at: string
 }
@@ -43,6 +44,25 @@ const emit = defineEmits(['view', 'state-change'])
 
 const pcapItems = ref<PcapItem[]>([])
 const loading = ref(false)
+const uploadRef = ref()
+
+// 批量上传相关状态
+const uploadDialogVisible = ref(false)
+const uploadLoading = ref(false)
+const uploadProgress = ref(0)
+const uploadStatus = ref('')
+const selectedFiles = ref<File[]>([])
+const uploadResults = ref<{
+  successCount: number
+  skippedCount: number
+  errorCount: number
+  errors: string[]
+}>({
+  successCount: 0,
+  skippedCount: 0,
+  errorCount: 0,
+  errors: []
+})
 
 // 分页相关
 const currentPage = ref(1)
@@ -286,8 +306,7 @@ const getTagType = (tag: string) => {
 }
 
 // 格式化文件大小
-const formatSize = (sizeStr: string) => {
-  const size = parseInt(sizeStr || '0')
+const formatSize = (size: number) => {
   if (size === 0) return '0 B'
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
@@ -313,6 +332,209 @@ const copyToClipboard = async (text: string, type: string) => {
       type: 'error',
       position: 'bottom-right',
       duration: 2000
+    })
+  }
+}
+
+// 打开批量上传对话框
+const openUploadDialog = () => {
+  uploadDialogVisible.value = true
+  uploadProgress.value = 0
+  uploadStatus.value = ''
+  selectedFiles.value = []
+  uploadResults.value = {
+    successCount: 0,
+    skippedCount: 0,
+    errorCount: 0,
+    errors: []
+  }
+}
+
+// 关闭批量上传对话框
+const closeUploadDialog = () => {
+  uploadDialogVisible.value = false
+  uploadLoading.value = false
+  uploadProgress.value = 0
+  uploadStatus.value = ''
+  selectedFiles.value = []
+  uploadResults.value = {
+    successCount: 0,
+    skippedCount: 0,
+    errorCount: 0,
+    errors: []
+  }
+}
+
+// 批量上传文件
+const handleBatchUpload = async () => {
+  console.log('handleBatchUpload called')
+  console.log('Selected files:', selectedFiles.value.map(f => f.name))
+  
+  if (selectedFiles.value.length === 0) {
+    console.log('No files to upload')
+    ElNotification({
+      title: '上传失败',
+      message: '请选择要上传的文件',
+      type: 'warning',
+      position: 'bottom-right'
+    })
+    return
+  }
+  
+  console.log('Starting upload with files:', selectedFiles.value.map(f => f.name))
+
+  uploadLoading.value = true
+  uploadProgress.value = 0
+  uploadStatus.value = `正在上传 ${selectedFiles.value.length} 个文件...`
+
+  const formData = new FormData()
+  selectedFiles.value.forEach(file => {
+    formData.append('files', file)
+  })
+
+  try {
+    // 模拟上传进度
+    const progressInterval = setInterval(() => {
+      if (uploadProgress.value < 90) {
+        uploadProgress.value += Math.random() * 20
+      }
+    }, 200)
+
+    const response = await fetch('/webui/pcap_upload', {
+      method: 'POST',
+      body: formData
+    })
+
+    clearInterval(progressInterval)
+    uploadProgress.value = 100
+
+    const result = await response.json()
+    
+    if (result.message === 'success' || result.message === 'partial_success') {
+      uploadResults.value = {
+        successCount: result.success_count || 0,
+        skippedCount: result.skipped_count || 0,
+        errorCount: result.error_count || 0,
+        errors: result.errors || []
+      }
+      
+      uploadProgress.value = 100
+      uploadStatus.value = '上传完成'
+      
+      // 显示上传结果
+      const totalFiles = selectedFiles.value.length
+      const successMsg = `成功上传 ${result.success_count || 0} 个文件`
+      const skippedMsg = result.skipped_count > 0 ? `，跳过 ${result.skipped_count} 个重复文件` : ''
+      const errorMsg = result.error_count > 0 ? `，失败 ${result.error_count} 个文件` : ''
+      
+      ElNotification({
+        title: '上传完成',
+        message: successMsg + skippedMsg + errorMsg,
+        type: result.error_count > 0 ? 'warning' : 'success',
+        position: 'bottom-right',
+        duration: 5000
+      })
+      
+      // 清空文件列表并关闭对话框
+      selectedFiles.value = []
+      if (uploadRef.value && uploadRef.value.clearFiles) {
+        uploadRef.value.clearFiles()
+      }
+      
+      // 延迟关闭对话框，让用户看到结果
+      setTimeout(() => {
+        closeUploadDialog()
+      }, 2000)
+      
+      // 刷新列表
+      fetchPcapItems()
+    } else {
+      throw new Error(result.error || '上传失败')
+    }
+  } catch (error) {
+    console.error('批量上传失败:', error)
+    uploadProgress.value = 0
+    uploadStatus.value = '上传失败'
+    ElNotification({
+      title: '上传失败',
+      message: error instanceof Error ? error.message : '网络错误，请稍后重试',
+      type: 'error',
+      position: 'bottom-right',
+      duration: 5000
+    })
+  } finally {
+    uploadLoading.value = false
+  }
+}
+
+// 文件上传前的验证
+const beforeUpload = (file: File) => {
+  const isValidType = file.name.endsWith('.pcap') || file.name.endsWith('.pcapng')
+  if (!isValidType) {
+    ElNotification({
+      title: '文件类型错误',
+      message: '只能上传 .pcap 或 .pcapng 文件',
+      type: 'error',
+      position: 'bottom-right'
+    })
+    return false
+  }
+  
+  const isValidSize = file.size <= 100 * 1024 * 1024 // 100MB
+  if (!isValidSize) {
+    ElNotification({
+      title: '文件过大',
+      message: '文件大小不能超过 100MB',
+      type: 'error',
+      position: 'bottom-right'
+    })
+    return false
+  }
+  
+  return true
+}
+
+// 处理文件变化
+const handleFileChange = (file: any, fileList: any[]) => {
+  console.log('Files changed:', { file, fileList })
+  console.log('File details:', {
+    name: file.name,
+    size: file.size,
+    raw: file.raw,
+    status: file.status
+  })
+  
+  // 更新选中的文件列表
+  selectedFiles.value = fileList
+    .filter(f => f.raw && f.status !== 'fail')
+    .map(f => f.raw)
+  
+  console.log('Selected files updated:', selectedFiles.value.map(f => f.name))
+}
+
+// 测试上传功能
+const testUpload = async () => {
+  console.log('Test upload clicked')
+  try {
+    const response = await fetch('/webui/pcap_upload', {
+      method: 'POST',
+      body: new FormData()
+    })
+    const result = await response.json()
+    console.log('Test upload result:', result)
+    ElNotification({
+      title: '测试结果',
+      message: `API响应: ${JSON.stringify(result)}`,
+      type: 'info',
+      position: 'bottom-right'
+    })
+  } catch (error) {
+    console.error('Test upload error:', error)
+    ElNotification({
+      title: '测试失败',
+      message: error instanceof Error ? error.message : '网络错误',
+      type: 'error',
+      position: 'bottom-right'
     })
   }
 }
@@ -352,6 +574,15 @@ onMounted(() => {
         <el-button @click="resetSearch">
           <el-icon><Refresh /></el-icon>
           重置
+        </el-button>
+      </div>
+      <div class="action-section">
+        <el-button type="primary" @click="openUploadDialog">
+          <el-icon><Upload /></el-icon>
+          批量上传
+        </el-button>
+        <el-button type="info" @click="testUpload">
+          测试上传
         </el-button>
       </div>
     </div>
@@ -460,6 +691,81 @@ onMounted(() => {
       />
     </div>
 
+    <!-- 批量上传对话框 -->
+    <el-dialog
+      v-model="uploadDialogVisible"
+      title="批量上传PCAP文件"
+      width="600px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      @close="closeUploadDialog"
+    >
+      <div class="upload-container">
+        <el-upload
+          ref="uploadRef"
+          class="upload-dragger"
+          drag
+          multiple
+          :auto-upload="false"
+          :before-upload="beforeUpload"
+          :on-change="handleFileChange"
+          accept=".pcap,.pcapng"
+        >
+          <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+          <div class="el-upload__text">
+            将文件拖到此处，或<em>点击上传</em>
+          </div>
+          <template #tip>
+            <div class="el-upload__tip">
+              支持 .pcap 和 .pcapng 格式，单个文件不超过 100MB
+            </div>
+          </template>
+        </el-upload>
+
+        <!-- 上传进度 -->
+        <div v-if="uploadLoading || uploadStatus" class="upload-progress">
+          <div class="progress-status">{{ uploadStatus }}</div>
+          <el-progress 
+            :percentage="uploadProgress" 
+            :status="uploadProgress === 100 ? 'success' : ''"
+          />
+        </div>
+
+        <!-- 上传结果 -->
+        <div v-if="uploadResults.successCount > 0 || uploadResults.skippedCount > 0 || uploadResults.errorCount > 0" class="upload-results">
+          <h4>上传结果：</h4>
+          <div class="result-item">
+            <el-tag type="success">成功: {{ uploadResults.successCount }}</el-tag>
+            <el-tag type="warning" v-if="uploadResults.skippedCount > 0">跳过: {{ uploadResults.skippedCount }}</el-tag>
+            <el-tag type="danger" v-if="uploadResults.errorCount > 0">失败: {{ uploadResults.errorCount }}</el-tag>
+          </div>
+          
+          <!-- 错误详情 -->
+          <div v-if="uploadResults.errors.length > 0" class="error-details">
+            <h5>错误详情：</h5>
+            <ul>
+              <li v-for="error in uploadResults.errors" :key="error" class="error-item">
+                {{ error }}
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="closeUploadDialog">取消</el-button>
+          <el-button 
+            type="primary" 
+            @click="handleBatchUpload()"
+            :loading="uploadLoading"
+          >
+            开始上传
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -487,6 +793,12 @@ onMounted(() => {
 }
 
 .search-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.action-section {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -590,5 +902,70 @@ onMounted(() => {
 
 :deep(.el-table .el-table__row:hover) {
   background-color: #f5f7fa;
+}
+
+/* 上传相关样式 */
+.upload-container {
+  padding: 20px 0;
+}
+
+.upload-dragger {
+  width: 100%;
+}
+
+.upload-progress {
+  margin-top: 20px;
+}
+
+.progress-status {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.upload-results {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+
+.upload-results h4 {
+  margin: 0 0 10px 0;
+  color: #303133;
+  font-size: 14px;
+}
+
+.result-item {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.error-details {
+  margin-top: 15px;
+}
+
+.error-details h5 {
+  margin: 0 0 10px 0;
+  color: #f56c6c;
+  font-size: 13px;
+}
+
+.error-details ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.error-item {
+  color: #f56c6c;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style>

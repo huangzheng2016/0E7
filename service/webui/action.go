@@ -3,6 +3,7 @@ package webui
 import (
 	"0E7/service/config"
 	"0E7/service/database"
+	"encoding/json"
 	"math"
 	"regexp"
 	"strconv"
@@ -270,8 +271,16 @@ func action_execute(c *gin.Context) {
 		return
 	}
 
-	// 检查是否有代码
-	if action.Code == "" {
+	// 解析配置，检查是否为exec_script类型
+	var actionConfig struct {
+		Type string `json:"type"`
+	}
+	if action.Config != "" {
+		json.Unmarshal([]byte(action.Config), &actionConfig)
+	}
+
+	// 检查是否有代码（exec_script类型不需要代码）
+	if action.Code == "" && actionConfig.Type != "exec_script" {
 		c.JSON(400, gin.H{"message": "fail", "error": "action has no code"})
 		return
 	}

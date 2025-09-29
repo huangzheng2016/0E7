@@ -1,0 +1,189 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        
+    - name: Install libpcap-dev
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpcap-dev
+        
+    - name: Get dependencies
+      run: go mod download
+      
+    - name: Build for Linux AMD64
+      run: |
+        CGO_ENABLED=1 go build -ldflags="-s -w" -o 0e7_linux_amd64 .
+        
+    - name: Create archive
+      run: |
+        tar -czf 0e7_linux_amd64.tar.gz 0e7_linux_amd64
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: linux-amd64
+        path: 0e7_linux_amd64.tar.gz
+
+  build-darwin:
+    runs-on: macos-latest
+    
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+          - goarch: arm64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        
+    - name: Install libpcap
+      run: |
+        brew install libpcap
+        
+    - name: Get dependencies
+      run: go mod download
+      
+    - name: Build for Darwin
+      run: |
+        GOARCH=${{ matrix.goarch }} CGO_ENABLED=1 go build -ldflags="-s -w" -o 0e7_darwin_${{ matrix.goarch }} .
+        
+    - name: Create archive
+      run: |
+        tar -czf 0e7_darwin_${{ matrix.goarch }}.tar.gz 0e7_darwin_${{ matrix.goarch }}
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: darwin-${{ matrix.goarch }}
+        path: 0e7_darwin_${{ matrix.goarch }}.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        
+    - name: Install WinPcap
+      run: |
+        # Download and install WinPcap
+        Invoke-WebRequest -Uri "https://www.winpcap.org/install/bin/WinPcap_4_1_3.exe" -OutFile "WinPcap_4_1_3.exe"
+        Start-Process -FilePath "WinPcap_4_1_3.exe" -ArgumentList "/S" -Wait
+        
+    - name: Get dependencies
+      run: go mod download
+      
+    - name: Build for Windows AMD64
+      run: |
+        $env:CGO_ENABLED = "1"
+        go build -ldflags="-s -w" -o 0e7_windows_amd64.exe .
+        
+    - name: Create archive
+      run: |
+        Compress-Archive -Path "0e7_windows_amd64.exe" -DestinationPath "0e7_windows_amd64.zip"
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-amd64
+        path: 0e7_windows_amd64.zip
+
+  release:
+    needs: [build-linux, build-darwin, build-windows]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.inputs.version
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      
+    - name: Prepare release files
+      run: |
+        mkdir -p release
+        find . -name "*.tar.gz" -o -name "*.zip" | while read file; do
+          cp "$file" release/
+        done
+        
+        # Create combined archive
+        cd release
+        tar -czf 0e7_all_platforms.tar.gz *.tar.gz *.zip
+        cd ..
+        
+        ls -la release/
+        
+    - name: Get version
+      id: get_version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+        else
+          VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        name: Release ${{ steps.get_version.outputs.version }}
+        draft: false
+        prerelease: false
+        files: |
+          release/*
+        body: |
+          ## 0E7 Security Tool Release ${{ steps.get_version.outputs.version }}
+          
+          ### Downloads
+          - **Linux AMD64**: `0e7_linux_amd64.tar.gz`
+          - **macOS AMD64**: `0e7_darwin_amd64.tar.gz`
+          - **macOS ARM64**: `0e7_darwin_arm64.tar.gz`
+          - **Windows AMD64**: `0e7_windows_amd64.zip`
+          - **All Platforms**: `0e7_all_platforms.tar.gz`
+          
+          ### Installation
+          1. Download the appropriate file for your platform
+          2. Extract the archive
+          3. Make the binary executable (Linux/macOS): `chmod +x 0e7_*`
+          4. Run: `./0e7_*` (Linux/macOS) or `0e7_*.exe` (Windows)
+          
+          ### Features
+          - Network traffic analysis
+          - PCAP file processing
+          - Client-server architecture
+          - Web-based management interface
+          
+          ### Dependencies
+          - **Linux**: Requires libpcap-dev
+          - **macOS**: Requires libpcap (via Homebrew)
+          - **Windows**: Requires WinPcap or Npcap
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

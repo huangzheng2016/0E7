@@ -3,6 +3,11 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Refresh, Edit, Delete } from '@element-plus/icons-vue'
 
+// 定义emit事件
+const emit = defineEmits<{
+  openExploitEdit: [exploitId: number]
+}>()
+
 interface Flag {
   id: number
   exploit_id: number
@@ -179,6 +184,11 @@ const stopAutoRefresh = () => {
     clearInterval(refreshTimer)
     refreshTimer = null
   }
+}
+
+// 处理exploit名称点击
+const handleExploitNameClick = (exploitId: number) => {
+  emit('openExploitEdit', exploitId)
 }
 
 // 切换自动刷新状态
@@ -461,7 +471,15 @@ onUnmounted(() => {
           <el-table-column prop="exploit_id" label="Exploit ID" width="100" />
           <el-table-column prop="exploit_name" label="Exploit名称" width="150">
             <template #default="{ row }">
-              <el-text v-if="row.exploit_name" type="primary">{{ row.exploit_name }}</el-text>
+              <el-link 
+                v-if="row.exploit_name && row.exploit_id" 
+                type="primary" 
+                :underline="false"
+                @click="handleExploitNameClick(row.exploit_id)"
+                class="exploit-link"
+              >
+                {{ row.exploit_name }}
+              </el-link>
               <el-text v-else type="info">手动提交</el-text>
             </template>
           </el-table-column>
@@ -627,6 +645,16 @@ onUnmounted(() => {
   margin-left: 12px;
   color: #67c23a;
   font-size: 12px;
+}
+
+.exploit-link {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.exploit-link:hover {
+  color: #409eff;
+  text-decoration: underline;
 }
 
 /* 响应式设计 */

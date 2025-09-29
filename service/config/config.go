@@ -134,6 +134,10 @@ func Init_conf() error {
 				section.Key("server_url").SetValue(Server_url)
 			}
 		}
+		Client_id, err = section.Key("id").Int()
+		if err != nil {
+			Client_id = 0
+		}
 		Client_name = section.Key("name").String()
 		if Client_name == "" {
 			Client_name = uuid.New().String()
@@ -224,7 +228,7 @@ func UpdateConfigClientId(clientId int) error {
 	if Client_id == clientId {
 		return nil // ID没有变化，不需要更新
 	}
-	log.Printf("Updated client_id: %d", clientId)
+	log.Printf("更新客户端 ID: %d", clientId)
 	cfg, err := ini.Load("config.ini")
 	if err != nil {
 		return fmt.Errorf("failed to load config.ini: %v", err)

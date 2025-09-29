@@ -1,6 +1,7 @@
 package pcap
 
 import (
+	"encoding/base64"
 	"log"
 	"regexp"
 )
@@ -34,7 +35,12 @@ func ApplyFlagTags(flow *FlowEntry, reg string) {
 	}
 	for idx := 0; idx < len(flow.Flow); idx++ {
 		flowItem := &flow.Flow[idx]
-		if flagRegex.MatchString(flowItem.Data) {
+		// 从B64解码数据进行匹配
+		data, err := base64.StdEncoding.DecodeString(flowItem.B64)
+		if err != nil {
+			continue
+		}
+		if flagRegex.MatchString(string(data)) {
 			var tag string
 			if flowItem.From == "c" {
 				tag = "flag-in"

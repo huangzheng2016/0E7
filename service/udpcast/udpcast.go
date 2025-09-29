@@ -15,25 +15,28 @@ func Udp_sent(server_tls bool, server_port string) {
 			go Udp_sent(server_tls, server_port)
 		}
 	}()
-	for true {
-		broadcastIP := net.IPv4(255, 255, 255, 255)
-		port := 6102
-		conn, err := net.DialUDP("udp", nil, &net.UDPAddr{
-			IP:   broadcastIP,
-			Port: port,
-		})
-		if err != nil {
-			log.Printf("UDPCAST ERROR: %s\n", err.Error())
-			return
-		}
-		defer conn.Close()
 
-		var message []byte
-		if server_tls {
-			message = []byte("0E7" + "s" + server_port)
-		} else {
-			message = []byte("0E7" + "n" + server_port)
-		}
+	// 创建一次连接，然后复用
+	broadcastIP := net.IPv4(255, 255, 255, 255)
+	port := 6102
+	conn, err := net.DialUDP("udp", nil, &net.UDPAddr{
+		IP:   broadcastIP,
+		Port: port,
+	})
+	if err != nil {
+		log.Printf("UDPCAST ERROR: %s\n", err.Error())
+		return
+	}
+	defer conn.Close() // 确保函数结束时关闭连接
+
+	var message []byte
+	if server_tls {
+		message = []byte("0E7" + "s" + server_port)
+	} else {
+		message = []byte("0E7" + "n" + server_port)
+	}
+
+	for {
 		_, err = conn.Write(message)
 		if err != nil {
 			log.Printf("UDPCAST ERROR: %s\n", err.Error())
