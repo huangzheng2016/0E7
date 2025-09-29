@@ -136,7 +136,7 @@ print(json.dumps(team))`),
 				ID:       3,
 				Name:     "run_exploit_1",
 				Code:     "",
-				Config:   "{\"type\":\"exec_script\",\"num\":1,\"script_id\":1}s",
+				Config:   "{\"type\":\"exec_script\",\"num\":1,\"script_id\":1}",
 				Interval: 60,
 			},
 		}
