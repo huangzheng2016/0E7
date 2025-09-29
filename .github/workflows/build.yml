@@ -154,46 +154,48 @@ jobs:
       with:
         go-version: '1.21'
         
-    - name: Install WinPcap
+    - name: Install 7-Zip
+      run: |
+        Write-Host "Installing 7-Zip..."
+        choco install 7zip -y
+        Write-Host "7-Zip installed successfully"
+        
+    - name: Install WinPcap from Nmap
       run: |
         # Check if WinPcap is already installed
         $winpcapInstalled = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*WinPcap*"}
         if ($winpcapInstalled) {
           Write-Host "WinPcap is already installed. Version: $($winpcapInstalled.Version)"
         } else {
-          Write-Host "Downloading WinPcap..."
+          Write-Host "Downloading Nmap 7.12 setup to extract WinPcap..."
           try {
-            # Download with timeout and retry logic
-            Invoke-WebRequest -Uri "https://www.winpcap.org/install/bin/WinPcap_4_1_3.exe" -OutFile "WinPcap_4_1_3.exe" -TimeoutSec 300 -UseBasicParsing
-            Write-Host "Download completed successfully"
+            # Download Nmap 7.12 setup
+            Invoke-WebRequest -Uri "https://nmap.org/dist/nmap-7.12-setup.exe" -OutFile "nmap-7.12-setup.exe" -TimeoutSec 300 -UseBasicParsing
+            Write-Host "Nmap setup downloaded successfully"
             
-            Write-Host "Installing WinPcap..."
-            # Install with better error handling
-            $process = Start-Process -FilePath "WinPcap_4_1_3.exe" -ArgumentList "/S", "/v/qn" -Wait -PassThru -NoNewWindow
+            # Extract WinPcap from Nmap setup using 7-Zip
+            Write-Host "Extracting WinPcap from Nmap setup..."
+            & "C:\ProgramData\chocolatey\bin\7z.exe" e nmap-7.12-setup.exe winpcap-nmap-4.13.exe
+            Write-Host "WinPcap extracted successfully using 7-Zip"
+            
+            # Install WinPcap
+            Write-Host "Installing WinPcap from Nmap package..."
+            $process = Start-Process -FilePath "winpcap-nmap-4.13.exe" -ArgumentList "/S", "/v/qn" -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -eq 0) {
-              Write-Host "WinPcap installed successfully"
+              Write-Host "WinPcap installed successfully from Nmap package"
             } else {
               Write-Host "WinPcap installation failed with exit code: $($process.ExitCode)"
               # Try alternative installation method
-              Write-Host "Trying alternative installation method..."
-              Start-Process -FilePath "WinPcap_4_1_3.exe" -ArgumentList "/SILENT", "/NORESTART" -Wait
+              Start-Process -FilePath "winpcap-nmap-4.13.exe" -ArgumentList "/SILENT", "/NORESTART" -Wait
+              Write-Host "WinPcap installation completed with alternative method"
             }
           } catch {
             Write-Host "WinPcap installation failed: $($_.Exception.Message)"
-            Write-Host "Trying to install Npcap as alternative..."
-            # Fallback to Npcap
-            try {
-              Invoke-WebRequest -Uri "https://npcap.com/dist/npcap-1.79.exe" -OutFile "npcap-1.79.exe" -UseBasicParsing
-              Start-Process -FilePath "npcap-1.79.exe" -ArgumentList "/S" -Wait
-              Write-Host "Npcap installed successfully as fallback"
-            } catch {
-              Write-Host "Both WinPcap and Npcap installation failed"
-              exit 1
-            }
+            exit 1
           } finally {
             # Clean up
-            if (Test-Path "WinPcap_4_1_3.exe") { Remove-Item "WinPcap_4_1_3.exe" -Force }
-            if (Test-Path "npcap-1.79.exe") { Remove-Item "npcap-1.79.exe" -Force }
+            if (Test-Path "nmap-7.12-setup.exe") { Remove-Item "nmap-7.12-setup.exe" -Force }
+            if (Test-Path "winpcap-nmap-4.13.exe") { Remove-Item "winpcap-nmap-4.13.exe" -Force }
           }
         }
         
@@ -315,6 +317,6 @@ jobs:
           ### Dependencies
           - **Linux**: Requires libpcap-dev
           - **macOS**: Requires libpcap (via Homebrew)
-          - **Windows**: Requires WinPcap or Npcap
+          - **Windows**: Requires WinPcap (extracted from Nmap 7.12 setup)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
