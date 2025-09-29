@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -144,13 +145,7 @@ func savefile(file *multipart.FileHeader, c *gin.Context) error {
 	newFilename := strings.TrimSuffix(file.Filename, ext) + "_" + uuid.New().String() + ext
 	filePath := "pcap/" + newFilename
 
-	// 保存文件
-	err = c.SaveUploadedFile(file, filePath)
-	if err != nil {
-		return fmt.Errorf("failed to save file: %v", err)
-	}
-
-	// 将文件信息保存到数据库
+	// 先将文件信息保存到数据库（避免文件监控重复处理）
 	pcapFile := database.PcapFile{
 		Filename: filePath,
 		ModTime:  time.Now(), // 使用当前时间作为修改时间
@@ -159,17 +154,23 @@ func savefile(file *multipart.FileHeader, c *gin.Context) error {
 	}
 	err = config.Db.Create(&pcapFile).Error
 	if err != nil {
-		// 如果数据库保存失败，删除已上传的文件
-		os.Remove(filePath)
 		return fmt.Errorf("failed to save file info to database: %v", err)
+	}
+
+	// 保存文件到磁盘
+	err = c.SaveUploadedFile(file, filePath)
+	if err != nil {
+		// 如果文件保存失败，删除数据库记录
+		config.Db.Delete(&pcapFile)
+		return fmt.Errorf("failed to save file: %v", err)
 	}
 
 	// 手动触发 pcap 文件处理
 	go func() {
 		// 调用 pcap 处理函数
-		fmt.Printf("Starting pcap processing for uploaded file: %s\n", filePath)
-		pcap.ParsePcapfile(filePath)
-		fmt.Printf("Completed pcap processing for file: %s\n", filePath)
+		log.Printf("Starting pcap processing for uploaded file: %s\n", filePath)
+		pcap.ParsePcapfile(filePath, false)
+		log.Printf("Completed pcap processing for file: %s\n", filePath)
 	}()
 
 	return nil

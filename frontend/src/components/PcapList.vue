@@ -309,9 +309,9 @@ const getTagType = (tag: string) => {
 const formatSize = (size: number) => {
   if (size === 0) return '0 B'
   if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`
-  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KB`
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(2)} MB`
+  return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 // 复制到剪贴板
@@ -512,32 +512,6 @@ const handleFileChange = (file: any, fileList: any[]) => {
   console.log('Selected files updated:', selectedFiles.value.map(f => f.name))
 }
 
-// 测试上传功能
-const testUpload = async () => {
-  console.log('Test upload clicked')
-  try {
-    const response = await fetch('/webui/pcap_upload', {
-      method: 'POST',
-      body: new FormData()
-    })
-    const result = await response.json()
-    console.log('Test upload result:', result)
-    ElNotification({
-      title: '测试结果',
-      message: `API响应: ${JSON.stringify(result)}`,
-      type: 'info',
-      position: 'bottom-right'
-    })
-  } catch (error) {
-    console.error('Test upload error:', error)
-    ElNotification({
-      title: '测试失败',
-      message: error instanceof Error ? error.message : '网络错误',
-      type: 'error',
-      position: 'bottom-right'
-    })
-  }
-}
 
 onMounted(() => {
   fetchPcapItems()
@@ -580,9 +554,6 @@ onMounted(() => {
         <el-button type="primary" @click="openUploadDialog">
           <el-icon><Upload /></el-icon>
           批量上传
-        </el-button>
-        <el-button type="info" @click="testUpload">
-          测试上传
         </el-button>
       </div>
     </div>

@@ -46,7 +46,21 @@ jobs:
       
     - name: Build for Linux AMD64
       run: |
+        echo "Building for Linux AMD64..."
+        echo "Go version: $(go version)"
+        echo "CGO enabled: $CGO_ENABLED"
         CGO_ENABLED=1 go build -ldflags="-s -w" -o 0e7_linux_amd64 .
+        if [ $? -ne 0 ]; then
+          echo "Build failed"
+          exit 1
+        fi
+        echo "Build completed successfully"
+        ls -la 0e7_linux_amd64
+        
+    - name: Verify Linux binary
+      run: |
+        file 0e7_linux_amd64
+        ldd 0e7_linux_amd64 || echo "Binary verification completed"
         
     - name: Create archive
       run: |
@@ -102,7 +116,21 @@ jobs:
       
     - name: Build for Darwin
       run: |
+        echo "Building for Darwin ${{ matrix.goarch }}..."
+        echo "Go version: $(go version)"
+        echo "CGO enabled: $CGO_ENABLED"
         GOARCH=${{ matrix.goarch }} CGO_ENABLED=1 go build -ldflags="-s -w" -o 0e7_darwin_${{ matrix.goarch }} .
+        if [ $? -ne 0 ]; then
+          echo "Build failed"
+          exit 1
+        fi
+        echo "Build completed successfully"
+        ls -la 0e7_darwin_${{ matrix.goarch }}
+        
+    - name: Verify Darwin binary
+      run: |
+        file 0e7_darwin_${{ matrix.goarch }}
+        otool -L 0e7_darwin_${{ matrix.goarch }} || echo "Binary verification completed"
         
     - name: Create archive
       run: |
@@ -128,9 +156,46 @@ jobs:
         
     - name: Install WinPcap
       run: |
-        # Download and install WinPcap
-        Invoke-WebRequest -Uri "https://www.winpcap.org/install/bin/WinPcap_4_1_3.exe" -OutFile "WinPcap_4_1_3.exe"
-        Start-Process -FilePath "WinPcap_4_1_3.exe" -ArgumentList "/S" -Wait
+        # Check if WinPcap is already installed
+        $winpcapInstalled = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*WinPcap*"}
+        if ($winpcapInstalled) {
+          Write-Host "WinPcap is already installed. Version: $($winpcapInstalled.Version)"
+        } else {
+          Write-Host "Downloading WinPcap..."
+          try {
+            # Download with timeout and retry logic
+            Invoke-WebRequest -Uri "https://www.winpcap.org/install/bin/WinPcap_4_1_3.exe" -OutFile "WinPcap_4_1_3.exe" -TimeoutSec 300 -UseBasicParsing
+            Write-Host "Download completed successfully"
+            
+            Write-Host "Installing WinPcap..."
+            # Install with better error handling
+            $process = Start-Process -FilePath "WinPcap_4_1_3.exe" -ArgumentList "/S", "/v/qn" -Wait -PassThru -NoNewWindow
+            if ($process.ExitCode -eq 0) {
+              Write-Host "WinPcap installed successfully"
+            } else {
+              Write-Host "WinPcap installation failed with exit code: $($process.ExitCode)"
+              # Try alternative installation method
+              Write-Host "Trying alternative installation method..."
+              Start-Process -FilePath "WinPcap_4_1_3.exe" -ArgumentList "/SILENT", "/NORESTART" -Wait
+            }
+          } catch {
+            Write-Host "WinPcap installation failed: $($_.Exception.Message)"
+            Write-Host "Trying to install Npcap as alternative..."
+            # Fallback to Npcap
+            try {
+              Invoke-WebRequest -Uri "https://npcap.com/dist/npcap-1.79.exe" -OutFile "npcap-1.79.exe" -UseBasicParsing
+              Start-Process -FilePath "npcap-1.79.exe" -ArgumentList "/S" -Wait
+              Write-Host "Npcap installed successfully as fallback"
+            } catch {
+              Write-Host "Both WinPcap and Npcap installation failed"
+              exit 1
+            }
+          } finally {
+            # Clean up
+            if (Test-Path "WinPcap_4_1_3.exe") { Remove-Item "WinPcap_4_1_3.exe" -Force }
+            if (Test-Path "npcap-1.79.exe") { Remove-Item "npcap-1.79.exe" -Force }
+          }
+        }
         
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -155,7 +220,22 @@ jobs:
     - name: Build for Windows AMD64
       run: |
         $env:CGO_ENABLED = "1"
+        Write-Host "Building for Windows AMD64..."
+        Write-Host "Go version: $(go version)"
+        Write-Host "CGO enabled: $env:CGO_ENABLED"
         go build -ldflags="-s -w" -o 0e7_windows_amd64.exe .
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "Build failed with exit code: $LASTEXITCODE"
+          exit 1
+        }
+        Write-Host "Build completed successfully"
+        Get-ChildItem 0e7_windows_amd64.exe | Format-Table Name, Length, LastWriteTime
+        
+    - name: Verify Windows binary
+      run: |
+        Write-Host "Verifying Windows binary..."
+        Get-ItemProperty 0e7_windows_amd64.exe | Select-Object Name, Length, VersionInfo
+        Write-Host "Binary verification completed"
         
     - name: Create archive
       run: |

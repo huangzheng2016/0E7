@@ -314,7 +314,9 @@ func reassemblyCallback(entry FlowEntry) {
 	err = config.Db.Create(&pcapRecord).Error
 
 	if err != nil {
-		log.Fatalf("Failed to insert pcap record into database: %v", err)
+		log.Printf("Failed to insert pcap record into database: %v", err)
+		// 不退出程序，继续处理其他记录
+		return
 	}
 }
 
@@ -324,8 +326,8 @@ func Setbpf(str string) {
 func SetFlagRegex(flag string) {
 	flag_regex = flag
 }
-func ParsePcapfile(fname string) {
-	handlePcapUri(fname, bpf)
+func ParsePcapfile(fname string, check bool) {
+	handlePcapUri(fname, bpf, check)
 }
 func WatchDir(watch_dir string) {
 	// 确保flow目录存在
@@ -372,7 +374,7 @@ func WatchDir(watch_dir string) {
 
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".pcap") || strings.HasSuffix(file.Name(), ".pcapng") {
-			handlePcapUri(filepath.Join(watch_dir, file.Name()), bpf)
+			handlePcapUri(filepath.Join(watch_dir, file.Name()), bpf, true)
 		}
 	}
 
@@ -393,7 +395,7 @@ func WatchDir(watch_dir string) {
 				if event.Op&(fsnotify.Rename|fsnotify.Create) != 0 {
 					if strings.HasSuffix(event.Name, ".pcap") || strings.HasSuffix(event.Name, ".pcapng") {
 						log.Println("Found new file", event.Name, event.Op.String())
-						handlePcapUri(event.Name, bpf)
+						handlePcapUri(event.Name, bpf, true)
 						time.Sleep(1 * time.Second)
 					}
 				}
@@ -517,8 +519,10 @@ func checkfile(fname string, status bool) bool {
 			}
 			err = config.Db.Create(&pcapFile).Error
 			if err != nil {
-				log.Println("Failed to insert pcap file:", err)
+				log.Printf("Failed to insert pcap file %s: %v", fname, err)
+				return false // 数据库操作失败，返回false
 			}
+			log.Printf("Successfully inserted pcap file record: %s", fname)
 		}
 		return true
 	}
@@ -540,8 +544,10 @@ func checkfile(fname string, status bool) bool {
 				"md5":       fileMD5,
 			}).Error
 			if err != nil {
-				log.Println("Failed to update pcap file info:", err)
+				log.Printf("Failed to update pcap file info for %s: %v", fname, err)
+				return false // 数据库更新失败，返回false
 			}
+			log.Printf("Successfully updated pcap file record: %s", fname)
 		}
 		return true
 	}
@@ -549,7 +555,7 @@ func checkfile(fname string, status bool) bool {
 	// 文件未修改，不需要重新处理
 	return false
 }
-func handlePcapUri(fname string, bpf string) {
+func handlePcapUri(fname string, bpf string, check bool) {
 	var handle *pcap.Handle
 	var err error
 
@@ -566,11 +572,11 @@ func handlePcapUri(fname string, bpf string) {
 		}
 	}
 
-	processPcapHandle(handle, fname)
+	processPcapHandle(handle, fname, check)
 }
 
-func processPcapHandle(handle *pcap.Handle, fname string) {
-	if !checkfile(fname, false) {
+func processPcapHandle(handle *pcap.Handle, fname string, check bool) {
+	if check && !checkfile(fname, false) {
 		return
 	}
 	var source *gopacket.PacketSource
@@ -718,5 +724,7 @@ func processPcapHandle(handle *pcap.Handle, fname string) {
 	log.Printf("  Other packets: %d", otherCount)
 	log.Printf("  Total bytes: %d", bytes)
 
-	checkfile(fname, true)
+	if !checkfile(fname, true) {
+		log.Printf("Failed to update file record for %s", fname)
+	}
 }
