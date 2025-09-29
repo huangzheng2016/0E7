@@ -698,6 +698,7 @@ onMounted(() => {
           <div class="progress-status">{{ uploadStatus }}</div>
           <el-progress 
             :percentage="uploadProgress" 
+            :format="(percentage) => Math.round(percentage) + '%'"
             :status="uploadProgress === 100 ? 'success' : ''"
           />
         </div>
