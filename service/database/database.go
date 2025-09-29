@@ -115,7 +115,7 @@ for item in data:
 		"msg": ""
 	})
 print(json.dumps(result))`),
-				Output:   "{\"type\":\"flag_submiter\",\"num\":20}",
+				Config:   "{\"type\":\"flag_submiter\",\"num\":20}",
 				Interval: 5,
 			},
 			{
