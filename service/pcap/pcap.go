@@ -328,32 +328,38 @@ func ParsePcapfile(fname string) {
 	handlePcapUri(fname, bpf)
 }
 func WatchDir(watch_dir string) {
+	// 确保flow目录存在
 	flowDir := "flow/"
 	if _, err := os.Stat(flowDir); os.IsNotExist(err) {
+		log.Printf("Flow directory %s does not exist, creating...", flowDir)
 		err := os.MkdirAll(flowDir, os.ModePerm)
 		if err != nil {
-			log.Println("Create flow dir failed:", err)
+			log.Printf("Failed to create flow directory %s: %v", flowDir, err)
 			return
 		}
+		log.Printf("Successfully created flow directory: %s", flowDir)
 	}
 
-	stat, err := os.Stat(watch_dir)
-	if err != nil {
-		log.Println("Failed to open the watch_dir with error: ", err)
+	// 确保监控目录存在
+	if _, err := os.Stat(watch_dir); os.IsNotExist(err) {
+		log.Printf("Watch directory %s does not exist, creating...", watch_dir)
 		err := os.MkdirAll(watch_dir, os.ModePerm)
 		if err != nil {
-			log.Println("Create dir failed:", err)
+			log.Printf("Failed to create watch directory %s: %v", watch_dir, err)
 			return
 		}
-		stat, err = os.Stat(watch_dir)
-		if err != nil {
-			log.Println("Stat dir failed:", err)
-			return
-		}
+		log.Printf("Successfully created watch directory: %s", watch_dir)
+	}
+
+	// 验证目录状态
+	stat, err := os.Stat(watch_dir)
+	if err != nil {
+		log.Printf("Failed to stat watch directory %s: %v", watch_dir, err)
+		return
 	}
 
 	if !stat.IsDir() {
-		log.Println("watch_dir is not a directory")
+		log.Printf("Watch path %s is not a directory", watch_dir)
 		return
 	}
 

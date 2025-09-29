@@ -395,7 +395,7 @@ const formatNextRunTime = (nextRun: string, interval: number) => {
                   style="width: 100%"
                 />
                 <div class="form-tip">
-                  -1: 手动执行, 0: 不执行, >0: 间隔秒数（建议最低5秒）
+                  -1: 手动执行, >=0: 间隔秒数（建议最低5秒）
                 </div>
               </el-form-item>
             </el-col>

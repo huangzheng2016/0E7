@@ -124,7 +124,7 @@ print(json.dumps(result))`),
 				Code: CodeToBase64("code/python3",
 					`import json
 team = []
-for i in range(1,254):
+for i in range(1,10):
     team.append({
         "team": f"Team {i}",
         "value": f"192.168.1.{i}"
@@ -132,19 +132,18 @@ for i in range(1,254):
 print(json.dumps(team))`),
 				Interval: 60,
 			},
+			{
+				ID:       3,
+				Name:     "run_exploit_1",
+				Code:     "",
+				Config:   "{\"type\":\"exec_script\",\"num\":1,\"script_id\":1}s",
+				Interval: 60,
+			},
 		}
 		for _, action := range actions {
 			db.Create(&action)
 		}
 	}
-
-	// exploit
-	// import sys
-	//import uuid
-	//ip = "127.0.0.1"
-	//if len(sys.argv) == 2:
-	//    ip = sys.argv[1]
-	//print(f"ip:{ip} \nflag{{{str(uuid.uuid4())}}}")
 	db.Model(&Exploit{}).Count(&count)
 	if count == 0 {
 		exploits := []Exploit{
@@ -161,6 +160,7 @@ print(f"ip:{ip} \nflag{{{str(uuid.uuid4())}}}")`),
 				Timeout:   "15",
 				Times:     "0",
 				Flag:      "flag{.*}",
+				Argv:      "{ipbucket_default}",
 				IsDeleted: false,
 			},
 		}
