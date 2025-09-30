@@ -32,6 +32,7 @@ interface PcapDetail {
 
 const props = defineProps<{
   pcapId: number
+  searchKeyword?: string
 }>()
 
 const emit = defineEmits(['close'])
@@ -612,7 +613,7 @@ const copySelectedBytes = async (flowIndex: number) => {
 
 // HTML语法高亮
 const highlightHTML = (text: string) => {
-  return text
+  let highlighted = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -623,6 +624,41 @@ const highlightHTML = (text: string) => {
     .replace(/(\w+)=&quot;([^&quot;]*)&quot;/g, '<span class="html-attr">$1</span>=<span class="html-value">&quot;$2&quot;</span>')
     .replace(/(\w+)=&apos;([^&apos;]*)&apos;/g, '<span class="html-attr">$1</span>=<span class="html-value">&apos;$2&apos;</span>')
     .replace(/(\w+)=([^&gt;\s]+)/g, '<span class="html-attr">$1</span>=<span class="html-value">$2</span>')
+
+  // 如果有搜索关键字，添加高亮
+  if (props.searchKeyword) {
+    highlighted = highlightSearchKeyword(highlighted, props.searchKeyword)
+  }
+
+  return highlighted
+}
+
+// 高亮搜索关键字
+const highlightSearchKeyword = (text: string, keyword: string) => {
+  if (!keyword) return text
+
+  // 处理正则表达式搜索
+  if (keyword.startsWith('/') && keyword.endsWith('/')) {
+    const pattern = keyword.slice(1, -1)
+    try {
+      const regex = new RegExp(pattern, 'gi')
+      return text.replace(regex, '<mark class="search-highlight">$&</mark>')
+    } catch (error) {
+      console.warn('无效的正则表达式:', pattern)
+      // 如果正则表达式无效，回退到普通文本搜索
+      return highlightText(text, pattern)
+    }
+  }
+
+  // 普通文本搜索
+  return highlightText(text, keyword)
+}
+
+// 高亮文本
+const highlightText = (text: string, keyword: string) => {
+  const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escapedKeyword})`, 'gi')
+  return text.replace(regex, '<mark class="search-highlight">$1</mark>')
 }
 
 onMounted(() => {
@@ -1243,6 +1279,15 @@ onUnmounted(() => {
   background: #fff0f5;
   padding: 2px 4px;
   border-radius: 2px;
+}
+
+/* 搜索高亮样式 */
+.search-highlight {
+  background-color: #ffeb3b;
+  color: #000;
+  padding: 1px 2px;
+  border-radius: 2px;
+  font-weight: bold;
 }
 
 .hex-editor-display {

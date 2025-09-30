@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 // calculateFileMD5 计算文件的MD5值
@@ -141,8 +140,8 @@ func savefile(file *multipart.FileHeader, c *gin.Context) error {
 		return fmt.Errorf("file with same MD5 (%s) already exists: %s", fileMD5, existingFile.Filename)
 	}
 
-	// 生成新的文件名
-	newFilename := strings.TrimSuffix(file.Filename, ext) + "_" + uuid.New().String() + ext
+	// 生成新的文件名 时间Unix时间戳
+	newFilename := strings.TrimSuffix(file.Filename, ext) + "_" + strconv.FormatInt(time.Now().Unix(), 10) + ext
 	filePath := "pcap/" + newFilename
 
 	// 先将文件信息保存到数据库（避免文件监控重复处理）

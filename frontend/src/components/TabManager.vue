@@ -15,6 +15,13 @@ interface Tab {
   // 只保存ID，不保存完整数据
   itemId?: number | string  // action的id、exploit的id或pcap的id
   closable: boolean
+  // 搜索相关状态
+  searchState?: {
+    src_ip?: string
+    dst_ip?: string
+    tags?: string
+    fulltext?: string
+  }
 }
 
 const tabs = ref<Tab[]>([
@@ -163,6 +170,9 @@ const closeTab = (tabId: string) => {
         url.searchParams.delete('action_id')
       } else if (closedTab.type === 'exploit-edit') {
         url.searchParams.delete('exploit_id')
+      } else if (closedTab.type === 'pcap-detail') {
+        url.searchParams.delete('pcap_id')
+        url.searchParams.delete('search')
       }
       window.history.pushState({ path: url.href }, '', url.href)
     }
@@ -183,6 +193,8 @@ const closeAllTabs = () => {
   const url = new URL(window.location.href)
   url.searchParams.delete('action_id')
   url.searchParams.delete('exploit_uuid')
+  url.searchParams.delete('pcap_id')
+  url.searchParams.delete('search')
   window.history.pushState({ path: url.href }, '', url.href)
 }
 
@@ -212,6 +224,7 @@ const updateUrlForActiveTab = () => {
       url.searchParams.delete('exploit_id')
       url.searchParams.delete('name')
       url.searchParams.delete('pcap_id')
+      url.searchParams.delete('search')
       
       // 根据标签页类型设置相应的参数
       if (activeTab.type === 'action-edit') {
@@ -231,6 +244,11 @@ const updateUrlForActiveTab = () => {
         if (activeTab.itemId) {
           url.searchParams.set('pcap_id', activeTab.itemId.toString())
         }
+        if (activeTab.searchState?.fulltext) {
+          url.searchParams.set('search', activeTab.searchState.fulltext)
+        }
+      } else if (activeTab.type === 'pcap-list' && activeTab.searchState?.fulltext) {
+        url.searchParams.set('search', activeTab.searchState.fulltext)
       }
   
   window.history.pushState({ path: url.href }, '', url.href)
@@ -356,7 +374,9 @@ const handlePcapView = (pcap: any) => {
       title: `流量详情 -  ${pcap.id}`,
       type: 'pcap-detail',
       itemId: pcap.id, // 只保存ID，不保存完整数据
-      closable: true
+      closable: true,
+      // 传递搜索关键字
+      searchState: pcap._searchKeyword ? { fulltext: pcap._searchKeyword } : undefined
     })
   }
   
@@ -386,9 +406,15 @@ const handleExploitAdd = () => {
   updateUrlForActiveTab()
 }
 
-// 简化的状态变化处理 - 不再需要保存分页和搜索状态
+// 简化的状态变化处理 - 保存搜索状态
 const handleStateChange = (tabType: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list', state: any) => {
-  // 状态变化时不需要特殊处理，数据会实时从服务器获取
+  // 只保存搜索状态，不保存分页状态
+  if (state.search) {
+    const tab = tabs.value.find(t => t.type === tabType)
+    if (tab) {
+      tab.searchState = state.search
+    }
+  }
 }
 
 // 处理保存成功事件
@@ -467,6 +493,7 @@ const openTabFromUrl = () => {
   const actionId = urlParams.get('action_id')
   const exploitId = urlParams.get('exploit_id')
   const pcapId = urlParams.get('pcap_id')
+  const searchKeyword = urlParams.get('search')
   
   if (actionId) {
     // 检查是否已存在Action编辑标签页
@@ -538,6 +565,9 @@ const openTabFromUrl = () => {
       // 如果存在，更新现有标签页并切换到它
       existingTab.title = `流量详情 -  ${pcapId}`
       existingTab.itemId = parseInt(pcapId)
+      if (searchKeyword) {
+        existingTab.searchState = { fulltext: searchKeyword }
+      }
       activeTabId.value = existingTab.id
     } else {
       // 如果不存在，创建新标签页
@@ -545,8 +575,18 @@ const openTabFromUrl = () => {
         title: `流量详情 -  ${pcapId}`,
         type: 'pcap-detail',
         itemId: parseInt(pcapId),
-        closable: true
+        closable: true,
+        searchState: searchKeyword ? { fulltext: searchKeyword } : undefined
       })
+    }
+  }
+  
+  // 如果有搜索关键字但没有pcap_id，切换到pcap-list并设置搜索状态
+  if (searchKeyword && !pcapId) {
+    const pcapListTab = tabs.value.find(tab => tab.type === 'pcap-list')
+    if (pcapListTab) {
+      pcapListTab.searchState = { fulltext: searchKeyword }
+      activeTabId.value = pcapListTab.id
     }
   }
 }
@@ -640,6 +680,7 @@ onUnmounted(() => {
       
       <div v-else-if="activeTab?.type === 'pcap-list'">
         <PcapList
+          :search-state="activeTab.searchState"
           @view="handlePcapView"
           @state-change="(state) => handleStateChange('pcap-list', state)"
         />
@@ -673,6 +714,7 @@ onUnmounted(() => {
       <div v-else-if="activeTab?.type === 'pcap-detail'">
         <PcapDetail
           :pcap-id="activeTab.itemId as number"
+          :search-keyword="activeTab.searchState?.fulltext"
           @close="closeTab(activeTab.id)"
         />
       </div>

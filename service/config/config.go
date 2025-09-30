@@ -22,23 +22,33 @@ import (
 )
 
 var (
-	Global_timeout_http     int
-	Global_timeout_download int
-	Global_debug            bool
-	Db                      *gorm.DB
-	Server_mode             bool
-	Server_tls              bool
-	Server_port             string
-	Server_url              string
-	Server_flag             string
-	Server_pcap_zip         bool
-	Client_mode             bool
-	Client_name             string
-	Client_id               int
-	Client_pypi             string
-	Client_update           bool
-	Client_worker           int
-	Client_monitor          bool
+	Global_timeout_http           int
+	Global_timeout_download       int
+	Global_debug                  bool
+	Db                            *gorm.DB
+	Server_mode                   bool
+	Server_tls                    bool
+	Server_port                   string
+	Server_url                    string
+	Server_flag                   string
+	Server_pcap_zip               bool
+	Client_mode                   bool
+	Client_name                   string
+	Client_id                     int
+	Client_pypi                   string
+	Client_update                 bool
+	Client_worker                 int
+	Client_monitor                bool
+	Search_engine                 string
+	Search_elasticsearch_url      string
+	Search_elasticsearch_username string
+	Search_elasticsearch_password string
+	Db_engine                     string
+	Db_host                       string
+	Db_port                       string
+	Db_username                   string
+	Db_password                   string
+	Db_tables                     string
 )
 
 func Init_conf() error {
@@ -103,6 +113,24 @@ func Init_conf() error {
 		if err != nil {
 			Server_pcap_zip = true
 		}
+
+		// 读取数据库配置
+		Db_engine = section.Key("db_engine").String()
+		if Db_engine == "" {
+			Db_engine = "sqlite3" // 默认使用sqlite3
+		}
+		Db_host = section.Key("db_host").String()
+		if Db_host == "" {
+			Db_host = "localhost"
+		}
+		Db_port = section.Key("db_port").String()
+		if Db_port == "" {
+			Db_port = "3306"
+		}
+		Db_username = section.Key("db_username").String()
+		Db_password = section.Key("db_password").String()
+		Db_tables = section.Key("db_tables").String()
+
 		Db, err = database.Init_database(section)
 		if err != nil {
 			log.Println("Failed to init database:", err)
@@ -164,6 +192,20 @@ func Init_conf() error {
 			Client_monitor = false
 		}
 	}
+
+	// 读取搜索引擎配置
+	section = cfg.Section("search")
+	Search_engine = section.Key("search_engine").String()
+	if Search_engine == "" {
+		Search_engine = "bleve" // 默认使用bleve
+	}
+	Search_elasticsearch_url = section.Key("search_elasticsearch_url").String()
+	if Search_elasticsearch_url == "" {
+		Search_elasticsearch_url = "http://localhost:9200" // 默认Elasticsearch地址
+	}
+	Search_elasticsearch_username = section.Key("search_elasticsearch_username").String()
+	Search_elasticsearch_password = section.Key("search_elasticsearch_password").String()
+
 	wg.Wait()
 	if Client_mode && Server_url == "" {
 		log.Println("Server not found")

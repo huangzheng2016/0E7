@@ -33,6 +33,7 @@ interface SearchState {
   src_ip?: string
   dst_ip?: string
   tags?: string
+  fulltext?: string
 }
 
 const props = defineProps<{
@@ -73,7 +74,8 @@ const totalItems = ref(0)
 const searchFilters = ref({
   src_ip: '',
   dst_ip: '',
-  tags: ''
+  tags: '',
+  fulltext: ''
 })
 
 // 状态同步
@@ -87,11 +89,12 @@ watch(() => props.paginationState, (newState) => {
 
 watch(() => props.searchState, (newState) => {
   if (newState) {
-    searchFilters.value.src_ip = newState.src_ip || ''
-    searchFilters.value.dst_ip = newState.dst_ip || ''
-    searchFilters.value.tags = newState.tags || ''
+    if (newState.src_ip !== undefined) searchFilters.value.src_ip = newState.src_ip
+    if (newState.dst_ip !== undefined) searchFilters.value.dst_ip = newState.dst_ip
+    if (newState.tags !== undefined) searchFilters.value.tags = newState.tags
+    if (newState.fulltext !== undefined) searchFilters.value.fulltext = newState.fulltext
   }
-}, { immediate: true })
+}, { immediate: true, deep: true })
 
 // 监听状态变化并通知父组件
 watch([currentPage, pageSize, totalItems], () => {
@@ -132,6 +135,12 @@ watch(searchFilters, () => {
 const fetchPcapItems = async () => {
   loading.value = true
   try {
+    // 如果有全文搜索关键字，使用搜索API
+    if (searchFilters.value.fulltext && searchFilters.value.fulltext.trim() !== '') {
+      await fetchSearchResults()
+      return
+    }
+
     const formData = new FormData()
     formData.append('page', currentPage.value.toString())
     formData.append('page_size', pageSize.value.toString())
@@ -168,7 +177,8 @@ const fetchPcapItems = async () => {
         search: {
           src_ip: searchFilters.value.src_ip,
           dst_ip: searchFilters.value.dst_ip,
-          tags: searchFilters.value.tags
+          tags: searchFilters.value.tags,
+          fulltext: searchFilters.value.fulltext
         }
       })
     } else {
@@ -183,6 +193,86 @@ const fetchPcapItems = async () => {
     console.error('获取流量列表失败:', error)
     ElNotification({
       title: '获取失败',
+      message: '网络错误，请稍后重试',
+      type: 'error',
+      position: 'bottom-right'
+    })
+  } finally {
+    loading.value = false
+  }
+}
+
+// 获取搜索结果
+const fetchSearchResults = async () => {
+  try {
+    const formData = new FormData()
+    // 如果查询为空，使用通配符查询所有数据
+    const query = searchFilters.value.fulltext.trim() || '*'
+    formData.append('query', query)
+    formData.append('page', currentPage.value.toString())
+    formData.append('page_size', pageSize.value.toString())
+
+    const response = await fetch('/webui/search_pcap', {
+      method: 'POST',
+      body: formData
+    })
+    
+    const result = await response.json()
+    
+    if (result.message === 'success') {
+      // 将搜索结果转换为PcapItem格式
+      const searchResults = result.result || []
+      pcapItems.value = searchResults.map((item: any) => ({
+        id: item.pcap_id,
+        src_ip: item.src_ip,
+        src_port: item.src_port,
+        dst_ip: item.dst_ip,
+        dst_port: item.dst_port,
+        time: item.timestamp,
+        duration: 0, // 搜索结果中没有duration
+        num_packets: 0, // 搜索结果中没有num_packets
+        blocked: 'false', // 搜索结果中没有blocked
+        filename: '', // 搜索结果中没有filename
+        fingerprints: '', // 搜索结果中没有fingerprints
+        suricata: '', // 搜索结果中没有suricata
+        flow: '', // 搜索结果中没有flow
+        tags: item.tags,
+        size: 0, // 搜索结果中没有size
+        created_at: '', // 搜索结果中没有created_at
+        updated_at: '', // 搜索结果中没有updated_at
+        // 保存搜索相关信息
+        _searchScore: item.score,
+        _searchHighlights: item.highlights,
+        _searchKeyword: searchFilters.value.fulltext
+      }))
+      totalItems.value = result.total || 0
+      
+      // 数据加载完成后触发状态同步
+      emit('state-change', {
+        pagination: {
+          currentPage: currentPage.value,
+          pageSize: pageSize.value,
+          totalItems: totalItems.value
+        },
+        search: {
+          src_ip: searchFilters.value.src_ip,
+          dst_ip: searchFilters.value.dst_ip,
+          tags: searchFilters.value.tags,
+          fulltext: searchFilters.value.fulltext
+        }
+      })
+    } else {
+      ElNotification({
+        title: '搜索失败',
+        message: result.error || '搜索失败',
+        type: 'error',
+        position: 'bottom-right'
+      })
+    }
+  } catch (error) {
+    console.error('搜索失败:', error)
+    ElNotification({
+      title: '搜索失败',
       message: '网络错误，请稍后重试',
       type: 'error',
       position: 'bottom-right'
@@ -208,7 +298,8 @@ const resetSearch = () => {
   searchFilters.value = {
     src_ip: '',
     dst_ip: '',
-    tags: ''
+    tags: '',
+    fulltext: ''
   }
   currentPage.value = 1
   fetchPcapItems()
@@ -523,6 +614,13 @@ onMounted(() => {
     <!-- 搜索和操作栏 -->
     <div class="toolbar">
       <div class="search-section">
+        <el-input
+          v-model="searchFilters.fulltext"
+          placeholder="全文搜索 (支持正则表达式，如: /flag\{.*\}/)"
+          style="width: 300px"
+          @keyup.enter="handleSearch"
+          clearable
+        />
         <el-input
           v-model="searchFilters.src_ip"
           placeholder="源IP"

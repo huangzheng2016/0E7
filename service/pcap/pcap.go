@@ -3,6 +3,7 @@ package pcap
 import (
 	"0E7/service/config"
 	"0E7/service/database"
+	"0E7/service/search"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/base64"
@@ -362,6 +363,15 @@ func reassemblyCallback(entry FlowEntry) {
 		// 不退出程序，继续处理其他记录
 		return
 	}
+
+	// 建立搜索索引
+	go func() {
+		searchService := search.GetSearchService()
+		err := searchService.IndexPcap(pcapRecord)
+		if err != nil {
+			log.Printf("Failed to index pcap record: %v", err)
+		}
+	}()
 }
 
 func Setbpf(str string) {

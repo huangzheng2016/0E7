@@ -24,6 +24,12 @@ func Register(router *gin.Engine) {
 	router.POST("/webui/pcap_get_by_id", pcap_get_by_id)
 	router.POST("/webui/pcap_download", pcap_download)
 
+	// 搜索相关路由
+	router.POST("/webui/search_pcap", search_pcap)
+	router.POST("/webui/search_stats", search_stats)
+	router.POST("/webui/search_engine_info", search_engine_info)
+	router.POST("/webui/switch_search_engine", switch_search_engine)
+
 	// Flag管理相关路由
 	router.POST("/webui/flag_show", GetFlagList)
 	router.POST("/webui/flag/submit", SubmitFlag)

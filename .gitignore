@@ -10,6 +10,7 @@ sqlite.db-wal
 /pcap
 /cert
 /dist
+/bleve
 /exploit
 /upload
 .DS_Store
