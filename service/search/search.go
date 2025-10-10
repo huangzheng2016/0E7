@@ -36,16 +36,23 @@ type FlowEntry struct {
 
 // SearchDocument 搜索文档结构
 type SearchDocument struct {
-	ID        string    `json:"id"`
-	PcapID    int       `json:"pcap_id"`
-	Content   string    `json:"content"`
-	SrcIP     string    `json:"src_ip"`
-	DstIP     string    `json:"dst_ip"`
-	SrcPort   string    `json:"src_port"`
-	DstPort   string    `json:"dst_port"`
-	Tags      string    `json:"tags"`
-	Timestamp int       `json:"timestamp"`
-	CreatedAt time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	PcapID        int       `json:"pcap_id"`
+	Content       string    `json:"content"`        // 所有内容
+	ClientContent string    `json:"client_content"` // 客户端内容
+	ServerContent string    `json:"server_content"` // 服务器内容
+	SrcIP         string    `json:"src_ip"`
+	DstIP         string    `json:"dst_ip"`
+	SrcPort       string    `json:"src_port"`
+	DstPort       string    `json:"dst_port"`
+	Tags          string    `json:"tags"`
+	Timestamp     int       `json:"timestamp"`
+	Duration      int       `json:"duration"`
+	NumPackets    int       `json:"num_packets"`
+	Size          int       `json:"size"`
+	Filename      string    `json:"filename"`
+	Blocked       string    `json:"blocked"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // SearchResult 搜索结果
@@ -59,7 +66,13 @@ type SearchResult struct {
 	DstPort    string              `json:"dst_port"`
 	Tags       string              `json:"tags"`
 	Timestamp  int                 `json:"timestamp"`
+	Duration   int                 `json:"duration"`
+	NumPackets int                 `json:"num_packets"`
+	Size       int                 `json:"size"`
+	Filename   string              `json:"filename"`
+	Blocked    string              `json:"blocked"`
 	Score      float64             `json:"score"`
+	Highlight  string              `json:"highlight,omitempty"`
 	Highlights map[string][]string `json:"highlights,omitempty"`
 }
 
@@ -69,6 +82,15 @@ type SearchEngine string
 const (
 	SearchEngineBleve         SearchEngine = "bleve"
 	SearchEngineElasticsearch SearchEngine = "elasticsearch"
+)
+
+// SearchType 搜索类型
+type SearchType int
+
+const (
+	SearchTypeAll    SearchType = iota // 搜索所有内容
+	SearchTypeClient                   // 只搜索客户端内容
+	SearchTypeServer                   // 只搜索服务器端内容
 )
 
 // SearchService 搜索服务
@@ -173,6 +195,16 @@ func (s *SearchService) createMapping() mapping.IndexMapping {
 	contentFieldMapping.Analyzer = standard.Name
 	documentMapping.AddFieldMappingsAt("content", contentFieldMapping)
 
+	// 客户端内容字段 - 使用标准分析器
+	clientContentFieldMapping := bleve.NewTextFieldMapping()
+	clientContentFieldMapping.Analyzer = standard.Name
+	documentMapping.AddFieldMappingsAt("client_content", clientContentFieldMapping)
+
+	// 服务器端内容字段 - 使用标准分析器
+	serverContentFieldMapping := bleve.NewTextFieldMapping()
+	serverContentFieldMapping.Analyzer = standard.Name
+	documentMapping.AddFieldMappingsAt("server_content", serverContentFieldMapping)
+
 	// IP地址字段 - 使用关键词分析器，精确匹配
 	ipFieldMapping := bleve.NewTextFieldMapping()
 	ipFieldMapping.Analyzer = keyword.Name
@@ -193,6 +225,18 @@ func (s *SearchService) createMapping() mapping.IndexMapping {
 	// 时间戳字段 - 数值类型
 	timestampFieldMapping := bleve.NewNumericFieldMapping()
 	documentMapping.AddFieldMappingsAt("timestamp", timestampFieldMapping)
+
+	// 数值字段 - 数值类型
+	numericFieldMapping := bleve.NewNumericFieldMapping()
+	documentMapping.AddFieldMappingsAt("duration", numericFieldMapping)
+	documentMapping.AddFieldMappingsAt("num_packets", numericFieldMapping)
+	documentMapping.AddFieldMappingsAt("size", numericFieldMapping)
+
+	// 字符串字段 - 使用关键词分析器
+	stringFieldMapping := bleve.NewTextFieldMapping()
+	stringFieldMapping.Analyzer = keyword.Name
+	documentMapping.AddFieldMappingsAt("filename", stringFieldMapping)
+	documentMapping.AddFieldMappingsAt("blocked", stringFieldMapping)
 
 	// 创建索引映射
 	indexMapping := bleve.NewIndexMapping()
@@ -233,30 +277,53 @@ func (s *SearchService) indexPcapBleve(pcapRecord database.Pcap) error {
 		return err
 	}
 
-	// 将所有FlowItem的B64解码后拼接
-	var contentBuilder strings.Builder
+	// 分别处理客户端和服务器端内容
+	var allContentBuilder, clientContentBuilder, serverContentBuilder strings.Builder
+
 	for _, flowItem := range flowData {
 		decoded, err := base64.StdEncoding.DecodeString(flowItem.B64)
 		if err != nil {
 			log.Printf("解码B64数据失败: %v", err)
 			continue
 		}
-		contentBuilder.WriteString(string(decoded))
-		contentBuilder.WriteString(" ") // 添加分隔符
+
+		decodedStr := string(decoded)
+
+		// 添加到总内容
+		allContentBuilder.WriteString(decodedStr)
+		allContentBuilder.WriteString(" ")
+
+		// 根据方向分别添加到客户端或服务器端内容
+		if flowItem.From == "c" {
+			// 客户端到服务器
+			clientContentBuilder.WriteString(decodedStr)
+			clientContentBuilder.WriteString(" ")
+		} else if flowItem.From == "s" {
+			// 服务器到客户端
+			serverContentBuilder.WriteString(decodedStr)
+			serverContentBuilder.WriteString(" ")
+		}
 	}
 
 	// 创建搜索文档
 	doc := SearchDocument{
-		ID:        fmt.Sprintf("pcap_%d", pcapRecord.ID),
-		PcapID:    pcapRecord.ID,
-		Content:   contentBuilder.String(),
-		SrcIP:     pcapRecord.SrcIP,
-		DstIP:     pcapRecord.DstIP,
-		SrcPort:   pcapRecord.SrcPort,
-		DstPort:   pcapRecord.DstPort,
-		Tags:      pcapRecord.Tags,
-		Timestamp: pcapRecord.Time,
-		CreatedAt: pcapRecord.CreatedAt,
+		ID:            fmt.Sprintf("pcap_%d", pcapRecord.ID),
+		PcapID:        pcapRecord.ID,
+		Content:       allContentBuilder.String(),
+		ClientContent: clientContentBuilder.String(),
+		ServerContent: serverContentBuilder.String(),
+		SrcIP:         pcapRecord.SrcIP,
+		DstIP:         pcapRecord.DstIP,
+		SrcPort:       pcapRecord.SrcPort,
+		DstPort:       pcapRecord.DstPort,
+		Tags:          pcapRecord.Tags,
+		Timestamp:     pcapRecord.Time,
+		Duration:      pcapRecord.Duration,
+		NumPackets:    pcapRecord.NumPackets,
+		Size:          pcapRecord.Size,
+		Filename:      pcapRecord.Filename,
+		Blocked:       pcapRecord.Blocked,
+		CreatedAt:     pcapRecord.CreatedAt,
 	}
 
 	// 索引文档
@@ -311,23 +378,39 @@ func (s *SearchService) getFlowData(pcapRecord database.Pcap) ([]FlowItem, error
 }
 
 // Search 执行搜索
-func (s *SearchService) Search(query string, page, pageSize int) ([]SearchResult, int64, error) {
+func (s *SearchService) Search(query string, page, pageSize int, searchType SearchType) ([]SearchResult, int64, error) {
 	switch s.engine {
 	case SearchEngineElasticsearch:
 		if s.esService != nil && s.esService.IsAvailable() {
-			return s.esService.Search(query, page, pageSize)
+			return s.esService.Search(query, page, pageSize, searchType)
 		}
 		// 如果Elasticsearch不可用，回退到Bleve
 		fallthrough
 	case SearchEngineBleve:
 		fallthrough
 	default:
-		return s.searchBleve(query, page, pageSize)
+		return s.searchBleve(query, page, pageSize, searchType)
+	}
+}
+
+// SearchByPcapIDs 在指定的PCAP ID范围内搜索
+func (s *SearchService) SearchByPcapIDs(query string, pcapIDs []int, searchType SearchType) ([]SearchResult, error) {
+	switch s.engine {
+	case SearchEngineElasticsearch:
+		if s.esService != nil && s.esService.IsAvailable() {
+			return s.esService.SearchByPcapIDs(query, pcapIDs, searchType)
+		}
+		// 如果Elasticsearch不可用，回退到Bleve
+		fallthrough
+	case SearchEngineBleve:
+		fallthrough
+	default:
+		return s.searchBleveByPcapIDs(query, pcapIDs, searchType)
 	}
 }
 
 // searchBleve 使用Bleve执行搜索
-func (s *SearchService) searchBleve(query string, page, pageSize int) ([]SearchResult, int64, error) {
+func (s *SearchService) searchBleve(query string, page, pageSize int, searchType SearchType) ([]SearchResult, int64, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -336,14 +419,23 @@ func (s *SearchService) searchBleve(query string, page, pageSize int) ([]SearchR
 	}
 
 	// 构建搜索查询
-	searchQuery := s.buildSearchQuery(query)
+	searchQuery := s.buildSearchQuery(query, searchType)
 
 	// 创建搜索请求
 	searchRequest := bleve.NewSearchRequest(searchQuery)
 	searchRequest.Size = pageSize
 	searchRequest.From = (page - 1) * pageSize
 	searchRequest.Highlight = bleve.NewHighlight()
-	searchRequest.Highlight.AddField("content")
+
+	// 根据搜索类型添加高亮字段
+	switch searchType {
+	case SearchTypeClient:
+		searchRequest.Highlight.AddField("client_content")
+	case SearchTypeServer:
+		searchRequest.Highlight.AddField("server_content")
+	default:
+		searchRequest.Highlight.AddField("content")
+	}
 
 	// 执行搜索
 	searchResult, err := s.index.Search(searchRequest)
@@ -375,6 +467,11 @@ func (s *SearchService) searchBleve(query string, page, pageSize int) ([]SearchR
 			result.DstPort = pcapRecord.DstPort
 			result.Tags = pcapRecord.Tags
 			result.Timestamp = pcapRecord.Time
+			result.Duration = pcapRecord.Duration
+			result.NumPackets = pcapRecord.NumPackets
+			result.Size = pcapRecord.Size
+			result.Filename = pcapRecord.Filename
+			result.Blocked = pcapRecord.Blocked
 		}
 
 		results = append(results, result)
@@ -383,8 +480,32 @@ func (s *SearchService) searchBleve(query string, page, pageSize int) ([]SearchR
 	return results, int64(searchResult.Total), nil
 }
 
+// escapeRegexSpecialChars 转义正则表达式特殊字符，但保留通配符
+func (s *SearchService) escapeRegexSpecialChars(str string) string {
+	// 需要转义的正则表达式特殊字符
+	specialChars := []string{".", "+", "^", "$", "(", ")", "[", "]", "{", "}", "|", "\\"}
+
+	result := str
+	for _, char := range specialChars {
+		result = strings.ReplaceAll(result, char, "\\"+char)
+	}
+
+	return result
+}
+
 // buildSearchQuery 构建搜索查询
-func (s *SearchService) buildSearchQuery(queryStr string) query.Query {
+func (s *SearchService) buildSearchQuery(queryStr string, searchType SearchType) query.Query {
+	// 根据搜索类型选择字段
+	var searchField string
+	switch searchType {
+	case SearchTypeClient:
+		searchField = "client_content"
+	case SearchTypeServer:
+		searchField = "server_content"
+	default:
+		searchField = "content"
+	}
+
 	// 如果查询为空或只有通配符，返回匹配所有文档的查询
 	if queryStr == "" || queryStr == "*" {
 		matchAllQuery := bleve.NewMatchAllQuery()
@@ -396,20 +517,20 @@ func (s *SearchService) buildSearchQuery(queryStr string) query.Query {
 		// 正则表达式查询
 		regexPattern := strings.Trim(queryStr, "/")
 		regexQuery := bleve.NewRegexpQuery(regexPattern)
-		regexQuery.SetField("content")
+		regexQuery.SetField(searchField)
 		return regexQuery
 	}
 
 	// 检查是否包含特殊字符，决定使用短语查询还是匹配查询
 	if strings.Contains(queryStr, " ") {
 		// 包含空格，使用短语查询
-		phraseQuery := bleve.NewPhraseQuery(strings.Fields(queryStr), "content")
+		phraseQuery := bleve.NewPhraseQuery(strings.Fields(queryStr), searchField)
 		return phraseQuery
 	}
 
 	// 单个词，使用匹配查询
 	matchQuery := bleve.NewMatchQuery(queryStr)
-	matchQuery.SetField("content")
+	matchQuery.SetField(searchField)
 	return matchQuery
 }
 
@@ -507,4 +628,65 @@ func (s *SearchService) Close() error {
 		return s.index.Close()
 	}
 	return nil
+}
+
+// searchBleveByPcapIDs 在指定的PCAP ID范围内使用Bleve执行搜索
+func (s *SearchService) searchBleveByPcapIDs(queryStr string, pcapIDs []int, searchType SearchType) ([]SearchResult, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	if s.index == nil {
+		return nil, fmt.Errorf("Bleve搜索索引未初始化")
+	}
+
+	// 构建搜索查询
+	searchQuery := s.buildSearchQuery(queryStr, searchType)
+
+	// 创建ID范围查询
+	var idQueries []query.Query
+	for _, pcapID := range pcapIDs {
+		idQuery := query.NewTermQuery(fmt.Sprintf("%d", pcapID))
+		idQuery.SetField("pcap_id")
+		idQueries = append(idQueries, idQuery)
+	}
+
+	// 组合查询：flag查询 AND (ID1 OR ID2 OR ...)
+	if len(idQueries) > 0 {
+		idOrQuery := query.NewBooleanQuery(idQueries, nil, nil)
+		combinedQuery := query.NewBooleanQuery([]query.Query{searchQuery, idOrQuery}, nil, nil)
+		searchQuery = combinedQuery
+	}
+
+	// 执行搜索
+	searchRequest := bleve.NewSearchRequest(searchQuery)
+	searchRequest.Size = 10000 // 设置足够大的size以获取所有结果
+	searchRequest.Fields = []string{"*"}
+
+	searchResult, err := s.index.Search(searchRequest)
+	if err != nil {
+		return nil, fmt.Errorf("Bleve搜索失败: %v", err)
+	}
+
+	// 转换结果
+	var results []SearchResult
+	for _, hit := range searchResult.Hits {
+		result := SearchResult{
+			PcapID:     hit.Fields["pcap_id"].(int),
+			SrcIP:      hit.Fields["src_ip"].(string),
+			DstIP:      hit.Fields["dst_ip"].(string),
+			SrcPort:    hit.Fields["src_port"].(string),
+			DstPort:    hit.Fields["dst_port"].(string),
+			Tags:       hit.Fields["tags"].(string),
+			Timestamp:  hit.Fields["timestamp"].(int),
+			Duration:   hit.Fields["duration"].(int),
+			NumPackets: hit.Fields["num_packets"].(int),
+			Size:       hit.Fields["size"].(int),
+			Filename:   hit.Fields["filename"].(string),
+			Blocked:    hit.Fields["blocked"].(string),
+			Score:      hit.Score,
+		}
+		results = append(results, result)
+	}
+
+	return results, nil
 }

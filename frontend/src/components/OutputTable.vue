@@ -172,9 +172,9 @@ watch (() => store.state.totalItems, (newVal) => {
             </ElTableColumn>
         </ElTable>
         
-        <!-- 底部控件 -->
+        <!-- 底部控件和分页 -->
         <div class="bottom-controls">
-            <!-- 自动刷新控件（左下角） -->
+            <!-- 自动刷新控件（左侧） -->
             <div class="refresh-control">
                 <el-checkbox v-model="autoRefresh">自动刷新</el-checkbox>
                 <el-button 
@@ -188,37 +188,20 @@ watch (() => store.state.totalItems, (newVal) => {
                 </el-button>
             </div>
             
-            <!-- 分页控件（右下角） -->
+            <!-- 分页控件（右侧） -->
             <div class="pagination-control">
                 <el-pagination
-                v-model:current-page="currentPage"
-                v-model:page-size="pageSize"
-                :page-sizes="[10, 20, 50, 100]"
-                :small="true"
-                :background="true"
-                layout="total, sizes, prev, pager, next"
-                :total="totalItems"
-                :hide-on-single-page="false"
-                @current-change="handlePageChange"
-                @size-change="handleSizeChange"
-            >
-                <template #total="{ total }">
-                    总计 {{ total }} 条
-                </template>
-                <template #sizes="{ sizes }">
-                    <span class="el-pagination__sizes">
-                        <span class="el-pagination__sizes-text">每页</span>
-                        <el-select v-model="pageSize" @change="handleSizeChange" size="small">
-                            <el-option
-                                v-for="size in sizes"
-                                :key="size"
-                                :label="size + ' 条'"
-                                :value="size"
-                            />
-                        </el-select>
-                    </span>
-                </template>
-            </el-pagination>
+                    v-model:current-page="currentPage"
+                    v-model:page-size="pageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :small="true"
+                    :background="true"
+                    layout="total, sizes, prev, pager, next"
+                    :total="totalItems"
+                    :hide-on-single-page="false"
+                    @current-change="handlePageChange"
+                    @size-change="handleSizeChange"
+                />
             </div>
         </div>
     </div>
@@ -235,7 +218,10 @@ watch (() => store.state.totalItems, (newVal) => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 16px;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #e6e8eb;
+    flex-shrink: 0;
 }
 
 .refresh-control {

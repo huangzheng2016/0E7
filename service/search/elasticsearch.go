@@ -171,27 +171,46 @@ func (s *ElasticsearchService) IndexPcap(pcapRecord database.Pcap) error {
 		// 即使获取流量数据失败，也尝试索引其他元数据
 	}
 
-	var contentBuilder strings.Builder
+	// 分别处理客户端和服务器端内容
+	var allContentBuilder, clientContentBuilder, serverContentBuilder strings.Builder
+
 	for _, item := range flowItems {
 		decoded, err := base64.StdEncoding.DecodeString(item.B64)
 		if err != nil {
 			log.Printf("Base64解码失败 (PcapID: %d, FlowItemTime: %d): %v", pcapRecord.ID, item.Time, err)
 			continue
 		}
-		contentBuilder.WriteString(string(decoded))
-		contentBuilder.WriteString("\n")
+
+		decodedStr := string(decoded)
+
+		// 添加到总内容
+		allContentBuilder.WriteString(decodedStr)
+		allContentBuilder.WriteString("\n")
+
+		// 根据方向分别添加到客户端或服务器端内容
+		if item.From == "c" {
+			// 客户端到服务器
+			clientContentBuilder.WriteString(decodedStr)
+			clientContentBuilder.WriteString("\n")
+		} else if item.From == "s" {
+			// 服务器到客户端
+			serverContentBuilder.WriteString(decodedStr)
+			serverContentBuilder.WriteString("\n")
+		}
 	}
 
 	doc := map[string]interface{}{
-		"pcap_id":    pcapRecord.ID,
-		"content":    contentBuilder.String(),
-		"src_ip":     pcapRecord.SrcIP,
-		"dst_ip":     pcapRecord.DstIP,
-		"src_port":   pcapRecord.SrcPort,
-		"dst_port":   pcapRecord.DstPort,
-		"tags":       pcapRecord.Tags,
-		"timestamp":  pcapRecord.Time,
-		"created_at": pcapRecord.CreatedAt,
+		"pcap_id":        pcapRecord.ID,
+		"content":        allContentBuilder.String(),
+		"client_content": clientContentBuilder.String(),
+		"server_content": serverContentBuilder.String(),
+		"src_ip":         pcapRecord.SrcIP,
+		"dst_ip":         pcapRecord.DstIP,
+		"src_port":       pcapRecord.SrcPort,
+		"dst_port":       pcapRecord.DstPort,
+		"tags":           pcapRecord.Tags,
+		"timestamp":      pcapRecord.Time,
+		"created_at":     pcapRecord.CreatedAt,
 	}
 
 	docJSON, err := json.Marshal(doc)
@@ -260,7 +279,7 @@ func (s *ElasticsearchService) getFlowData(pcapRecord database.Pcap) ([]FlowItem
 }
 
 // Search 执行搜索
-func (s *ElasticsearchService) Search(queryStr string, page, pageSize int) ([]SearchResult, int64, error) {
+func (s *ElasticsearchService) Search(queryStr string, page, pageSize int, searchType SearchType) ([]SearchResult, int64, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -269,7 +288,18 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int) ([]Se
 	}
 
 	// 构建搜索查询
-	searchQuery := s.buildSearchQuery(queryStr)
+	searchQuery := s.buildSearchQuery(queryStr, searchType)
+
+	// 根据搜索类型选择高亮字段
+	var highlightField string
+	switch searchType {
+	case SearchTypeClient:
+		highlightField = "client_content"
+	case SearchTypeServer:
+		highlightField = "server_content"
+	default:
+		highlightField = "content"
+	}
 
 	// 构建搜索请求体
 	searchBody := map[string]interface{}{
@@ -278,7 +308,7 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int) ([]Se
 		"size":  pageSize,
 		"highlight": map[string]interface{}{
 			"fields": map[string]interface{}{
-				"content": map[string]interface{}{},
+				highlightField: map[string]interface{}{},
 			},
 		},
 	}
@@ -371,6 +401,11 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int) ([]Se
 			DstPort:    pcapRecord.DstPort,
 			Tags:       pcapRecord.Tags,
 			Timestamp:  pcapRecord.Time,
+			Duration:   pcapRecord.Duration,
+			NumPackets: pcapRecord.NumPackets,
+			Size:       pcapRecord.Size,
+			Filename:   pcapRecord.Filename,
+			Blocked:    pcapRecord.Blocked,
 			Score:      score,
 			Highlights: highlights,
 		}
@@ -381,7 +416,18 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int) ([]Se
 }
 
 // buildSearchQuery 构建搜索查询
-func (s *ElasticsearchService) buildSearchQuery(queryStr string) map[string]interface{} {
+func (s *ElasticsearchService) buildSearchQuery(queryStr string, searchType SearchType) map[string]interface{} {
+	// 根据搜索类型选择字段
+	var searchField string
+	switch searchType {
+	case SearchTypeClient:
+		searchField = "client_content"
+	case SearchTypeServer:
+		searchField = "server_content"
+	default:
+		searchField = "content"
+	}
+
 	// 如果查询为空或只有通配符，返回匹配所有文档的查询
 	if queryStr == "" || queryStr == "*" {
 		return map[string]interface{}{
@@ -395,7 +441,7 @@ func (s *ElasticsearchService) buildSearchQuery(queryStr string) map[string]inte
 		regexPattern := strings.Trim(queryStr, "/")
 		return map[string]interface{}{
 			"regexp": map[string]interface{}{
-				"content": map[string]interface{}{
+				searchField: map[string]interface{}{
 					"value": regexPattern,
 				},
 			},
@@ -407,7 +453,7 @@ func (s *ElasticsearchService) buildSearchQuery(queryStr string) map[string]inte
 		// 包含空格，使用短语查询
 		return map[string]interface{}{
 			"match_phrase": map[string]interface{}{
-				"content": queryStr,
+				searchField: queryStr,
 			},
 		}
 	}
@@ -415,7 +461,7 @@ func (s *ElasticsearchService) buildSearchQuery(queryStr string) map[string]inte
 	// 单个词，使用匹配查询
 	return map[string]interface{}{
 		"match": map[string]interface{}{
-			"content": queryStr,
+			searchField: queryStr,
 		},
 	}
 }
@@ -497,4 +543,122 @@ func (s *ElasticsearchService) IsAvailable() bool {
 	defer res.Body.Close()
 
 	return !res.IsError()
+}
+
+// SearchByPcapIDs 在指定的PCAP ID范围内执行搜索
+func (s *ElasticsearchService) SearchByPcapIDs(queryStr string, pcapIDs []int, searchType SearchType) ([]SearchResult, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	if s.client == nil {
+		return nil, fmt.Errorf("Elasticsearch客户端未初始化")
+	}
+
+	// 构建搜索查询
+	searchQuery := s.buildSearchQuery(queryStr, searchType)
+
+	// 添加ID范围过滤
+	if len(pcapIDs) > 0 {
+		termsQuery := map[string]interface{}{
+			"terms": map[string]interface{}{
+				"pcap_id": pcapIDs,
+			},
+		}
+
+		// 组合查询：flag查询 AND ID范围查询
+		combinedQuery := map[string]interface{}{
+			"bool": map[string]interface{}{
+				"must": []interface{}{
+					searchQuery,
+					termsQuery,
+				},
+			},
+		}
+		searchQuery = combinedQuery
+	}
+
+	// 执行搜索
+	searchRequest := map[string]interface{}{
+		"query": searchQuery,
+		"size":  10000, // 设置足够大的size以获取所有结果
+	}
+
+	// 根据搜索类型选择高亮字段
+	var highlightField string
+	switch searchType {
+	case SearchTypeClient:
+		highlightField = "client_content"
+	case SearchTypeServer:
+		highlightField = "server_content"
+	default:
+		highlightField = "content"
+	}
+
+	searchRequest["highlight"] = map[string]interface{}{
+		"fields": map[string]interface{}{
+			highlightField: map[string]interface{}{},
+		},
+	}
+
+	res, err := s.client.Search(
+		s.client.Search.WithIndex(s.index),
+		s.client.Search.WithBody(strings.NewReader(toJSON(searchRequest))),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Elasticsearch搜索失败: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return nil, fmt.Errorf("Elasticsearch搜索错误: %s", res.String())
+	}
+
+	var searchResponse map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&searchResponse); err != nil {
+		return nil, fmt.Errorf("解析搜索结果失败: %v", err)
+	}
+
+	// 转换结果
+	var results []SearchResult
+	if hits, ok := searchResponse["hits"].(map[string]interface{}); ok {
+		if hitsList, ok := hits["hits"].([]interface{}); ok {
+			for _, hit := range hitsList {
+				if hitMap, ok := hit.(map[string]interface{}); ok {
+					if source, ok := hitMap["_source"].(map[string]interface{}); ok {
+						result := SearchResult{
+							PcapID:     int(source["pcap_id"].(float64)),
+							SrcIP:      source["src_ip"].(string),
+							DstIP:      source["dst_ip"].(string),
+							SrcPort:    source["src_port"].(string),
+							DstPort:    source["dst_port"].(string),
+							Tags:       source["tags"].(string),
+							Timestamp:  int(source["timestamp"].(float64)),
+							Duration:   int(source["duration"].(float64)),
+							NumPackets: int(source["num_packets"].(float64)),
+							Size:       int(source["size"].(float64)),
+							Filename:   source["filename"].(string),
+							Blocked:    source["blocked"].(string),
+						}
+
+						// 添加高亮信息
+						if highlight, ok := hitMap["highlight"].(map[string]interface{}); ok {
+							if highlightContent, ok := highlight[highlightField].([]interface{}); ok && len(highlightContent) > 0 {
+								result.Highlight = highlightContent[0].(string)
+							}
+						}
+
+						results = append(results, result)
+					}
+				}
+			}
+		}
+	}
+
+	return results, nil
+}
+
+// toJSON 将对象转换为JSON字符串
+func toJSON(v interface{}) string {
+	b, _ := json.Marshal(v)
+	return string(b)
 }

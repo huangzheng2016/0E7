@@ -3,315 +3,311 @@ package webui
 import (
 	"0E7/service/config"
 	"0E7/service/database"
-	"net/http"
+	"0E7/service/flag"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gopkg.in/ini.v1"
 )
 
-// 获取flag列表
+// GetFlagList 获取flag列表
 func GetFlagList(c *gin.Context) {
-	// 获取查询参数
-	page, _ := strconv.Atoi(c.DefaultPostForm("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultPostForm("page_size", "20"))
+	// 获取分页参数
+	pageStr := c.PostForm("page")
+	pageSizeStr := c.PostForm("page_size")
+
+	page := 1
+	pageSize := 20
+
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	if pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 100 {
+			pageSize = ps
+		}
+	}
+
+	// 获取搜索条件
 	flag := c.PostForm("flag")
 	team := c.PostForm("team")
 	status := c.PostForm("status")
-	exploitId := c.PostForm("exploit_id")
+	exploitIdStr := c.PostForm("exploit_id")
 
-	// 构建查询条件 - 使用JOIN获取exploit_name
-	query := config.Db.Table("`0e7_flag` f").
-		Select("f.*, e.name as exploit_name").
-		Joins("LEFT JOIN `0e7_exploit` e ON f.exploit_id = e.id")
+	// 构建查询条件
+	query := config.Db.Model(&database.Flag{})
 
-	// 添加搜索条件
 	if flag != "" {
-		query = query.Where("f.flag LIKE ?", "%"+flag+"%")
+		query = query.Where("flag LIKE ?", "%"+flag+"%")
 	}
 	if team != "" {
-		query = query.Where("f.team LIKE ?", "%"+team+"%")
+		query = query.Where("team LIKE ?", "%"+team+"%")
 	}
 	if status != "" {
-		query = query.Where("f.status = ?", status)
+		query = query.Where("status = ?", status)
 	}
-	if exploitId != "" {
-		query = query.Where("f.exploit_id = ?", exploitId)
+	if exploitIdStr != "" {
+		if exploitId, err := strconv.Atoi(exploitIdStr); err == nil {
+			query = query.Where("exploit_id = ?", exploitId)
+		}
 	}
 
 	// 获取总数
 	var total int64
 	err := query.Count(&total).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(500, gin.H{
 			"message": "fail",
 			"error":   "获取flag总数失败: " + err.Error(),
 		})
 		return
 	}
 
-	// 分页查询
-	type FlagWithExploitName struct {
-		database.Flag
-		ExploitName *string `json:"exploit_name" gorm:"column:exploit_name"`
+	// 获取分页数据
+	var flags []database.Flag
+
+	// 确保分页参数正确
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if page <= 0 {
+		page = 1
 	}
 
-	var flags []FlagWithExploitName
+	// 计算offset
 	offset := (page - 1) * pageSize
-	err = query.Order("f.created_at DESC").Offset(offset).Limit(pageSize).Find(&flags).Error
+
+	// 执行查询
+	err = query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&flags).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(500, gin.H{
 			"message": "fail",
 			"error":   "获取flag列表失败: " + err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	// 获取exploit名称
+	for i := range flags {
+		if flags[i].ExploitId > 0 {
+			var exploit database.Exploit
+			if err := config.Db.Where("id = ?", flags[i].ExploitId).First(&exploit).Error; err == nil {
+				flags[i].ExploitName = exploit.Name
+			}
+		}
+	}
+
+	c.JSON(200, gin.H{
 		"message": "success",
 		"result": gin.H{
-			"flags":     flags,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
+			"flags": flags,
+			"total": total,
 		},
 	})
 }
 
-// 手动提交flag
+// SubmitFlag 提交flag
 func SubmitFlag(c *gin.Context) {
-	flagText := strings.TrimSpace(c.PostForm("flag"))
-	team := strings.TrimSpace(c.PostForm("team"))
-	flagRegex := strings.TrimSpace(c.PostForm("flag_regex"))
+	flagValue := c.PostForm("flag")
+	team := c.PostForm("team")
+	_ = c.PostForm("flag_regex") // 暂时不使用，但保留参数
 
-	if flagText == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
+	if flagValue == "" {
+		c.JSON(400, gin.H{
 			"message": "fail",
 			"error":   "flag不能为空",
 		})
 		return
 	}
 
-	// 如果没有提供team，使用默认值
-	if team == "" {
-		team = "manual"
-	}
-
-	// 如果没有提供flag正则，使用服务器默认的
-	if flagRegex == "" {
-		flagRegex = config.Server_flag
-	}
-
-	// 解析flag文本，支持多个flag（每行一个或逗号分隔）
+	// 解析flag（支持多种格式）
 	var flags []string
-
-	// 首先按行分割
-	lines := strings.Split(flagText, "\n")
+	lines := strings.Split(flagValue, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-
-		// 检查是否包含逗号，如果包含则按逗号分割
-		if strings.Contains(line, ",") {
-			commaFlags := strings.Split(line, ",")
-			for _, flag := range commaFlags {
-				flag = strings.TrimSpace(flag)
-				if flag != "" {
-					flags = append(flags, flag)
-				}
+		// 支持逗号分隔
+		parts := strings.Split(line, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				flags = append(flags, part)
 			}
-		} else {
-			// 不包含逗号，直接作为单个flag
-			flags = append(flags, line)
 		}
 	}
 
-	// 限制最多999条
+	// 限制数量
 	if len(flags) > 999 {
-		c.JSON(http.StatusBadRequest, gin.H{
+		flags = flags[:999]
+	}
+
+	if len(flags) == 0 {
+		c.JSON(400, gin.H{
 			"message": "fail",
-			"error":   "最多只能提交999个flag",
+			"error":   "没有有效的flag",
 		})
 		return
 	}
 
-	var results []gin.H
-	var successCount, skippedCount int
+	// 统计结果
+	var total, success, skipped, error int
 
+	// 批量处理flag
 	for _, flag := range flags {
-		// 检查flag是否已存在
+		total++
+
+		// 检查是否已存在
 		var count int64
 		err := config.Db.Model(&database.Flag{}).Where("flag = ?", flag).Count(&count).Error
 		if err != nil {
-			results = append(results, gin.H{
-				"flag":   flag,
-				"status": "ERROR",
-				"msg":    "检查flag失败: " + err.Error(),
-			})
+			error++
 			continue
 		}
 
 		// 创建flag记录
 		flagRecord := database.Flag{
-			ExploitId: 0, // 手动提交的flag，exploit_id设为0
-			Flag:      flag,
-			Status:    "QUEUE",
-			Team:      team,
-			Msg:       "",
+			Flag:   flag,
+			Team:   team,
+			Status: "QUEUE",
 		}
 
-		if count == 0 {
-			// flag不存在，状态设为QUEUE
-			flagRecord.Status = "QUEUE"
-			successCount++
-		} else {
-			// flag已存在，状态设为SKIPPED
+		if count > 0 {
 			flagRecord.Status = "SKIPPED"
-			flagRecord.Msg = "Flag已存在"
-			skippedCount++
+			skipped++
+		} else {
+			success++
 		}
 
 		err = config.Db.Create(&flagRecord).Error
 		if err != nil {
-			results = append(results, gin.H{
-				"flag":   flag,
-				"status": "ERROR",
-				"msg":    "创建flag记录失败: " + err.Error(),
-			})
-		} else {
-			results = append(results, gin.H{
-				"id":     flagRecord.ID,
-				"flag":   flagRecord.Flag,
-				"status": flagRecord.Status,
-				"msg":    flagRecord.Msg,
-			})
+			error++
+			success--
+			continue
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(200, gin.H{
 		"message": "success",
 		"result": gin.H{
-			"total":   len(flags),
-			"success": successCount,
-			"skipped": skippedCount,
-			"error":   len(flags) - successCount - skippedCount,
-			"details": results,
+			"total":   total,
+			"success": success,
+			"skipped": skipped,
+			"error":   error,
 		},
 	})
 }
 
-// 删除flag
+// DeleteFlag 删除flag
 func DeleteFlag(c *gin.Context) {
 	idStr := c.PostForm("id")
+	if idStr == "" {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "id不能为空",
+		})
+		return
+	}
+
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(400, gin.H{
 			"message": "fail",
-			"error":   "无效的flag ID",
+			"error":   "无效的id",
 		})
 		return
 	}
 
-	// 查找flag
-	var flag database.Flag
-	err = config.Db.First(&flag, id).Error
+	err = config.Db.Delete(&database.Flag{}, id).Error
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"message": "fail",
-			"error":   "flag不存在",
-		})
-		return
-	}
-
-	// 删除flag
-	err = config.Db.Delete(&flag).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(500, gin.H{
 			"message": "fail",
 			"error":   "删除flag失败: " + err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(200, gin.H{
 		"message": "success",
-		"result": gin.H{
-			"id": flag.ID,
-		},
+		"result":  "flag删除成功",
 	})
 }
 
-// 获取flag统计信息
-func GetFlagStats(c *gin.Context) {
-	var stats struct {
-		Total   int64 `json:"total"`
-		Queue   int64 `json:"queue"`
-		Success int64 `json:"success"`
-		Failed  int64 `json:"failed"`
-		Skipped int64 `json:"skipped"`
-	}
-
-	// 获取各种状态的统计
-	config.Db.Model(&database.Flag{}).Count(&stats.Total)
-	config.Db.Model(&database.Flag{}).Where("status = ?", "QUEUE").Count(&stats.Queue)
-	config.Db.Model(&database.Flag{}).Where("status = ?", "SUCCESS").Count(&stats.Success)
-	config.Db.Model(&database.Flag{}).Where("status = ?", "FAILED").Count(&stats.Failed)
-	config.Db.Model(&database.Flag{}).Where("status = ?", "SKIPPED").Count(&stats.Skipped)
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
-		"result":  stats,
-	})
-}
-
-// 批量更新flag状态
-func BatchUpdateFlagStatus(c *gin.Context) {
-	var request struct {
-		IDs    []int  `json:"ids" binding:"required"`
-		Status string `json:"status" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+// UpdateFlagConfig 更新flag配置
+func UpdateFlagConfig(c *gin.Context) {
+	newPattern := c.PostForm("pattern")
+	if newPattern == "" {
+		c.JSON(400, gin.H{
 			"message": "fail",
-			"error":   "请求参数错误: " + err.Error(),
+			"error":   "flag模式不能为空",
 		})
 		return
 	}
 
-	// 验证状态值
-	validStatuses := []string{"QUEUE", "SUCCESS", "FAILED", "SKIPPED"}
-	validStatus := false
-	for _, status := range validStatuses {
-		if request.Status == status {
-			validStatus = true
-			break
-		}
-	}
-	if !validStatus {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "fail",
-			"error":   "无效的状态值",
+	// 检查模式是否发生变化
+	if config.Server_flag == newPattern {
+		c.JSON(200, gin.H{
+			"message": "success",
+			"result":  "flag配置未发生变化",
 		})
 		return
 	}
 
-	// 批量更新
-	err := config.Db.Model(&database.Flag{}).Where("id IN ?", request.IDs).Update("status", request.Status).Error
+	// 更新config.ini文件
+	err := updateFlagConfigInFile(newPattern)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(500, gin.H{
 			"message": "fail",
-			"error":   "批量更新失败: " + err.Error(),
+			"error":   "更新flag配置失败: " + err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	// 更新内存中的配置
+	config.Server_flag = newPattern
+
+	// 触发重新索引
+	flagDetector := flag.GetFlagDetector()
+	flagDetector.TriggerReindex()
+
+	c.JSON(200, gin.H{
+		"message": "success",
+		"result":  "flag配置更新成功，正在重新索引历史数据",
+	})
+}
+
+// updateFlagConfigInFile 更新config.ini文件中的flag配置
+func updateFlagConfigInFile(newPattern string) error {
+	cfg, err := ini.Load("config.ini")
+	if err != nil {
+		return fmt.Errorf("failed to load config.ini: %v", err)
+	}
+
+	// 更新server section中的flag值
+	serverSection := cfg.Section("server")
+	serverSection.Key("flag").SetValue(newPattern)
+
+	// 保存文件
+	err = cfg.SaveTo("config.ini")
+	if err != nil {
+		return fmt.Errorf("failed to save config.ini: %v", err)
+	}
+
+	return nil
+}
+
+// GetCurrentFlagConfig 获取当前flag配置
+func GetCurrentFlagConfig(c *gin.Context) {
+	c.JSON(200, gin.H{
 		"message": "success",
 		"result": gin.H{
-			"updated_count": len(request.IDs),
+			"current_pattern": config.Server_flag,
 		},
 	})
 }

@@ -210,8 +210,21 @@ func (t *tcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 		return false
 	}
 
-	time = t.FlowItems[0].Time
-	duration = t.FlowItems[len(t.FlowItems)-1].Time - time
+	// 找到最小和最大时间戳来计算准确的持续时间
+	minTime := t.FlowItems[0].Time
+	maxTime := t.FlowItems[0].Time
+
+	for _, item := range t.FlowItems {
+		if item.Time < minTime {
+			minTime = item.Time
+		}
+		if item.Time > maxTime {
+			maxTime = item.Time
+		}
+	}
+
+	time = minTime
+	duration = maxTime - minTime
 
 	entry := FlowEntry{
 		SrcPort:         int(t.src_port),
@@ -222,7 +235,6 @@ func (t *tcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 		Duration:        duration,
 		NumPackets:      t.num_packets,
 		Blocked:         false,
-		Tags:            make([]string, 0),
 		Suricata:        make([]int, 0),
 		Filename:        t.source,
 		Flow:            t.FlowItems,

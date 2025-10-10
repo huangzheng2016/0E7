@@ -32,8 +32,10 @@ func Register(router *gin.Engine) {
 
 	// Flag管理相关路由
 	router.POST("/webui/flag_show", GetFlagList)
-	router.POST("/webui/flag/submit", SubmitFlag)
+	router.POST("/webui/flag_submit", SubmitFlag)
 	router.POST("/webui/flag_delete", DeleteFlag)
-	router.POST("/webui/flag/stats", GetFlagStats)
-	router.POST("/webui/flag/batch_update", BatchUpdateFlagStatus)
+
+	// Flag检测和配置相关路由
+	router.POST("/webui/flag_config", GetCurrentFlagConfig)
+	router.POST("/webui/flag_config_update", UpdateFlagConfig)
 }

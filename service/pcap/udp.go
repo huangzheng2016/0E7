@@ -173,9 +173,21 @@ func (s *udpStream) finalize() {
 		return
 	}
 
-	// 计算流的时间信息
-	time := s.FlowItems[0].Time
-	duration := s.FlowItems[len(s.FlowItems)-1].Time - time
+	// 找到最小和最大时间戳来计算准确的持续时间
+	minTime := s.FlowItems[0].Time
+	maxTime := s.FlowItems[0].Time
+
+	for _, item := range s.FlowItems {
+		if item.Time < minTime {
+			minTime = item.Time
+		}
+		if item.Time > maxTime {
+			maxTime = item.Time
+		}
+	}
+
+	time := minTime
+	duration := maxTime - minTime
 
 	// 获取网络端点信息
 	src, dst := s.net.Endpoints()
@@ -190,7 +202,6 @@ func (s *udpStream) finalize() {
 		Duration:        duration,
 		NumPackets:      s.num_packets,
 		Blocked:         false,
-		Tags:            make([]string, 0),
 		Suricata:        make([]int, 0),
 		Filename:        s.source,
 		Flow:            s.FlowItems,

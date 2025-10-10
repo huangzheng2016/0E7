@@ -3,6 +3,7 @@ package main
 import (
 	"0E7/service/client"
 	"0E7/service/config"
+	"0E7/service/flag"
 	"0E7/service/pcap"
 	"0E7/service/route"
 	"0E7/service/server"
@@ -74,6 +75,10 @@ func main() {
 		webui.Register(r_server)
 		update.Register(r_server)
 		server.Register(r_server)
+
+		// 启动flag检测器
+		_ = flag.GetFlagDetector()
+		log.Println("Flag检测器已启动")
 
 		fp, _ := fs.Sub(f, "dist")
 		r_server.StaticFS("/", http.FS(fp))

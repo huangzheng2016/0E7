@@ -699,6 +699,7 @@ onUnmounted(() => {
           :is-editing="!!activeTab.itemId"
           :standalone="true"
           @save-success="handleSaveSuccess"
+          @close="closeTab(activeTab.id)"
         />
       </div>
       
@@ -708,6 +709,7 @@ onUnmounted(() => {
           :is-editing="!!activeTab.itemId"
           :standalone="true"
           @save-success="handleSaveSuccess"
+          @close="closeTab(activeTab.id)"
         />
       </div>
       

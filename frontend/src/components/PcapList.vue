@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { ElNotification, ElMessageBox, ElUpload, ElProgress } from 'element-plus'
-import { Upload, UploadFilled } from '@element-plus/icons-vue'
+import { Upload, UploadFilled, Flag } from '@element-plus/icons-vue'
 
 interface PcapItem {
   id: number
@@ -78,6 +78,16 @@ const searchFilters = ref({
   fulltext: ''
 })
 
+// 搜索类型：0=全部，1=客户端，2=服务器端
+const searchType = ref(0)
+
+// 搜索模式：keyword=关键词搜索，string=字符串匹配
+const searchMode = ref('keyword')
+
+// Flag按钮状态
+const flagInActive = ref(false)
+const flagOutActive = ref(false)
+
 // 状态同步
 watch(() => props.paginationState, (newState) => {
   if (newState) {
@@ -135,8 +145,8 @@ watch(searchFilters, () => {
 const fetchPcapItems = async () => {
   loading.value = true
   try {
-    // 如果有全文搜索关键字，使用搜索API
-    if (searchFilters.value.fulltext && searchFilters.value.fulltext.trim() !== '') {
+    // 如果有全文搜索关键字、设置了搜索类型（IN/OUT）或者Flag按钮激活，使用搜索API
+    if ((searchFilters.value.fulltext && searchFilters.value.fulltext.trim() !== '') || searchType.value > 0 || flagInActive.value || flagOutActive.value) {
       await fetchSearchResults()
       return
     }
@@ -206,11 +216,32 @@ const fetchPcapItems = async () => {
 const fetchSearchResults = async () => {
   try {
     const formData = new FormData()
-    // 如果查询为空，使用通配符查询所有数据
-    const query = searchFilters.value.fulltext.trim() || '*'
+    
+    // 构建查询条件
+    let query = searchFilters.value.fulltext.trim() || '*'
+    
+    // 如果Flag按钮激活，构建标签查询
+    if (flagInActive.value || flagOutActive.value) {
+      const flagTags = []
+      if (flagInActive.value) flagTags.push('FLAG-IN')
+      if (flagOutActive.value) flagTags.push('FLAG-OUT')
+      
+      if (flagTags.length > 0) {
+        // 如果同时激活两个按钮，查询同时包含两个标签的记录
+        if (flagTags.length === 2) {
+          query = `tags:FLAG-IN AND tags:FLAG-OUT ${query !== '*' ? 'AND ' + query : ''}`
+        } else {
+          // 只激活一个按钮，查询包含该标签的记录，并加上关键词搜索
+          query = `tags:${flagTags[0]} ${query !== '*' ? 'AND ' + query : ''}`
+        }
+      }
+    }
+    
     formData.append('query', query)
     formData.append('page', currentPage.value.toString())
     formData.append('page_size', pageSize.value.toString())
+    formData.append('search_type', '0') // 固定搜索全部内容
+    formData.append('search_mode', searchMode.value)
 
     const response = await fetch('/webui/search_pcap', {
       method: 'POST',
@@ -289,6 +320,32 @@ const viewPcap = (pcapItem: PcapItem) => {
 
 // 搜索
 const handleSearch = () => {
+  searchType.value = 0 // 搜索所有内容
+  currentPage.value = 1
+  fetchPcapItems()
+}
+
+// FlagIn按钮切换
+const handleFlagInToggle = () => {
+  flagInActive.value = !flagInActive.value
+  console.log('FlagIn按钮切换:', flagInActive.value)
+  updateFlagSearch()
+}
+
+// FlagOut按钮切换
+const handleFlagOutToggle = () => {
+  flagOutActive.value = !flagOutActive.value
+  console.log('FlagOut按钮切换:', flagOutActive.value)
+  updateFlagSearch()
+}
+
+// 更新Flag搜索状态
+const updateFlagSearch = () => {
+  // 清除其他搜索条件
+  searchFilters.value.tags = ''
+  searchFilters.value.fulltext = ''
+  searchType.value = 0
+  
   currentPage.value = 1
   fetchPcapItems()
 }
@@ -301,6 +358,9 @@ const resetSearch = () => {
     tags: '',
     fulltext: ''
   }
+  searchType.value = 0 // 重置搜索类型
+  flagInActive.value = false // 重置Flag按钮状态
+  flagOutActive.value = false
   currentPage.value = 1
   fetchPcapItems()
 }
@@ -624,25 +684,47 @@ onMounted(() => {
         <el-input
           v-model="searchFilters.src_ip"
           placeholder="源IP"
-          style="width: 150px"
+          style="width: 120px"
           @keyup.enter="handleSearch"
         />
         <el-input
           v-model="searchFilters.dst_ip"
           placeholder="目标IP"
-          style="width: 150px"
+          style="width: 120px"
           @keyup.enter="handleSearch"
         />
         <el-input
           v-model="searchFilters.tags"
           placeholder="标签"
-          style="width: 150px"
+          style="width: 120px"
           @keyup.enter="handleSearch"
         />
+        <el-select v-model="searchMode" placeholder="搜索模式" style="width: 120px; margin-right: 10px;">
+          <el-option label="关键词搜索" value="keyword"></el-option>
+          <el-option label="字符串匹配" value="string"></el-option>
+        </el-select>
         <el-button @click="handleSearch">
           <el-icon><Search /></el-icon>
           搜索
         </el-button>
+        <div class="flag-buttons">
+          <el-button 
+            @click="handleFlagInToggle" 
+            :type="flagInActive ? 'primary' : 'default'"
+            :class="{ 'is-active': flagInActive }"
+          >
+            <el-icon><Flag /></el-icon>
+            IN
+          </el-button>
+          <el-button 
+            @click="handleFlagOutToggle" 
+            :type="flagOutActive ? 'primary' : 'default'"
+            :class="{ 'is-active': flagOutActive }"
+          >
+            <el-icon><Flag /></el-icon>
+            OUT
+          </el-button>
+        </div>
         <el-button @click="resetSearch">
           <el-icon><Refresh /></el-icon>
           重置
@@ -667,9 +749,9 @@ onMounted(() => {
         row-class-name="pcap-row"
       >
       <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column label="流量方向" min-width="200" show-overflow-tooltip>
+      <el-table-column label="流量方向" min-width="300" show-overflow-tooltip>
         <template #default="{ row }">
-          <div class="flow-direction">
+          <div class="flow-direction" :title="`流量方向: ${row.src_ip}:${row.src_port} -> ${row.dst_ip}:${row.dst_port}`">
             <span 
               class="ip-port clickable" 
               @click.stop="copyToClipboard(`${row.src_ip}:${row.src_port}`, '源地址')"
@@ -874,6 +956,12 @@ onMounted(() => {
   gap: 10px;
 }
 
+.flag-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
 .table-container {
   flex: 1;
   overflow: hidden;
@@ -912,6 +1000,30 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   font-family: 'Courier New', monospace;
+  min-width: 280px;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 4px 0;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.flow-direction::-webkit-scrollbar {
+  height: 4px;
+}
+
+.flow-direction::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 2px;
+}
+
+.flow-direction::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.flow-direction::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .ip-port {
@@ -1037,5 +1149,12 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* Flag按钮激活状态样式 */
+.is-active {
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2) !important;
+  transform: scale(1.05);
+  transition: all 0.2s ease;
 }
 </style>

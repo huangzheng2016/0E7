@@ -51,14 +51,15 @@ func (Exploit) TableName() string {
 
 // Flag 标志表
 type Flag struct {
-	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	ExploitId int       `json:"exploit_id" gorm:"column:exploit_id;type:int;not null;default:0;index;"`
-	Team      string    `json:"team" gorm:"column:team;type:varchar(255);not null;default:'';index;"`
-	Flag      string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;default:'';index;"`
-	Status    string    `json:"status" gorm:"column:status;type:varchar(255);index;"`
-	Msg       string    `json:"msg" gorm:"column:msg;type:text;"` // 提交结果消息
-	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
-	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	ID          int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	ExploitId   int       `json:"exploit_id" gorm:"column:exploit_id;type:int;not null;default:0;index;"`
+	Team        string    `json:"team" gorm:"column:team;type:varchar(255);not null;default:'';index;"`
+	Flag        string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;default:'';index;"`
+	Status      string    `json:"status" gorm:"column:status;type:varchar(255);index;"`
+	Msg         string    `json:"msg" gorm:"column:msg;type:text;"` // 提交结果消息
+	ExploitName string    `json:"exploit_name" gorm:"-"`            // 不存储到数据库，仅用于显示
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (Flag) TableName() string {
@@ -134,24 +135,26 @@ func (Monitor) TableName() string {
 
 // Pcap PCAP数据表
 type Pcap struct {
-	ID           int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	SrcPort      string    `json:"src_port" gorm:"column:src_port;type:varchar(255);"`
-	DstPort      string    `json:"dst_port" gorm:"column:dst_port;type:varchar(255);"`
-	SrcIP        string    `json:"src_ip" gorm:"column:src_ip;type:varchar(255);index;"`
-	DstIP        string    `json:"dst_ip" gorm:"column:dst_ip;type:varchar(255);index;"`
-	Time         int       `json:"time" gorm:"column:time;type:int;index;"`
-	Duration     int       `json:"duration" gorm:"column:duration;type:int;"`
-	NumPackets   int       `json:"num_packets" gorm:"column:num_packets;type:int;"`
-	Blocked      string    `json:"blocked" gorm:"column:blocked;type:varchar(255);index;"`
-	Filename     string    `json:"filename" gorm:"column:filename;type:varchar(255);index;"`
-	Fingerprints string    `json:"fingerprints" gorm:"column:fingerprints;type:text;"`
-	Suricata     string    `json:"suricata" gorm:"column:suricata;type:text;"`
-	FlowFile     string    `json:"flow_file" gorm:"column:flow_file;type:text;"`
-	PcapFile     string    `json:"pcap_file" gorm:"column:pcap_file;type:varchar(255);"`
-	Tags         string    `json:"tags" gorm:"column:tags;type:text;index;"`
-	Size         int       `json:"size" gorm:"column:size;type:int;"`
-	CreatedAt    time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
-	UpdatedAt    time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	ID            int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
+	SrcPort       string    `json:"src_port" gorm:"column:src_port;type:varchar(255);"`
+	DstPort       string    `json:"dst_port" gorm:"column:dst_port;type:varchar(255);"`
+	SrcIP         string    `json:"src_ip" gorm:"column:src_ip;type:varchar(255);index;"`
+	DstIP         string    `json:"dst_ip" gorm:"column:dst_ip;type:varchar(255);index;"`
+	Time          int       `json:"time" gorm:"column:time;type:int;index;"`
+	Duration      int       `json:"duration" gorm:"column:duration;type:int;"`
+	NumPackets    int       `json:"num_packets" gorm:"column:num_packets;type:int;"`
+	Blocked       string    `json:"blocked" gorm:"column:blocked;type:varchar(255);index;"`
+	Filename      string    `json:"filename" gorm:"column:filename;type:varchar(255);index;"`
+	Fingerprints  string    `json:"fingerprints" gorm:"column:fingerprints;type:text;"`
+	Suricata      string    `json:"suricata" gorm:"column:suricata;type:text;"`
+	FlowFile      string    `json:"flow_file" gorm:"column:flow_file;type:text;"`
+	PcapFile      string    `json:"pcap_file" gorm:"column:pcap_file;type:varchar(255);"`
+	Tags          string    `json:"tags" gorm:"column:tags;type:text;index;"`
+	ClientContent string    `json:"client_content" gorm:"column:client_content;type:text;"`
+	ServerContent string    `json:"server_content" gorm:"column:server_content;type:text;"`
+	Size          int       `json:"size" gorm:"column:size;type:int;"`
+	CreatedAt     time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
+	UpdatedAt     time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (Pcap) TableName() string {

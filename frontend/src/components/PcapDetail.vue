@@ -768,22 +768,20 @@ onUnmounted(() => {
             <label>时间:</label>
             <span>{{ formatTimestamp(pcapDetail.time) }}</span>
           </div>
-        </div>
-      </div>
-
-      <!-- 标签信息 -->
-      <div class="tags-section" v-if="parseTags(pcapDetail.tags).length > 0">
-        <h3 class="section-title">标签</h3>
-        <div class="tags-container">
-          <el-tag
-            v-for="tag in parseTags(pcapDetail.tags)"
-            :key="tag"
-            :type="getTagType(tag)"
-            size="small"
-            class="tag-item"
-          >
-            {{ tag }}
-          </el-tag>
+          <div class="info-item info-item-tags" v-if="parseTags(pcapDetail.tags).length > 0">
+            <label>标签:</label>
+            <div class="tags-container">
+              <el-tag
+                v-for="tag in parseTags(pcapDetail.tags)"
+                :key="tag"
+                :type="getTagType(tag)"
+                size="small"
+                class="tag-item"
+              >
+                {{ tag }}
+              </el-tag>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -816,7 +814,8 @@ onUnmounted(() => {
         >
           <template #default>
             <div class="download-actions">
-              <el-button @click="forceLoadFlowData">仍要在线查看</el-button>
+              <el-button type="primary" @click="forceLoadFlowData">仍要在线查看</el-button>
+              <el-button @click="showDownloadOption = false">取消</el-button>
             </div>
           </template>
         </el-alert>
@@ -1050,6 +1049,7 @@ onUnmounted(() => {
   padding: 8px 12px;
   background: #f5f7fa;
   border-radius: 4px;
+  min-height: 40px;
 }
 
 .info-item label {
@@ -1057,11 +1057,74 @@ onUnmounted(() => {
   color: #606266;
   margin-right: 8px;
   min-width: 80px;
+  flex-shrink: 0;
 }
 
 .info-item span {
   color: #303133;
   font-family: 'Courier New', monospace;
+  flex: 1;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+  padding: 2px 0;
+}
+
+.info-item span::-webkit-scrollbar {
+  height: 3px;
+}
+
+.info-item span::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 2px;
+}
+
+.info-item span::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.info-item span::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 标签容器在info-item中的样式 */
+.info-item .tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+  padding: 2px 0;
+  white-space: nowrap;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.info-item .tags-container::-webkit-scrollbar {
+  height: 3px;
+}
+
+.info-item .tags-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 2px;
+}
+
+.info-item .tags-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.info-item .tags-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 标签项占用两个格子宽度 */
+.info-item-tags {
+  grid-column: span 2;
 }
 
 .tags-section {
@@ -1074,10 +1137,33 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+  padding: 4px 0;
+}
+
+.tags-container::-webkit-scrollbar {
+  height: 3px;
+}
+
+.tags-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 2px;
+}
+
+.tags-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.tags-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .tag-item {
   margin: 0;
+  padding: 4px 8px !important;
 }
 
 .flow-section {

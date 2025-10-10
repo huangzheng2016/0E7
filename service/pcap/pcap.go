@@ -305,9 +305,10 @@ func SaveFlowAsJson(entry FlowEntry) string {
 
 func reassemblyCallback(entry FlowEntry) {
 	ParseHttpFlow(&entry)
-	if flag_regex != "" {
-		ApplyFlagTags(&entry, flag_regex)
-	}
+
+	// 所有新流量都先打上PENDING标签，等待后台检测flag
+	entry.Tags = append(entry.Tags, "PENDING")
+
 	// B64字段已经在tcp.go中设置，这里不需要额外处理
 	Fingerprints, err := json.Marshal(entry.Fingerprints)
 	if err != nil {
@@ -317,6 +318,12 @@ func reassemblyCallback(entry FlowEntry) {
 	Suricata, err := json.Marshal(entry.Suricata)
 	if err != nil {
 		log.Println("Suricata Error:", err)
+		return
+	}
+
+	Tags, err := json.Marshal(entry.Tags)
+	if err != nil {
+		log.Println("Tags Error:", err)
 		return
 	}
 
@@ -333,28 +340,45 @@ func reassemblyCallback(entry FlowEntry) {
 		log.Println("Failed to save pcap file for flow")
 	}
 
-	Tags, err := json.Marshal(entry.Tags)
-	if err != nil {
-		log.Println("Tags Error:", err)
-		return
+	// 提取客户端和服务器端内容
+	var clientContentBuilder, serverContentBuilder strings.Builder
+	for _, flowItem := range entry.Flow {
+		decoded, err := base64.StdEncoding.DecodeString(flowItem.B64)
+		if err != nil {
+			log.Printf("解码B64数据失败: %v", err)
+			continue
+		}
+		decodedStr := string(decoded)
+
+		if flowItem.From == "c" {
+			// 客户端到服务器
+			clientContentBuilder.WriteString(decodedStr)
+			clientContentBuilder.WriteString(" ")
+		} else if flowItem.From == "s" {
+			// 服务器到客户端
+			serverContentBuilder.WriteString(decodedStr)
+			serverContentBuilder.WriteString(" ")
+		}
 	}
 
 	pcapRecord := database.Pcap{
-		SrcPort:      fmt.Sprintf("%d", entry.SrcPort),
-		DstPort:      fmt.Sprintf("%d", entry.DstPort),
-		SrcIP:        entry.SrcIp,
-		DstIP:        entry.DstIp,
-		Time:         entry.Time,
-		Duration:     entry.Duration,
-		NumPackets:   entry.NumPackets,
-		Blocked:      fmt.Sprintf("%t", entry.Blocked),
-		Filename:     entry.Filename,
-		Fingerprints: string(Fingerprints),
-		Suricata:     string(Suricata),
-		FlowFile:     jsonFile, // JSON文件路径
-		PcapFile:     pcapFile, // PCAP文件路径
-		Tags:         string(Tags),
-		Size:         entry.Size,
+		SrcPort:       fmt.Sprintf("%d", entry.SrcPort),
+		DstPort:       fmt.Sprintf("%d", entry.DstPort),
+		SrcIP:         entry.SrcIp,
+		DstIP:         entry.DstIp,
+		Time:          entry.Time,
+		Duration:      entry.Duration,
+		NumPackets:    entry.NumPackets,
+		Blocked:       fmt.Sprintf("%t", entry.Blocked),
+		Filename:      entry.Filename,
+		Fingerprints:  string(Fingerprints),
+		Suricata:      string(Suricata),
+		Tags:          string(Tags),
+		ClientContent: clientContentBuilder.String(),
+		ServerContent: serverContentBuilder.String(),
+		FlowFile:      jsonFile, // JSON文件路径
+		PcapFile:      pcapFile, // PCAP文件路径
+		Size:          entry.Size,
 	}
 	err = config.Db.Create(&pcapRecord).Error
 
@@ -372,6 +396,7 @@ func reassemblyCallback(entry FlowEntry) {
 			log.Printf("Failed to index pcap record: %v", err)
 		}
 	}()
+
 }
 
 func Setbpf(str string) {

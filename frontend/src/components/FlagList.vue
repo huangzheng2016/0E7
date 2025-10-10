@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Refresh, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, Search, Refresh, Edit, Delete, Setting } from '@element-plus/icons-vue'
 
 // 定义emit事件
 const emit = defineEmits<{
@@ -28,6 +28,13 @@ interface FlagSubmitDialog {
   loading: boolean
 }
 
+interface FlagConfigDialog {
+  visible: boolean
+  pattern: string
+  loading: boolean
+}
+
+
 const flags = ref<Flag[]>([])
 const loading = ref(false)
 const total = ref(0)
@@ -37,7 +44,7 @@ const pageSize = ref(20)
 // 自动刷新相关
 const autoRefresh = ref(false)
 const refreshInterval = ref(5000) // 5秒刷新一次
-let refreshTimer: number | null = null
+let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 // 搜索条件
 const searchForm = reactive({
@@ -55,6 +62,14 @@ const submitDialog = reactive<FlagSubmitDialog>({
   flagRegex: '',
   loading: false
 })
+
+// Flag配置弹窗
+const configDialog = reactive<FlagConfigDialog>({
+  visible: false,
+  pattern: '',
+  loading: false
+})
+
 
 // 状态选项
 const statusOptions = [
@@ -255,7 +270,7 @@ const handleSubmitFlag = async () => {
       formData.append('flag_regex', submitDialog.flagRegex.trim())
     }
 
-    const response = await fetch('/webui/flag/submit', {
+    const response = await fetch('/webui/flag_submit', {
       method: 'POST',
       body: formData
     })
@@ -343,6 +358,71 @@ onMounted(() => {
   startAutoRefresh()
 })
 
+// 打开flag配置弹窗
+const openConfigDialog = async () => {
+  try {
+    const response = await fetch('/webui/flag_config', {
+      method: 'POST'
+    })
+    const data = await response.json()
+    
+    if (data.message === 'success') {
+      configDialog.pattern = data.result.current_pattern || ''
+      configDialog.visible = true
+    } else {
+      ElMessage.error('获取flag配置失败')
+    }
+  } catch (error) {
+    console.error('获取flag配置失败:', error)
+    ElMessage.error('获取flag配置失败')
+  }
+}
+
+// 关闭flag配置弹窗
+const closeConfigDialog = () => {
+  configDialog.visible = false
+  configDialog.pattern = ''
+}
+
+// 更新flag配置
+const handleUpdateConfig = async () => {
+  if (!configDialog.pattern.trim()) {
+    ElMessage.warning('请输入flag格式')
+    return
+  }
+
+  configDialog.loading = true
+  try {
+    const formData = new FormData()
+    formData.append('pattern', configDialog.pattern.trim())
+
+    const response = await fetch('/webui/flag_config_update', {
+      method: 'POST',
+      body: formData
+    })
+    
+    const data = await response.json()
+    
+    if (data.message === 'success') {
+      ElMessage.success('Flag配置更新成功，正在重新索引历史数据')
+      closeConfigDialog()
+    } else {
+      ElMessage.error(data.error || 'Flag配置更新失败')
+    }
+  } catch (error) {
+    console.error('更新flag配置失败:', error)
+    ElMessage.error('更新flag配置失败')
+  } finally {
+    configDialog.loading = false
+  }
+}
+
+
+onMounted(() => {
+  fetchFlags()
+  startAutoRefresh()
+})
+
 onUnmounted(() => {
   stopAutoRefresh()
 })
@@ -418,6 +498,9 @@ onUnmounted(() => {
             <el-button type="primary" :icon="Plus" @click="openSubmitDialog">
               手动提交Flag
             </el-button>
+            <el-button :icon="Setting" @click="openConfigDialog">
+              Flag配置
+            </el-button>
             <el-button :icon="Refresh" @click="handleRefresh">
               刷新
             </el-button>
@@ -437,6 +520,7 @@ onUnmounted(() => {
         </div>
       </el-card>
     </div>
+
 
     <!-- 数据表格 -->
     <div class="table-section">
@@ -508,13 +592,16 @@ onUnmounted(() => {
         </el-table>
 
         <!-- 分页 -->
-        <div class="pagination-section">
+        <div class="pagination-container">
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[10, 20, 50, 100]"
+            :small="true"
+            :background="true"
+            layout="total, sizes, prev, pager, next"
             :total="total"
-            layout="total, sizes, prev, pager, next, jumper"
+            :hide-on-single-page="false"
             @size-change="handlePageSizeChange"
             @current-change="handlePageChange"
           />
@@ -566,6 +653,41 @@ onUnmounted(() => {
             @click="handleSubmitFlag"
           >
             提交
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Flag配置弹窗 -->
+    <el-dialog
+      v-model="configDialog.visible"
+      title="Flag格式配置"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-form :model="configDialog" label-width="120px" @submit.prevent>
+        <el-form-item label="Flag格式">
+          <el-input
+            v-model="configDialog.pattern"
+            placeholder="请输入flag格式（正则表达式）"
+          />
+          <div class="form-tip">
+            <el-text type="info" size="small">
+              例如：flag\{[^}]+\} 或 [a-zA-Z0-9_]{20,}
+            </el-text>
+          </div>
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="closeConfigDialog">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="configDialog.loading"
+            @click="handleUpdateConfig"
+          >
+            更新配置
           </el-button>
         </div>
       </template>
@@ -625,10 +747,13 @@ onUnmounted(() => {
   word-break: break-all;
 }
 
-.pagination-section {
-  margin-top: 16px;
+.pagination-container {
   display: flex;
   justify-content: center;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #e6e8eb;
+  flex-shrink: 0;
 }
 
 .dialog-footer {

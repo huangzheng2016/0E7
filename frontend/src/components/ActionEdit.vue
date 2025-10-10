@@ -23,7 +23,7 @@ const props = defineProps<{
   standalone?: boolean
 }>()
 
-const emit = defineEmits(['update:modelValue', 'save-success'])
+const emit = defineEmits(['update:modelValue', 'save-success', 'close'])
 
 const dialogVisible = computed({
   get: () => props.modelValue ?? true,
@@ -315,9 +315,15 @@ const saveAction = async () => {
   }
 }
 
-// 取消编辑
-const cancelEdit = () => {
-  dialogVisible.value = false
+// 关闭编辑
+const closeEdit = () => {
+  if (isStandalone.value) {
+    // 如果是独立模式，关闭整个tab
+    emit('close')
+  } else {
+    // 如果是对话框模式，关闭对话框
+    dialogVisible.value = false
+  }
 }
 
 // 重置表单
@@ -559,7 +565,7 @@ const formatNextRunTime = (nextRun: string, interval: number) => {
       </el-form>
       
       <div class="edit-footer">
-        <el-button @click="cancelEdit">取消</el-button>
+        <el-button @click="closeEdit">关闭</el-button>
         <el-button type="primary" @click="saveAction" :loading="loading">
           {{ isEditing ? '更新' : '创建' }}
         </el-button>
@@ -629,7 +635,7 @@ const formatNextRunTime = (nextRun: string, interval: number) => {
     
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="cancelEdit">取消</el-button>
+        <el-button @click="closeEdit">关闭</el-button>
         <el-button type="primary" @click="saveAction" :loading="loading">
           {{ isEditing ? '更新' : '创建' }}
         </el-button>
