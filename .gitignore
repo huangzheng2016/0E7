@@ -3,6 +3,8 @@
 sqlite.db
 sqlite.db-shm
 sqlite.db-wal
+*.bak
+*.backup
 /frontend/node_modules/
 .idea
 /0E7

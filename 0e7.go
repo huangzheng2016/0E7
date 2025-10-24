@@ -48,10 +48,17 @@ func main() {
 			fmt.Println("")
 			fmt.Println("用法:")
 			fmt.Println("  0e7                    # 正常启动")
+			fmt.Println("  0e7 --server, -s       # 服务器模式启动")
 			fmt.Println("  0e7 --help             # 显示帮助信息")
 			fmt.Println("  0e7 --install-guide    # 显示Windows依赖安装指南")
 			fmt.Println("")
 			os.Exit(0)
+		case "--server", "-s":
+			// 服务器模式：检查并生成配置文件
+			if err := ensureServerConfig(); err != nil {
+				log.Printf("配置文件处理失败: %v", err)
+				os.Exit(1)
+			}
 		case "--install-guide":
 			if runtime.GOOS == "windows" {
 				fmt.Println(windows.GetInstallationGuide())
@@ -145,4 +152,63 @@ func main() {
 	} else {
 		log.Println("Configuration file error, please check")
 	}
+}
+
+// ensureServerConfig 确保服务器配置文件存在，如果不存在则生成默认配置
+func ensureServerConfig() error {
+	configFile := "config.ini"
+
+	// 检查配置文件是否存在
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		log.Printf("配置文件 %s 不存在，正在生成默认配置...", configFile)
+
+		// 生成默认服务器配置
+		defaultConfig := `[global]
+timeout_http     = 5
+timeout_download = 60
+debug            = true
+
+[client]
+enable     = true
+id         = 
+name       = 
+server_url = https://remotehost:6102
+pypi       = https://pypi.tuna.tsinghua.edu.cn/simple
+update     = true
+worker     = 5
+monitor    = false
+
+[server]
+enable      = true
+port        = 6102
+db_engine   = sqlite3
+db_host     = localhost
+db_port     = 3306
+db_username = 
+db_password = 
+db_tables   = 
+server_url  = https://localhost:6102
+flag        = flag{.*}
+tls         = false
+pcap_zip    = false
+
+[search]
+search_engine                 = bleve
+search_elasticsearch_url      = http://localhost:9200
+search_elasticsearch_username = 
+search_elasticsearch_password = 
+`
+
+		// 写入配置文件
+		if err := os.WriteFile(configFile, []byte(defaultConfig), 0644); err != nil {
+			return fmt.Errorf("无法创建配置文件: %v", err)
+		}
+
+		log.Printf("成功生成默认配置文件: %s", configFile)
+		log.Println("提示: 您可以根据需要修改配置文件中的设置")
+	} else {
+		log.Printf("配置文件 %s 已存在", configFile)
+	}
+
+	return nil
 }
