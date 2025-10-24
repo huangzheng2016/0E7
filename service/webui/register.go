@@ -38,4 +38,7 @@ func Register(router *gin.Engine) {
 	// Flag检测和配置相关路由
 	router.POST("/webui/flag_config", GetCurrentFlagConfig)
 	router.POST("/webui/flag_config_update", UpdateFlagConfig)
+
+	// 代码生成相关路由
+	router.POST("/webui/pcap_generate_code", pcap_generate_code)
 }

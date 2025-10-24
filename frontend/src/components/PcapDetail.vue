@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
-import { Download } from '@element-plus/icons-vue'
+import { Download, CopyDocument, ArrowDown, InfoFilled } from '@element-plus/icons-vue'
+import { Codemirror } from 'vue-codemirror'
+import { python } from '@codemirror/lang-python'
+import { javascript } from '@codemirror/lang-javascript'
+import { oneDark } from '@codemirror/theme-one-dark'
 
 interface FlowItem {
   f: string  // from: 'c' for client, 's' for server
@@ -53,13 +57,26 @@ const flowSizeInfo = ref<{ raw_size?: number, flow_size?: number, parsed_size?: 
 // 拖拽选择状态
 const dragSelection = ref<{ flowIndex: number, startByte: number, isDragging: boolean } | null>(null)
 
+// 代码生成相关状态
+const codeGenerationLoading = ref(false)
+const showCodeDialog = ref(false)
+const generatedCode = ref('')
+const codeTitle = ref('')
+const codeMirrorRef = ref()
+
 // 解码base64数据的辅助函数
 const decodeBase64 = (b64: string): string => {
   try {
-    return atob(b64)
+    // 使用decodeURIComponent和escape来处理UTF-8字符
+    return decodeURIComponent(escape(atob(b64)))
   } catch (error) {
     console.error('Failed to decode base64:', error)
-    return ''
+    // 如果解码失败，尝试直接使用atob
+    try {
+      return atob(b64)
+    } catch (e) {
+      return '' // 如果都失败了，返回空字符串
+    }
   }
 }
 
@@ -422,6 +439,94 @@ const copyToClipboard = async (text: string) => {
     ElMessage.error('复制失败')
   }
 }
+
+// 生成代码
+const generateCode = async (templateType: 'requests' | 'pwntools' | 'curl') => {
+  if (!pcapDetail.value || flowData.value.length === 0) {
+    ElMessage.warning('没有可用的流量数据')
+    return
+  }
+
+  codeGenerationLoading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('pcap_id', props.pcapId.toString())
+    formData.append('template', templateType)
+    formData.append('flow_data', JSON.stringify(flowData.value))
+
+    const response = await fetch('/webui/pcap_generate_code', {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const result = await response.json()
+    
+    if (result.message === 'success' && result.result) {
+      const code = result.result.code
+      
+      // 尝试直接复制到剪贴板
+      try {
+        await navigator.clipboard.writeText(code)
+        ElMessage.success('代码已复制到剪贴板')
+      } catch (clipboardError) {
+        // 复制失败，显示悬浮框
+        console.log('剪贴板复制失败，显示悬浮框:', clipboardError)
+        generatedCode.value = code
+        codeTitle.value = `${templateType} 代码`
+        showCodeDialog.value = true
+      }
+    } else {
+      ElNotification({
+        title: '代码生成失败',
+        message: result.error || '生成代码时发生错误',
+        type: 'error',
+        position: 'bottom-right'
+      })
+    }
+  } catch (error) {
+    console.error('代码生成失败:', error)
+    ElNotification({
+      title: '代码生成失败',
+      message: '网络错误，请稍后重试',
+      type: 'error',
+      position: 'bottom-right'
+    })
+  } finally {
+    codeGenerationLoading.value = false
+  }
+}
+
+// 获取代码类型
+const getCodeType = (title: string) => {
+  if (title.includes('Python') || title.includes('requests') || title.includes('pwntools')) {
+    return 'Python'
+  } else if (title.includes('curl') || title.includes('bash')) {
+    return 'Bash'
+  }
+  return 'Text'
+}
+
+// CodeMirror扩展配置
+const codeMirrorExtensions = computed(() => {
+  const codeType = getCodeType(codeTitle.value)
+  const extensions = []
+  
+  if (codeType === 'Python') {
+    extensions.push(python())
+  } else if (codeType === 'Bash') {
+    // 对于bash脚本，使用javascript语言包作为近似
+    extensions.push(javascript())
+  }
+  
+  // 添加暗色主题
+  extensions.push(oneDark)
+  
+  return extensions
+})
 
 // 获取流量方向标识
 const getFlowDirection = (from: string) => {
@@ -865,6 +970,34 @@ onUnmounted(() => {
                   <el-icon><CopyDocument /></el-icon>
                   复制全部
                 </el-button>
+                <!-- 代码生成下拉按钮，只在客户端请求时显示 -->
+                <el-dropdown 
+                  v-if="flow.f === 'c'" 
+                  @command="generateCode"
+                  :disabled="codeGenerationLoading"
+                >
+                  <el-button size="small" :loading="codeGenerationLoading">
+                    <el-icon><CopyDocument /></el-icon>
+                    生成代码
+                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="requests">
+                        <el-icon><CopyDocument /></el-icon>
+                        Requests
+                      </el-dropdown-item>
+                      <el-dropdown-item command="pwntools">
+                        <el-icon><CopyDocument /></el-icon>
+                        Pwntools
+                      </el-dropdown-item>
+                      <el-dropdown-item command="curl">
+                        <el-icon><CopyDocument /></el-icon>
+                        cURL
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </div>
             
@@ -989,6 +1122,43 @@ onUnmounted(() => {
       </el-button>
     </div>
   </div>
+
+  <!-- 代码显示对话框 -->
+  <el-dialog
+    v-model="showCodeDialog"
+    :title="codeTitle"
+    width="80%"
+    :close-on-click-modal="false"
+    :close-on-press-escape="true"
+    class="code-dialog"
+  >
+    <div class="code-dialog-content">
+      <div class="code-tip">
+        <el-icon><InfoFilled /></el-icon>
+        自动复制失败，请手动复制以下内容：
+      </div>
+      <div class="code-display-container">
+        <codemirror
+          ref="codeMirrorRef"
+          v-model="generatedCode"
+          :extensions="codeMirrorExtensions"
+          :indent-with-tab="true"
+          :tab-size="4"
+          :read-only="true"
+          class="code-display-content"
+        />
+      </div>
+    </div>
+    <template #footer>
+      <div class="dialog-footer">
+        <el-button @click="showCodeDialog = false">关闭</el-button>
+        <el-button type="primary" @click="copyToClipboard(generatedCode)">
+          <el-icon><CopyDocument /></el-icon>
+          复制代码
+        </el-button>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -1653,6 +1823,58 @@ onUnmounted(() => {
 .warning-actions .el-button,
 .download-actions .el-button {
   margin: 0;
+}
+
+/* 代码对话框样式 */
+.code-dialog .el-dialog__header {
+  padding: 15px 20px 10px;
+}
+
+.code-dialog .el-dialog__body {
+  padding: 10px 20px 20px;
+}
+
+.code-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.code-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #909399;
+  font-size: 14px;
+  background: #f4f4f5;
+  padding: 10px 15px;
+  border-radius: 4px;
+  border-left: 4px solid #409eff;
+}
+
+.code-display-container {
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.code-display-content {
+  height: 400px;
+  font-size: 14px;
+}
+
+.code-display-content .cm-editor {
+  height: 100%;
+}
+
+.code-display-content .cm-scroller {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 </style>

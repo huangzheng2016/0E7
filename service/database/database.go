@@ -137,11 +137,107 @@ print(json.dumps(team))`),
 				Name:     "run_exploit_1",
 				Code:     "",
 				Config:   "{\"type\":\"exec_script\",\"num\":1,\"script_id\":1}",
-				Interval: 60,
+				Interval: -1, // 默认不启用
 			},
 		}
 		for _, action := range actions {
 			db.Create(&action)
+		}
+
+		// 插入代码生成模板
+		codeTemplates := []Action{
+			{
+				ID:   4,
+				Name: "requests_template",
+				Code: CodeToBase64("code/python3",
+					`import requests
+import base64
+
+# 禁用SSL验证和保持连接
+session = requests.Session()
+session.verify = False
+session.headers.update({
+    'Connection': 'close'  # 不保持连接
+})
+
+# 请求数据
+url = "{{.URL}}"
+headers = {{.Headers}}
+
+# 使用base64解码的数据（默认）
+data = base64.b64decode("{{.Data}}").decode('utf-8', errors='ignore')
+
+# 或者直接使用原始数据（取消注释下面一行，注释上面一行）
+# data = "{{.RawData}}"
+
+# 发送请求
+response = session.post(url, headers=headers, data=data)
+print(f"Status: {response.status_code}")
+print(f"Response: {response.text}")`),
+				Config:   "{\"type\": \"template\"}",
+				Interval: -1, // 默认不启用
+				Timeout:  30,
+			},
+			{
+				ID:   5,
+				Name: "pwntools_template",
+				Code: CodeToBase64("code/python3",
+					`from pwn import *
+
+# 连接设置
+context.log_level = 'debug'
+
+# 连接信息
+host = "{{.Host}}"
+port = {{.Port}}
+
+# 原始数据 - 用户可以直接修改这里的数据
+raw_data = "{{.RawData}}"
+
+# 建立连接
+conn = remote(host, port)
+
+# 发送原始数据
+conn.send(raw_data.encode())
+
+# 接收响应
+response = conn.recvall()
+print(response.decode('utf-8', errors='ignore'))
+
+conn.close()`),
+				Config:   "{\"type\": \"template\"}",
+				Interval: -1, // 默认不启用
+				Timeout:  30,
+			},
+			{
+				ID:   6,
+				Name: "curl_template",
+				Code: CodeToBase64("code/python3",
+					`#!/bin/bash
+
+# 请求数据
+URL="{{.URL}}"
+DATA="{{.Data}}"
+
+# 解码base64数据（默认）
+DECODED_DATA=$(echo "$DATA" | base64 -d)
+
+# 或者直接使用原始数据（取消注释下面一行，注释上面一行）
+# DECODED_DATA="{{.RawData}}"
+
+# 构建curl命令
+curl -X POST \\
+  --insecure \\
+  --no-keepalive \\
+  {{.HeadersCurl}}  --data "$DECODED_DATA" \\
+  "$URL"`),
+				Config:   "{\"type\": \"template\"}",
+				Interval: -1, // 默认不启用
+				Timeout:  30,
+			},
+		}
+		for _, template := range codeTemplates {
+			db.Create(&template)
 		}
 	}
 	db.Model(&Exploit{}).Count(&count)

@@ -51,6 +51,22 @@ const form = ref({
 const loading = ref(false)
 const exploitList = ref<Array<{id: number, name: string}>>([])
 
+// 正确解码包含UTF-8字符的base64字符串
+const decodeBase64UTF8 = (base64: string): string => {
+  try {
+    // 使用decodeURIComponent和escape来处理UTF-8字符
+    return decodeURIComponent(escape(atob(base64)))
+  } catch (error) {
+    console.error('Base64解码失败:', error)
+    // 如果解码失败，尝试直接使用atob
+    try {
+      return atob(base64)
+    } catch (e) {
+      return base64 // 如果都失败了，返回原始字符串
+    }
+  }
+}
+
 // 获取exploit列表
 const fetchExploitList = async () => {
   try {
@@ -172,7 +188,7 @@ const updateFormFromAction = (action: Action) => {
           
           // 解码base64
           const base64Code = parts[1]
-          const decodedCode = atob(base64Code)
+          const decodedCode = decodeBase64UTF8(base64Code)
           form.value.code = decodedCode
         }
       } catch (error) {
@@ -202,8 +218,20 @@ const updateFormFromAction = (action: Action) => {
 // 编码代码为base64格式
 const encodeCodeToBase64 = (code: string, language: string): string => {
   if (!code.trim()) return ''
-  const base64Code = btoa(unescape(encodeURIComponent(code)))
-  return `data:code/${language};base64,${base64Code}`
+  try {
+    // 使用encodeURIComponent和unescape来正确处理UTF-8字符
+    const base64Code = btoa(unescape(encodeURIComponent(code)))
+    return `data:code/${language};base64,${base64Code}`
+  } catch (error) {
+    console.error('Base64编码失败:', error)
+    // 如果编码失败，尝试直接使用btoa
+    try {
+      const base64Code = btoa(code)
+      return `data:code/${language};base64,${base64Code}`
+    } catch (e) {
+      return code // 如果都失败了，返回原始字符串
+    }
+  }
 }
 
 // 保存Action
