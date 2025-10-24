@@ -142,8 +142,11 @@ func (fd *FlagDetector) detectPendingFlags() {
 			newTags = append(newTags, "FLAG-OUT")
 		}
 
-		log.Printf("在流量ID %d 中检测到flag (客户端: %v, 服务器端: %v)",
-			pcap.ID, hasClientFlag, hasServerFlag)
+		// 只有在检测到flag时才显示日志
+		if hasClientFlag || hasServerFlag {
+			log.Printf("在流量ID %d 中检测到flag (客户端: %v, 服务器端: %v)",
+				pcap.ID, hasClientFlag, hasServerFlag)
+		}
 
 		// 更新数据库
 		newTagsJSON, err := json.Marshal(newTags)

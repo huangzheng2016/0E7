@@ -6,6 +6,7 @@ import (
 	"0E7/service/flag"
 	"0E7/service/pcap"
 	"0E7/service/route"
+	"0E7/service/search"
 	"0E7/service/server"
 	"0E7/service/udpcast"
 	"0E7/service/update"
@@ -18,7 +19,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -148,6 +151,8 @@ func main() {
 	}
 
 	if config.Client_mode || config.Server_mode {
+		// 设置信号处理，确保程序退出时正确关闭资源
+		setupGracefulShutdown()
 		select {}
 	} else {
 		log.Println("Configuration file error, please check")
@@ -211,4 +216,27 @@ search_elasticsearch_password =
 	}
 
 	return nil
+}
+
+// setupGracefulShutdown 设置优雅关闭处理
+func setupGracefulShutdown() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-c
+		log.Println("收到退出信号，正在优雅关闭...")
+
+		// 关闭搜索服务
+		if searchService := search.GetSearchService(); searchService != nil {
+			if err := searchService.Close(); err != nil {
+				log.Printf("关闭搜索服务失败: %v", err)
+			} else {
+				log.Println("搜索服务已关闭")
+			}
+		}
+
+		log.Println("程序已优雅退出")
+		os.Exit(0)
+	}()
 }

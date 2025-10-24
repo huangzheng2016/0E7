@@ -625,7 +625,14 @@ func (s *SearchService) Close() error {
 	defer s.mutex.Unlock()
 
 	if s.index != nil {
-		return s.index.Close()
+		log.Println("正在关闭Bleve搜索索引...")
+		err := s.index.Close()
+		if err != nil {
+			log.Printf("关闭Bleve搜索索引失败: %v", err)
+			return err
+		}
+		s.index = nil
+		log.Println("Bleve搜索索引已关闭")
 	}
 	return nil
 }
