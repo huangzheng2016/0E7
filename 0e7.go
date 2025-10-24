@@ -10,6 +10,7 @@ import (
 	"0E7/service/udpcast"
 	"0E7/service/update"
 	"0E7/service/webui"
+	"0E7/service/windows"
 	"embed"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -37,6 +39,34 @@ func main() {
 		"                                                              |___/\n\n")
 
 	log.Println("0E7 For Security")
+
+	// 检查命令行参数
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--help", "-h":
+			fmt.Println("0E7 - AWD攻防演练工具箱")
+			fmt.Println("")
+			fmt.Println("用法:")
+			fmt.Println("  0e7                    # 正常启动")
+			fmt.Println("  0e7 --help             # 显示帮助信息")
+			fmt.Println("  0e7 --install-guide    # 显示Windows依赖安装指南")
+			fmt.Println("")
+			os.Exit(0)
+		case "--install-guide":
+			if runtime.GOOS == "windows" {
+				fmt.Println(windows.GetInstallationGuide())
+			} else {
+				fmt.Println("此功能仅在Windows上可用")
+			}
+			os.Exit(0)
+		}
+	}
+
+	// 在Windows下进行依赖检查
+	if err := windows.CheckWindowsDependencies(); err != nil {
+		log.Printf("Windows依赖检查完成: %v", err)
+	}
+
 	err = config.Init_conf()
 	if err != nil {
 		log.Println("Config load error: ", err)
