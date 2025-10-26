@@ -22,6 +22,9 @@ interface Tab {
     dst_ip?: string
     tags?: string
     fulltext?: string
+    flagInActive?: boolean
+    flagOutActive?: boolean
+    searchType?: number
   }
 }
 
@@ -277,13 +280,11 @@ const activeTab = computed(() => {
 
 // 处理ActionList的事件
 const handleActionEdit = (action: any) => {
-  // 检查是否已存在Action编辑标签页
-  const existingTab = tabs.value.find(tab => tab.type === 'action-edit')
+  // 检查是否已存在相同ID的Action编辑标签页
+  const existingTab = tabs.value.find(tab => tab.type === 'action-edit' && tab.itemId === action.id)
   
   if (existingTab) {
-    // 如果存在，更新现有标签页并切换到它
-    existingTab.title = `${action.name} - 编辑定时计划`
-    existingTab.itemId = action.id
+    // 如果存在相同ID的标签页，直接切换到它
     activeTabId.value = existingTab.id
   } else {
     // 如果不存在，创建新标签页
@@ -300,19 +301,18 @@ const handleActionEdit = (action: any) => {
 }
 
 const handleActionAdd = () => {
-  // 检查是否已存在Action编辑标签页
-  const existingTab = tabs.value.find(tab => tab.type === 'action-edit')
+  // 检查是否已存在新增Action编辑标签页（itemId为undefined）
+  const existingTab = tabs.value.find(tab => tab.type === 'action-edit' && tab.itemId === undefined)
   
   if (existingTab) {
-    // 如果存在，更新现有标签页并切换到它
-    existingTab.title = '新增定时计划'
-    existingTab.itemId = undefined // 新增时没有ID
+    // 如果存在新增标签页，直接切换到它
     activeTabId.value = existingTab.id
   } else {
     // 如果不存在，创建新标签页
     addTab({
       title: '新增定时计划',
       type: 'action-edit',
+      itemId: undefined, // 新增时没有ID
       closable: true
     })
   }
@@ -323,13 +323,11 @@ const handleActionAdd = () => {
 
 // 处理ExploitList的事件
 const handleExploitEdit = (exploit: any) => {
-  // 检查是否已存在Exploit编辑标签页
-  const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit')
+  // 检查是否已存在相同ID的Exploit编辑标签页
+  const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit' && tab.itemId === exploit.id)
   
   if (existingTab) {
-    // 如果存在，更新现有标签页并切换到它
-    existingTab.title = `${exploit.name} - 编辑执行脚本`
-    existingTab.itemId = exploit.id
+    // 如果存在相同ID的标签页，直接切换到它
     activeTabId.value = existingTab.id
   } else {
     // 如果不存在，创建新标签页
@@ -398,19 +396,18 @@ const handlePcapView = (pcap: any) => {
 }
 
 const handleExploitAdd = () => {
-  // 检查是否已存在Exploit编辑标签页
-  const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit')
+  // 检查是否已存在新增Exploit编辑标签页（itemId为undefined）
+  const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit' && tab.itemId === undefined)
   
   if (existingTab) {
-    // 如果存在，更新现有标签页并切换到它
-    existingTab.title = '新增执行脚本'
-    existingTab.itemId = undefined // 新增时没有ID
+    // 如果存在新增标签页，直接切换到它
     activeTabId.value = existingTab.id
   } else {
     // 如果不存在，创建新标签页
     addTab({
       title: '新增执行脚本',
       type: 'exploit-edit',
+      itemId: undefined, // 新增时没有ID
       closable: true
     })
   }
@@ -512,28 +509,31 @@ const openTabFromUrl = () => {
   const searchKeyword = urlParams.get('search')
   
   if (actionId) {
-    // 检查是否已存在Action编辑标签页
-    const existingTab = tabs.value.find(tab => tab.type === 'action-edit')
-    
-    if (existingTab) {
-      // 如果存在，更新现有标签页并切换到它
-      if (actionId === 'new') {
-        existingTab.title = '新增定时计划'
-        existingTab.itemId = undefined
+    if (actionId === 'new') {
+      // 检查是否已存在新增Action编辑标签页
+      const existingTab = tabs.value.find(tab => tab.type === 'action-edit' && tab.itemId === undefined)
+      
+      if (existingTab) {
+        // 如果存在新增标签页，直接切换到它
+        activeTabId.value = existingTab.id
       } else {
-        existingTab.title = `${actionId} - 编辑定时计划`
-        existingTab.itemId = parseInt(actionId)
-      }
-      activeTabId.value = existingTab.id
-    } else {
-      // 如果不存在，创建新标签页
-      if (actionId === 'new') {
+        // 如果不存在，创建新标签页
         addTab({
           title: '新增定时计划',
           type: 'action-edit',
+          itemId: undefined,
           closable: true
         })
+      }
+    } else {
+      // 检查是否已存在相同ID的Action编辑标签页
+      const existingTab = tabs.value.find(tab => tab.type === 'action-edit' && tab.itemId === parseInt(actionId))
+      
+      if (existingTab) {
+        // 如果存在相同ID的标签页，直接切换到它
+        activeTabId.value = existingTab.id
       } else {
+        // 如果不存在，创建新标签页
         addTab({
           title: `${actionId} - 编辑定时计划`,
           type: 'action-edit',
@@ -543,28 +543,31 @@ const openTabFromUrl = () => {
       }
     }
   } else if (exploitId) {
-    // 检查是否已存在Exploit编辑标签页
-    const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit')
-    
-    if (existingTab) {
-      // 如果存在，更新现有标签页并切换到它
-      if (exploitId === 'new') {
-        existingTab.title = '新增执行脚本'
-        existingTab.itemId = undefined
+    if (exploitId === 'new') {
+      // 检查是否已存在新增Exploit编辑标签页
+      const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit' && tab.itemId === undefined)
+      
+      if (existingTab) {
+        // 如果存在新增标签页，直接切换到它
+        activeTabId.value = existingTab.id
       } else {
-        existingTab.title = `${exploitId} - 编辑执行脚本`
-        existingTab.itemId = parseInt(exploitId)
-      }
-      activeTabId.value = existingTab.id
-    } else {
-      // 如果不存在，创建新标签页
-      if (exploitId === 'new') {
+        // 如果不存在，创建新标签页
         addTab({
           title: '新增执行脚本',
           type: 'exploit-edit',
+          itemId: undefined,
           closable: true
         })
+      }
+    } else {
+      // 检查是否已存在相同ID的Exploit编辑标签页
+      const existingTab = tabs.value.find(tab => tab.type === 'exploit-edit' && tab.itemId === parseInt(exploitId))
+      
+      if (existingTab) {
+        // 如果存在相同ID的标签页，直接切换到它
+        activeTabId.value = existingTab.id
       } else {
+        // 如果不存在，创建新标签页
         addTab({
           title: `${exploitId} - 编辑执行脚本`,
           type: 'exploit-edit',

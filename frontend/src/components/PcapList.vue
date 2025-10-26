@@ -33,6 +33,9 @@ interface SearchState {
   ip?: string
   tags?: string
   fulltext?: string
+  flagInActive?: boolean
+  flagOutActive?: boolean
+  searchType?: number
 }
 
 const props = defineProps<{
@@ -98,9 +101,38 @@ watch(() => props.paginationState, (newState) => {
 
 watch(() => props.searchState, (newState) => {
   if (newState) {
-    if (newState.ip !== undefined) searchFilters.value.ip = newState.ip
-    if (newState.tags !== undefined) searchFilters.value.tags = newState.tags
-    if (newState.fulltext !== undefined) searchFilters.value.fulltext = newState.fulltext
+    let stateChanged = false
+    
+    if (newState.ip !== undefined && newState.ip !== searchFilters.value.ip) {
+      searchFilters.value.ip = newState.ip
+      stateChanged = true
+    }
+    if (newState.tags !== undefined && newState.tags !== searchFilters.value.tags) {
+      searchFilters.value.tags = newState.tags
+      stateChanged = true
+    }
+    if (newState.fulltext !== undefined && newState.fulltext !== searchFilters.value.fulltext) {
+      searchFilters.value.fulltext = newState.fulltext
+      stateChanged = true
+    }
+    if (newState.flagInActive !== undefined && newState.flagInActive !== flagInActive.value) {
+      flagInActive.value = newState.flagInActive
+      stateChanged = true
+    }
+    if (newState.flagOutActive !== undefined && newState.flagOutActive !== flagOutActive.value) {
+      flagOutActive.value = newState.flagOutActive
+      stateChanged = true
+    }
+    if (newState.searchType !== undefined && newState.searchType !== searchType.value) {
+      searchType.value = newState.searchType
+      stateChanged = true
+    }
+    
+    // 如果状态发生变化，重新加载数据
+    if (stateChanged) {
+      currentPage.value = 1 // 重置到第一页
+      fetchPcapItems()
+    }
   }
 }, { immediate: true, deep: true })
 
@@ -115,13 +147,17 @@ watch([currentPage, pageSize, totalItems], () => {
       },
       search: {
         ip: searchFilters.value.ip,
-        tags: searchFilters.value.tags
+        tags: searchFilters.value.tags,
+        fulltext: searchFilters.value.fulltext,
+        flagInActive: flagInActive.value,
+        flagOutActive: flagOutActive.value,
+        searchType: searchType.value
       }
     })
   }
 })
 
-watch(searchFilters, () => {
+watch([searchFilters, flagInActive, flagOutActive, searchType], () => {
   if (totalItems.value > 0 || pcapItems.value.length > 0) {
     emit('state-change', {
       pagination: {
@@ -131,7 +167,11 @@ watch(searchFilters, () => {
       },
       search: {
         ip: searchFilters.value.ip,
-        tags: searchFilters.value.tags
+        tags: searchFilters.value.tags,
+        fulltext: searchFilters.value.fulltext,
+        flagInActive: flagInActive.value,
+        flagOutActive: flagOutActive.value,
+        searchType: searchType.value
       }
     })
   }
@@ -180,7 +220,10 @@ const fetchPcapItems = async () => {
         search: {
           ip: searchFilters.value.ip,
           tags: searchFilters.value.tags,
-          fulltext: searchFilters.value.fulltext
+          fulltext: searchFilters.value.fulltext,
+          flagInActive: flagInActive.value,
+          flagOutActive: flagOutActive.value,
+          searchType: searchType.value
         }
       })
     } else {
@@ -283,7 +326,10 @@ const fetchSearchResults = async () => {
         search: {
           ip: searchFilters.value.ip,
           tags: searchFilters.value.tags,
-          fulltext: searchFilters.value.fulltext
+          fulltext: searchFilters.value.fulltext,
+          flagInActive: flagInActive.value,
+          flagOutActive: flagOutActive.value,
+          searchType: searchType.value
         }
       })
     } else {

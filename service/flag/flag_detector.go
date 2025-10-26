@@ -56,12 +56,12 @@ func (fd *FlagDetector) startDetection() {
 
 // detectionLoop 检测循环
 func (fd *FlagDetector) detectionLoop() {
-	// 每30秒检查一次PENDING标签的流量
-	pendingTicker := time.NewTicker(30 * time.Second)
+	// 每10秒检查一次PENDING标签的流量
+	pendingTicker := time.NewTicker(10 * time.Second)
 	defer pendingTicker.Stop()
 
-	// 每10分钟检查一次flag模式是否变化
-	configTicker := time.NewTicker(10 * time.Minute)
+	// 每2分钟检查一次flag模式是否变化
+	configTicker := time.NewTicker(2 * time.Minute)
 	defer configTicker.Stop()
 
 	for {
