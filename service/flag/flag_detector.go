@@ -94,7 +94,7 @@ func (fd *FlagDetector) detectPendingFlags() {
 
 	// 获取所有PENDING标签的流量
 	var pcaps []database.Pcap
-	err := config.Db.Where("tags LIKE ?", "%PENDING%").Limit(100).Find(&pcaps).Error
+	err := config.Db.Where("tags LIKE ?", "%PENDING%").Limit(2000).Find(&pcaps).Error
 	if err != nil {
 		log.Printf("获取PENDING流量失败: %v", err)
 		return

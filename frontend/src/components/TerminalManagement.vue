@@ -54,13 +54,15 @@
                 @click="selectInterface(client, iface)"
                 :class="{ selected: selectedInterface && selectedInterface.clientId === client.id && selectedInterface.interfaceName === iface.name }"
               >
-                <div class="interface-name">{{ iface.name }}</div>
+                <div class="interface-main">
+                  <span class="interface-name">{{ iface.name }}</span>
+                  <span class="interface-ip" v-if="iface.ip">{{ iface.ip }}</span>
+                </div>
                 <div class="interface-desc">{{ iface.description || '无描述' }}</div>
-                <div class="interface-ip" v-if="iface.ip">{{ iface.ip }}</div>
               </div>
             </div>
             <div v-else class="no-interfaces">
-              <el-empty description="暂无网卡信息" :image-size="80" />
+              <el-empty description="暂无网卡信息" :image-size="60" />
             </div>
           </div>
 
@@ -76,7 +78,7 @@
                 <div class="monitor-info">
                   <span class="monitor-name">{{ monitor.name || '全部网卡' }}</span>
                   <el-tag size="small" type="primary">{{ monitor.types }}</el-tag>
-                  <el-tag size="small" type="info">{{ monitor.interval }}秒</el-tag>
+                  <el-tag size="small" type="info">{{ monitor.interval }}s</el-tag>
                 </div>
                 <div class="monitor-actions">
                   <el-button size="small" type="danger" @click="deleteMonitor(monitor.id)">
@@ -86,7 +88,7 @@
               </div>
             </div>
             <div v-else class="no-monitors">
-              <el-empty description="暂无监控任务" :image-size="60" />
+              <el-empty description="暂无监控任务" :image-size="50" />
             </div>
           </div>
         </div>
@@ -477,34 +479,34 @@ onMounted(() => {
 }
 
 .client-content {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .interfaces-section,
 .monitors-section {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .interfaces-section h4,
 .monitors-section h4 {
-  margin: 0 0 12px 0;
+  margin: 0 0 8px 0;
   color: #606266;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .interfaces-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px;
 }
 
 .interface-item {
-  padding: 12px;
+  padding: 8px 10px;
   border: 1px solid #e4e7ed;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
   background: #fafafa;
 }
 
@@ -518,22 +520,35 @@ onMounted(() => {
   background: #e6f7ff;
 }
 
+.interface-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
 .interface-name {
   font-weight: 600;
   color: #303133;
-  margin-bottom: 4px;
+  font-size: 13px;
 }
 
 .interface-desc {
-  font-size: 12px;
+  font-size: 11px;
   color: #909399;
-  margin-bottom: 4px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .interface-ip {
-  font-size: 12px;
+  font-size: 11px;
   color: #67c23a;
   font-family: monospace;
+  background: #f0f9ff;
+  padding: 1px 4px;
+  border-radius: 2px;
 }
 
 .no-interfaces,
@@ -546,33 +561,36 @@ onMounted(() => {
 .monitors-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .monitor-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
+  padding: 8px 10px;
   border: 1px solid #e4e7ed;
-  border-radius: 6px;
+  border-radius: 4px;
   background: #fafafa;
 }
 
 .monitor-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex: 1;
 }
 
 .monitor-name {
   font-weight: 500;
   color: #303133;
+  font-size: 13px;
+  margin-right: 6px;
 }
 
 .monitor-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dialog-footer {

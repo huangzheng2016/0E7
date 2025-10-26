@@ -39,6 +39,7 @@ var (
 	Client_update                 bool
 	Client_worker                 int
 	Client_monitor                bool
+	Client_only_monitor           bool
 	Search_engine                 string
 	Search_elasticsearch_url      string
 	Search_elasticsearch_username string
@@ -189,7 +190,12 @@ func Init_conf() error {
 
 		Client_monitor, err = section.Key("monitor").Bool()
 		if err != nil {
-			Client_monitor = false
+			Client_monitor = true
+		}
+
+		Client_only_monitor, err = section.Key("only_monitor").Bool()
+		if err != nil {
+			Client_only_monitor = false
 		}
 	}
 

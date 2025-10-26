@@ -7,11 +7,12 @@ import ActionEdit from './ActionEdit.vue'
 import ExploitEdit from './ExploitEdit.vue'
 import PcapDetail from './PcapDetail.vue'
 import FlagList from './FlagList.vue'
+import TerminalManagement from './TerminalManagement.vue'
 
 interface Tab {
   id: string
   title: string
-  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
+  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
   // 只保存ID，不保存完整数据
   itemId?: number | string  // action的id、exploit的id或pcap的id
   closable: boolean
@@ -47,6 +48,12 @@ const tabs = ref<Tab[]>([
     id: 'flag-list',
     title: 'Flag管理',
     type: 'flag-list',
+    closable: false
+  },
+  {
+    id: 'terminal-management',
+    title: '终端管理',
+    type: 'terminal-management',
     closable: false
   }
 ])
@@ -107,6 +114,12 @@ const loadState = () => {
             id: 'flag-list',
             title: 'Flag管理',
             type: 'flag-list',
+            closable: false
+          },
+          {
+            id: 'terminal-management',
+            title: '终端管理',
+            type: 'terminal-management',
             closable: false
           }
         ]
@@ -430,7 +443,7 @@ const handleSaveSuccess = () => {
 }
 
 // 导航到指定页面
-const navigateTo = (type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list') => {
+const navigateTo = (type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management') => {
   const existingTab = tabs.value.find(tab => tab.type === type)
   if (existingTab) {
     switchTab(existingTab.id)
@@ -448,6 +461,9 @@ const navigateTo = (type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-l
         break
       case 'flag-list':
         title = 'Flag管理'
+        break
+      case 'terminal-management':
+        title = '终端管理'
         break
     }
     
@@ -691,6 +707,10 @@ onUnmounted(() => {
           @state-change="(state: any) => handleStateChange('flag-list', state)"
           @open-exploit-edit="handleExploitEditById"
         />
+      </div>
+      
+      <div v-else-if="activeTab?.type === 'terminal-management'">
+        <TerminalManagement />
       </div>
       
       <div v-else-if="activeTab?.type === 'action-edit'">

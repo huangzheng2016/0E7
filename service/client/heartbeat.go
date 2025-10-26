@@ -120,7 +120,7 @@ func heartbeat() {
 			if !found && config.Client_update {
 				log.Println("Try to update")
 				go update.Replace()
-			} else {
+			} else if !config.Client_only_monitor {
 				// 获取 worker 资源并启动 exploit
 				go func() {
 					workerSemaphore.Acquire(context.Background(), 1)
