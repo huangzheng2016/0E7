@@ -17,7 +17,7 @@ type Client struct {
 	MemoryMax string    `json:"memory_max" gorm:"column:memory_max;type:varchar(255);not null;default:'';"`
 	Pcap      string    `json:"pcap" gorm:"column:pcap;type:varchar(255);not null;default:'';"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
-	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime;index;"`
 }
 
 func (Client) TableName() string {
@@ -136,8 +136,8 @@ func (Monitor) TableName() string {
 // Pcap PCAP数据表
 type Pcap struct {
 	ID            int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	SrcPort       string    `json:"src_port" gorm:"column:src_port;type:varchar(255);"`
-	DstPort       string    `json:"dst_port" gorm:"column:dst_port;type:varchar(255);"`
+	SrcPort       string    `json:"src_port" gorm:"column:src_port;type:varchar(255);index;"`
+	DstPort       string    `json:"dst_port" gorm:"column:dst_port;type:varchar(255);index;"`
 	SrcIP         string    `json:"src_ip" gorm:"column:src_ip;type:varchar(255);index;"`
 	DstIP         string    `json:"dst_ip" gorm:"column:dst_ip;type:varchar(255);index;"`
 	Time          int       `json:"time" gorm:"column:time;type:int;index;"`
@@ -150,8 +150,8 @@ type Pcap struct {
 	FlowFile      string    `json:"flow_file" gorm:"column:flow_file;type:text;"`
 	PcapFile      string    `json:"pcap_file" gorm:"column:pcap_file;type:varchar(255);"`
 	Tags          string    `json:"tags" gorm:"column:tags;type:text;index;"`
-	ClientContent string    `json:"client_content" gorm:"column:client_content;type:text;"`
-	ServerContent string    `json:"server_content" gorm:"column:server_content;type:text;"`
+	ClientContent string    `json:"client_content" gorm:"column:client_content;type:text;index;"`
+	ServerContent string    `json:"server_content" gorm:"column:server_content;type:text;index;"`
 	Size          int       `json:"size" gorm:"column:size;type:int;"`
 	CreatedAt     time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
 	UpdatedAt     time.Time `json:"updated_at" gorm:"autoUpdateTime"`

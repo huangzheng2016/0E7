@@ -325,7 +325,7 @@ func searchPcapByString(query, port string, page, pageSize int, searchType searc
 	// 分页查询
 	var pcaps []database.Pcap
 	offset := (page - 1) * pageSize
-	err = dbQuery.Offset(offset).Limit(pageSize).Order("time DESC").Find(&pcaps).Error
+	err = dbQuery.Offset(offset).Limit(pageSize).Order("id DESC").Find(&pcaps).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -391,7 +391,7 @@ func searchPcapByTag(tag, keyword, port string, page, pageSize int, searchType s
 	// 分页查询
 	var pcaps []database.Pcap
 	offset := (page - 1) * pageSize
-	err = dbQuery.Offset(offset).Limit(pageSize).Order("time DESC").Find(&pcaps).Error
+	err = dbQuery.Offset(offset).Limit(pageSize).Order("id DESC").Find(&pcaps).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -468,7 +468,7 @@ func searchPcapByTags(tags []string, keyword, port string, page, pageSize int, s
 	// 分页查询
 	var pcaps []database.Pcap
 	offset := (page - 1) * pageSize
-	err = dbQuery.Offset(offset).Limit(pageSize).Order("time DESC").Find(&pcaps).Error
+	err = dbQuery.Offset(offset).Limit(pageSize).Order("id DESC").Find(&pcaps).Error
 	if err != nil {
 		return nil, 0, err
 	}

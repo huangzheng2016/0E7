@@ -425,6 +425,7 @@ func (s *SearchService) searchBleve(query string, page, pageSize int, searchType
 	searchRequest := bleve.NewSearchRequest(searchQuery)
 	searchRequest.Size = pageSize
 	searchRequest.From = (page - 1) * pageSize
+	searchRequest.SortBy([]string{"-id"}) // 按id降序排序
 	searchRequest.Highlight = bleve.NewHighlight()
 
 	// 根据搜索类型添加高亮字段
@@ -666,7 +667,8 @@ func (s *SearchService) searchBleveByPcapIDs(queryStr string, pcapIDs []int, sea
 
 	// 执行搜索
 	searchRequest := bleve.NewSearchRequest(searchQuery)
-	searchRequest.Size = 10000 // 设置足够大的size以获取所有结果
+	searchRequest.Size = 10000            // 设置足够大的size以获取所有结果
+	searchRequest.SortBy([]string{"-id"}) // 按id降序排序
 	searchRequest.Fields = []string{"*"}
 
 	searchResult, err := s.index.Search(searchRequest)

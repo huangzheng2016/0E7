@@ -91,6 +91,7 @@ func init_database_client(db *gorm.DB, engine string) error {
 		log.Println("Failed to migrate database tables:", err)
 		return err
 	}
+
 	// 插入默认的 action 数据
 	var count int64
 	db.Model(&Action{}).Count(&count)

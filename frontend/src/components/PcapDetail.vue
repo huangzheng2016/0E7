@@ -216,6 +216,7 @@ const fetchFlowData = async () => {
 const forceLoadFlowData = async () => {
   if (pcapDetail.value?.flow_file) {
     showSizeWarning.value = false
+    showDownloadOption.value = false
     await fetchFlowData()
   }
 }
@@ -902,7 +903,6 @@ onUnmounted(() => {
           <template #default>
             <div class="warning-actions">
               <el-button type="primary" @click="forceLoadFlowData">继续加载</el-button>
-              <el-button @click="showSizeWarning = false">取消</el-button>
             </div>
           </template>
         </el-alert>
@@ -920,7 +920,6 @@ onUnmounted(() => {
           <template #default>
             <div class="download-actions">
               <el-button type="primary" @click="forceLoadFlowData">仍要在线查看</el-button>
-              <el-button @click="showDownloadOption = false">取消</el-button>
             </div>
           </template>
         </el-alert>

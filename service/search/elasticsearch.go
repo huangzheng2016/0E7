@@ -306,6 +306,9 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int, searc
 		"query": searchQuery,
 		"from":  (page - 1) * pageSize,
 		"size":  pageSize,
+		"sort": []map[string]interface{}{
+			{"id": map[string]interface{}{"order": "desc"}},
+		},
 		"highlight": map[string]interface{}{
 			"fields": map[string]interface{}{
 				highlightField: map[string]interface{}{},
@@ -581,6 +584,9 @@ func (s *ElasticsearchService) SearchByPcapIDs(queryStr string, pcapIDs []int, s
 	searchRequest := map[string]interface{}{
 		"query": searchQuery,
 		"size":  10000, // 设置足够大的size以获取所有结果
+		"sort": []map[string]interface{}{
+			{"id": map[string]interface{}{"order": "desc"}},
+		},
 	}
 
 	// 根据搜索类型选择高亮字段

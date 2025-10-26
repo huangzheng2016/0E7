@@ -298,15 +298,15 @@ const fetchSearchResults = async () => {
         dst_ip: item.dst_ip,
         dst_port: item.dst_port,
         time: item.timestamp,
-        duration: 0, // 搜索结果中没有duration
-        num_packets: 0, // 搜索结果中没有num_packets
-        blocked: 'false', // 搜索结果中没有blocked
-        filename: '', // 搜索结果中没有filename
+        duration: item.duration || 0, // 使用搜索结果中的duration
+        num_packets: item.num_packets || 0, // 使用搜索结果中的num_packets
+        blocked: item.blocked || 'false', // 使用搜索结果中的blocked
+        filename: item.filename || '', // 使用搜索结果中的filename
         fingerprints: '', // 搜索结果中没有fingerprints
         suricata: '', // 搜索结果中没有suricata
         flow: '', // 搜索结果中没有flow
         tags: item.tags,
-        size: 0, // 搜索结果中没有size
+        size: item.size || 0, // 使用搜索结果中的size
         created_at: '', // 搜索结果中没有created_at
         updated_at: '', // 搜索结果中没有updated_at
         // 保存搜索相关信息
