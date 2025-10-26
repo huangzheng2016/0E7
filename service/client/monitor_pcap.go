@@ -71,7 +71,7 @@ func capture(device string, desc string, bpf string, timeout time.Duration, wg *
 		return err
 	}
 	defer handle.Close()
-	log.Printf("设备 %s 初始化成功", device)
+	log.Printf("设备 %s 初始化成功，链路类型: %v", device, handle.LinkType())
 
 	buffer := new(bytes.Buffer)
 	writer_pcap := pcapgo.NewWriter(buffer)
@@ -93,6 +93,8 @@ func capture(device string, desc string, bpf string, timeout time.Duration, wg *
 			return err
 		}
 		log.Printf("设备 %s BPF过滤器设置成功: %s", device, bpf)
+	} else {
+		log.Printf("设备 %s 未设置BPF过滤器，将采集所有数据包", device)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -111,7 +113,7 @@ func capture(device string, desc string, bpf string, timeout time.Duration, wg *
 			err = writer_pcap.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
 			if err != nil {
 				log.Printf("设备 %s 写入数据包失败: %v", device, err)
-				break
+				return err
 			}
 		case <-ctx.Done():
 			endTime := time.Now()
@@ -123,8 +125,14 @@ func capture(device string, desc string, bpf string, timeout time.Duration, wg *
 				device,
 				startTime.Unix())
 
-			log.Printf("设备 %s 采集完成，采集时长: %v，数据包数量: %d，文件名: %s",
-				device, duration, packetCount, fileName)
+			// 检查是否采集到数据包
+			if packetCount == 0 {
+				log.Printf("设备 %s 采集完成，但未采集到任何数据包，跳过上传", device)
+				return nil
+			}
+
+			log.Printf("设备 %s 采集完成，采集时长: %v，数据包数量: %d，文件名: %s，文件大小: %d 字节",
+				device, duration, packetCount, fileName, buffer.Len())
 
 			body := &bytes.Buffer{}
 			writer_file := multipart.NewWriter(body)
@@ -146,7 +154,7 @@ func capture(device string, desc string, bpf string, timeout time.Duration, wg *
 				return err
 			}
 
-			log.Printf("设备 %s 开始上传文件 %s，文件大小: %d 字节", device, fileName, buffer.Len())
+			log.Printf("设备 %s 开始上传文件 %s，上传数据大小: %d 字节", device, fileName, body.Len())
 
 			request, err := http.NewRequest("POST", config.Server_url+"/webui/pcap_upload", body)
 			if err != nil {

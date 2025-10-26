@@ -84,6 +84,7 @@ func monitor() {
 				}
 			}
 			if !found {
+				log.Printf("监控任务ID %d 已从服务器删除，停止本地任务", id)
 				monitor_list.Delete(id)
 			}
 			return true
@@ -114,6 +115,7 @@ func monitor_run(id int) {
 			id, device.Name, device.Description, device.Bpf, old.interval)
 
 		for {
+			// 在每次循环开始时检查任务是否还存在
 			currentValue, exists := monitor_list.Load(id)
 			if !exists || currentValue.(Tmonitor) != old || old.interval == 0 {
 				log.Printf("监控任务ID %d 已停止或配置已更改", id)
@@ -134,7 +136,30 @@ func monitor_run(id int) {
 			if duration < time.Duration(old.interval)*time.Second {
 				sleepTime := time.Duration(old.interval)*time.Second - duration
 				log.Printf("监控任务ID %d 等待 %v 后进行下次采集", id, sleepTime)
-				time.Sleep(sleepTime)
+
+				// 分段等待，每5秒检查一次任务是否还存在
+				waitStart := time.Now()
+				for time.Since(waitStart) < sleepTime {
+					// 检查任务是否还存在
+					currentValue, exists := monitor_list.Load(id)
+					if !exists || currentValue.(Tmonitor) != old {
+						log.Printf("监控任务ID %d 在等待期间被删除，停止等待", id)
+						return
+					}
+
+					// 等待5秒或剩余时间（取较小值）
+					remainingTime := sleepTime - time.Since(waitStart)
+					if remainingTime <= 0 {
+						break
+					}
+
+					checkInterval := 5 * time.Second
+					if remainingTime < checkInterval {
+						checkInterval = remainingTime
+					}
+
+					time.Sleep(checkInterval)
+				}
 			}
 		}
 	}
