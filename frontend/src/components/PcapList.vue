@@ -30,8 +30,7 @@ interface PaginationState {
 }
 
 interface SearchState {
-  src_ip?: string
-  dst_ip?: string
+  ip?: string
   tags?: string
   fulltext?: string
 }
@@ -72,8 +71,7 @@ const totalItems = ref(0)
 
 // 搜索相关
 const searchFilters = ref({
-  src_ip: '',
-  dst_ip: '',
+  ip: '',
   tags: '',
   port: '',
   fulltext: ''
@@ -100,8 +98,7 @@ watch(() => props.paginationState, (newState) => {
 
 watch(() => props.searchState, (newState) => {
   if (newState) {
-    if (newState.src_ip !== undefined) searchFilters.value.src_ip = newState.src_ip
-    if (newState.dst_ip !== undefined) searchFilters.value.dst_ip = newState.dst_ip
+    if (newState.ip !== undefined) searchFilters.value.ip = newState.ip
     if (newState.tags !== undefined) searchFilters.value.tags = newState.tags
     if (newState.fulltext !== undefined) searchFilters.value.fulltext = newState.fulltext
   }
@@ -117,8 +114,7 @@ watch([currentPage, pageSize, totalItems], () => {
         totalItems: totalItems.value
       },
       search: {
-        src_ip: searchFilters.value.src_ip,
-        dst_ip: searchFilters.value.dst_ip,
+        ip: searchFilters.value.ip,
         tags: searchFilters.value.tags
       }
     })
@@ -134,8 +130,7 @@ watch(searchFilters, () => {
         totalItems: totalItems.value
       },
       search: {
-        src_ip: searchFilters.value.src_ip,
-        dst_ip: searchFilters.value.dst_ip,
+        ip: searchFilters.value.ip,
         tags: searchFilters.value.tags
       }
     })
@@ -157,11 +152,8 @@ const fetchPcapItems = async () => {
     formData.append('page_size', pageSize.value.toString())
     
     // 添加搜索过滤器
-    if (searchFilters.value.src_ip) {
-      formData.append('src_ip', searchFilters.value.src_ip)
-    }
-    if (searchFilters.value.dst_ip) {
-      formData.append('dst_ip', searchFilters.value.dst_ip)
+    if (searchFilters.value.ip) {
+      formData.append('ip', searchFilters.value.ip)
     }
     if (searchFilters.value.tags) {
       formData.append('tags', searchFilters.value.tags)
@@ -186,8 +178,7 @@ const fetchPcapItems = async () => {
           totalItems: totalItems.value
         },
         search: {
-          src_ip: searchFilters.value.src_ip,
-          dst_ip: searchFilters.value.dst_ip,
+          ip: searchFilters.value.ip,
           tags: searchFilters.value.tags,
           fulltext: searchFilters.value.fulltext
         }
@@ -290,8 +281,7 @@ const fetchSearchResults = async () => {
           totalItems: totalItems.value
         },
         search: {
-          src_ip: searchFilters.value.src_ip,
-          dst_ip: searchFilters.value.dst_ip,
+          ip: searchFilters.value.ip,
           tags: searchFilters.value.tags,
           fulltext: searchFilters.value.fulltext
         }
@@ -372,8 +362,7 @@ const updateFlagSearch = () => {
 // 重置搜索
 const resetSearch = () => {
   searchFilters.value = {
-    src_ip: '',
-    dst_ip: '',
+    ip: '',
     tags: '',
     port: '',
     fulltext: ''
@@ -401,8 +390,7 @@ const handleSizeChange = (size: number) => {
       totalItems: totalItems.value
     },
     search: {
-      src_ip: searchFilters.value.src_ip,
-      dst_ip: searchFilters.value.dst_ip,
+      ip: searchFilters.value.ip,
       tags: searchFilters.value.tags
     }
   })
@@ -702,15 +690,9 @@ onMounted(() => {
           clearable
         />
         <el-input
-          v-model="searchFilters.src_ip"
-          placeholder="源IP"
-          style="width: 120px"
-          @keyup.enter="handleSearch"
-        />
-        <el-input
-          v-model="searchFilters.dst_ip"
-          placeholder="目标IP"
-          style="width: 120px"
+          v-model="searchFilters.ip"
+          placeholder="IP地址 (源IP或目标IP)"
+          style="width: 180px"
           @keyup.enter="handleSearch"
         />
         <el-input

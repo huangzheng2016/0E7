@@ -196,6 +196,11 @@ func pcap_show(c *gin.Context) {
 	query := config.Db.Model(&database.Pcap{})
 
 	// 添加搜索条件
+	if ip := c.PostForm("ip"); ip != "" {
+		// 同时搜索源IP和目标IP
+		query = query.Where("src_ip LIKE ? OR dst_ip LIKE ?", "%"+ip+"%", "%"+ip+"%")
+	}
+	// 保持向后兼容性，如果传入了单独的src_ip或dst_ip参数
 	if srcIP := c.PostForm("src_ip"); srcIP != "" {
 		query = query.Where("src_ip LIKE ?", "%"+srcIP+"%")
 	}
