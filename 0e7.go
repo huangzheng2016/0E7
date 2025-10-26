@@ -51,7 +51,7 @@ func main() {
 		help         = flag.Bool("help", false, "显示帮助信息")
 		installGuide = flag.Bool("install-guide", false, "显示Windows依赖安装指南")
 	)
-	
+
 	// 支持短参数
 	flag.BoolVar(serverMode, "s", false, "以服务器模式启动（等同于 --server）")
 	flag.BoolVar(help, "h", false, "显示帮助信息（等同于 --help）")
