@@ -131,7 +131,7 @@ func generateCodeFromTemplate(templateType CodeTemplateType, url, host string, p
 
 	// 从数据库获取模板
 	var action database.Action
-	err := config.Db.Where("name = ?", templateName).First(&action).Error
+	err := config.Db.Where("name = ? AND is_deleted = ?", templateName, false).First(&action).Error
 	if err != nil {
 		return "", fmt.Errorf("template not found: %v", err)
 	}

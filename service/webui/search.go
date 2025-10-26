@@ -18,6 +18,7 @@ func search_pcap(c *gin.Context) {
 	pageSizeStr := c.PostForm("page_size")
 	searchTypeStr := c.PostForm("search_type") // 新增搜索类型参数
 	searchMode := c.PostForm("search_mode")    // 新增搜索模式参数：keyword(关键词) 或 string(字符串匹配)
+	port := c.PostForm("port")                 // 新增端口搜索参数
 
 	if query == "" {
 		c.JSON(400, gin.H{
@@ -64,7 +65,7 @@ func search_pcap(c *gin.Context) {
 	// 根据搜索模式选择搜索方法
 	if searchMode == "string" {
 		// 字符串匹配模式：直接查询数据库
-		results, total, err := searchPcapByString(query, page, pageSize, searchType)
+		results, total, err := searchPcapByString(query, port, page, pageSize, searchType)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"message": "fail",
@@ -97,7 +98,7 @@ func search_pcap(c *gin.Context) {
 		}
 
 		// 直接查询数据库，使用标签过滤
-		results, total, err := searchPcapByTag("FLAG-IN", keyword, page, pageSize, searchType)
+		results, total, err := searchPcapByTag("FLAG-IN", keyword, port, page, pageSize, searchType)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"message": "fail",
@@ -126,7 +127,7 @@ func search_pcap(c *gin.Context) {
 		}
 
 		// 直接查询数据库，使用标签过滤
-		results, total, err := searchPcapByTag("FLAG-OUT", keyword, page, pageSize, searchType)
+		results, total, err := searchPcapByTag("FLAG-OUT", keyword, port, page, pageSize, searchType)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"message": "fail",
@@ -155,7 +156,7 @@ func search_pcap(c *gin.Context) {
 		}
 
 		// 直接查询数据库，使用两个标签过滤
-		results, total, err := searchPcapByTags([]string{"FLAG-IN", "FLAG-OUT"}, keyword, page, pageSize, searchType)
+		results, total, err := searchPcapByTags([]string{"FLAG-IN", "FLAG-OUT"}, keyword, port, page, pageSize, searchType)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"message": "fail",
@@ -286,7 +287,7 @@ func switch_search_engine(c *gin.Context) {
 }
 
 // searchPcapByString 通过字符串匹配搜索PCAP数据
-func searchPcapByString(query string, page, pageSize int, searchType search.SearchType) ([]search.SearchResult, int64, error) {
+func searchPcapByString(query, port string, page, pageSize int, searchType search.SearchType) ([]search.SearchResult, int64, error) {
 	var results []search.SearchResult
 	var total int64
 
@@ -308,6 +309,11 @@ func searchPcapByString(query string, page, pageSize int, searchType search.Sear
 	// 如果指定了特定字段，使用该字段搜索
 	if searchField != "" {
 		dbQuery = dbQuery.Where(searchField+" LIKE ?", "%"+query+"%")
+	}
+
+	// 如果指定了端口，添加端口过滤条件（同时搜索源端口和目标端口）
+	if port != "" {
+		dbQuery = dbQuery.Where("src_port = ? OR dst_port = ?", port, port)
 	}
 
 	// 获取总数
@@ -350,7 +356,7 @@ func searchPcapByString(query string, page, pageSize int, searchType search.Sear
 }
 
 // searchPcapByTag 通过标签搜索PCAP数据
-func searchPcapByTag(tag, keyword string, page, pageSize int, searchType search.SearchType) ([]search.SearchResult, int64, error) {
+func searchPcapByTag(tag, keyword, port string, page, pageSize int, searchType search.SearchType) ([]search.SearchResult, int64, error) {
 	var results []search.SearchResult
 	var total int64
 
@@ -369,6 +375,11 @@ func searchPcapByTag(tag, keyword string, page, pageSize int, searchType search.
 			// 搜索全部内容，使用OR条件
 			dbQuery = dbQuery.Where("client_content LIKE ? OR server_content LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 		}
+	}
+
+	// 如果指定了端口，添加端口过滤条件（同时搜索源端口和目标端口）
+	if port != "" {
+		dbQuery = dbQuery.Where("src_port = ? OR dst_port = ?", port, port)
 	}
 
 	// 获取总数
@@ -411,7 +422,7 @@ func searchPcapByTag(tag, keyword string, page, pageSize int, searchType search.
 }
 
 // searchPcapByTags 通过多个标签搜索PCAP数据
-func searchPcapByTags(tags []string, keyword string, page, pageSize int, searchType search.SearchType) ([]search.SearchResult, int64, error) {
+func searchPcapByTags(tags []string, keyword, port string, page, pageSize int, searchType search.SearchType) ([]search.SearchResult, int64, error) {
 	var results []search.SearchResult
 	var total int64
 
@@ -441,6 +452,11 @@ func searchPcapByTags(tags []string, keyword string, page, pageSize int, searchT
 			// 搜索全部内容，使用OR条件
 			dbQuery = dbQuery.Where("client_content LIKE ? OR server_content LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 		}
+	}
+
+	// 如果指定了端口，添加端口过滤条件（同时搜索源端口和目标端口）
+	if port != "" {
+		dbQuery = dbQuery.Where("src_port = ? OR dst_port = ?", port, port)
 	}
 
 	// 获取总数

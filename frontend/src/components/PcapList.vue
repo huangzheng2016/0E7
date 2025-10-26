@@ -75,6 +75,7 @@ const searchFilters = ref({
   src_ip: '',
   dst_ip: '',
   tags: '',
+  port: '',
   fulltext: ''
 })
 
@@ -242,6 +243,9 @@ const fetchSearchResults = async () => {
     formData.append('page_size', pageSize.value.toString())
     formData.append('search_type', '0') // 固定搜索全部内容
     formData.append('search_mode', searchMode.value)
+    if (searchFilters.value.port) {
+      formData.append('port', searchFilters.value.port)
+    }
 
     const response = await fetch('/webui/search_pcap', {
       method: 'POST',
@@ -357,6 +361,7 @@ const handleFlagOutToggle = () => {
 const updateFlagSearch = () => {
   // 清除其他搜索条件
   searchFilters.value.tags = ''
+  searchFilters.value.port = ''
   searchFilters.value.fulltext = ''
   searchType.value = 0
   
@@ -370,6 +375,7 @@ const resetSearch = () => {
     src_ip: '',
     dst_ip: '',
     tags: '',
+    port: '',
     fulltext: ''
   }
   searchType.value = 0 // 重置搜索类型
@@ -711,6 +717,12 @@ onMounted(() => {
           v-model="searchFilters.tags"
           placeholder="标签"
           style="width: 120px"
+          @keyup.enter="handleSearch"
+        />
+        <el-input
+          v-model="searchFilters.port"
+          placeholder="端口"
+          style="width: 100px"
           @keyup.enter="handleSearch"
         />
         <el-select v-model="searchMode" placeholder="搜索模式" style="width: 120px; margin-right: 10px;">
