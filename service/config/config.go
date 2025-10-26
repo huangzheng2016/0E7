@@ -52,16 +52,16 @@ var (
 	Db_tables                     string
 )
 
-func Init_conf() error {
-	cfg, err := ini.Load("config.ini")
+func Init_conf(configFile string) error {
+	cfg, err := ini.Load(configFile)
 	if err != nil {
-		file, err := os.Create("config.ini")
+		file, err := os.Create(configFile)
 		if err != nil {
 			log.Println("Create error", err)
 			os.Exit(1)
 		}
 		defer file.Close()
-		cfg, err = ini.Load("config.ini")
+		cfg, err = ini.Load(configFile)
 		if err != nil {
 			log.Println("Failed to load config file:", err)
 			os.Exit(1)

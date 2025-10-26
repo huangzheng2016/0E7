@@ -3,7 +3,7 @@ package main
 import (
 	"0E7/service/client"
 	"0E7/service/config"
-	"0E7/service/flag"
+	flagService "0E7/service/flag"
 	"0E7/service/pcap"
 	"0E7/service/route"
 	"0E7/service/search"
@@ -13,6 +13,7 @@ import (
 	"0E7/service/webui"
 	"0E7/service/windows"
 	"embed"
+	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -43,32 +44,43 @@ func main() {
 
 	log.Println("0E7 For Security")
 
-	// 检查命令行参数
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "--help", "-h":
-			fmt.Println("0E7 - AWD攻防演练工具箱")
-			fmt.Println("")
-			fmt.Println("用法:")
-			fmt.Println("  0e7                    # 正常启动")
-			fmt.Println("  0e7 --server, -s       # 服务器模式启动")
-			fmt.Println("  0e7 --help             # 显示帮助信息")
-			fmt.Println("  0e7 --install-guide    # 显示Windows依赖安装指南")
-			fmt.Println("")
-			os.Exit(0)
-		case "--server", "-s":
-			// 服务器模式：检查并生成配置文件
-			if err := ensureServerConfig(); err != nil {
-				log.Printf("配置文件处理失败: %v", err)
-				os.Exit(1)
-			}
-		case "--install-guide":
-			if runtime.GOOS == "windows" {
-				fmt.Println(windows.GetInstallationGuide())
-			} else {
-				fmt.Println("此功能仅在Windows上可用")
-			}
-			os.Exit(0)
+	// 定义命令行参数
+	var (
+		configFile   = flag.String("config", "config.ini", "指定配置文件路径")
+		serverMode   = flag.Bool("server", false, "以服务器模式启动")
+		help         = flag.Bool("help", false, "显示帮助信息")
+		installGuide = flag.Bool("install-guide", false, "显示Windows依赖安装指南")
+	)
+	
+	// 支持短参数
+	flag.BoolVar(serverMode, "s", false, "以服务器模式启动（等同于 --server）")
+	flag.BoolVar(help, "h", false, "显示帮助信息（等同于 --help）")
+
+	// 解析命令行参数
+	flag.Parse()
+
+	// 处理帮助信息
+	if *help {
+		showHelp()
+		os.Exit(0)
+	}
+
+	// 处理Windows安装指南
+	if *installGuide {
+		if runtime.GOOS == "windows" {
+			fmt.Println(windows.GetInstallationGuide())
+		} else {
+			fmt.Println("此功能仅在Windows上可用")
+		}
+		os.Exit(0)
+	}
+
+	// 处理服务器模式
+	if *serverMode {
+		// 服务器模式：检查并生成配置文件
+		if err := ensureServerConfig(*configFile); err != nil {
+			log.Printf("配置文件处理失败: %v", err)
+			os.Exit(1)
 		}
 	}
 
@@ -77,9 +89,9 @@ func main() {
 		log.Printf("Windows依赖检查完成: %v", err)
 	}
 
-	err = config.Init_conf()
+	err = config.Init_conf(*configFile)
 	if err != nil {
-		log.Println("Config load error: ", err)
+		log.Printf("Config load error from %s: %v", *configFile, err)
 	}
 
 	file, err := os.OpenFile("0e7.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -117,13 +129,13 @@ func main() {
 		server.Register(r_server)
 
 		// 启动flag检测器
-		_ = flag.GetFlagDetector()
+		_ = flagService.GetFlagDetector()
 		log.Println("Flag检测器已启动")
 
 		fp, _ := fs.Sub(f, "dist")
 		r_server.StaticFS("/", http.FS(fp))
 
-		if config.Server_tls == true {
+		if config.Server_tls {
 			r_server.RedirectTrailingSlash = true
 			r_server.RedirectFixedPath = true
 			log.Printf("Starting TLS server on port: %s", config.Server_port)
@@ -159,9 +171,28 @@ func main() {
 	}
 }
 
+// showHelp 显示帮助信息
+func showHelp() {
+	fmt.Println("0E7 - AWD攻防演练工具箱")
+	fmt.Println("")
+	fmt.Println("用法:")
+	fmt.Println("  0e7                           # 正常启动（使用默认配置文件）")
+	fmt.Println("  0e7 -config <file>            # 指定配置文件路径")
+	fmt.Println("  0e7 --server, -s              # 服务器模式启动")
+	fmt.Println("  0e7 --server -config <file>   # 服务器模式启动并指定配置文件")
+	fmt.Println("  0e7 --help, -h                # 显示帮助信息")
+	fmt.Println("  0e7 --install-guide           # 显示Windows依赖安装指南")
+	fmt.Println("")
+	fmt.Println("参数说明:")
+	fmt.Println("  -config, --config <file>      指定配置文件路径（默认: config.ini）")
+	fmt.Println("  --server, -s                  以服务器模式启动")
+	fmt.Println("  --help, -h                    显示帮助信息")
+	fmt.Println("  --install-guide               显示Windows依赖安装指南")
+	fmt.Println("")
+}
+
 // ensureServerConfig 确保服务器配置文件存在，如果不存在则生成默认配置
-func ensureServerConfig() error {
-	configFile := "config.ini"
+func ensureServerConfig(configFile string) error {
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {

@@ -71,20 +71,20 @@ chmod +x build.sh
 
 #### 服务器模式
 ```bash
-# 启动服务器
+# 正常启动（使用默认配置文件）
 ./0e7_<platform>_<arch>
 
-# 或指定配置文件
-./0e7_<platform>_<arch> -config config.ini
-```
+# 指定配置文件路径
+./0e7_<platform>_<arch> -config <config_file>
 
-#### 客户端模式
-```bash
-# 启动客户端
-./0e7_<platform>_<arch> -client
+# 服务器模式启动（自动生成默认配置）
+./0e7_<platform>_<arch> --server
 
-# 或指定服务器地址
-./0e7_<platform>_<arch> -client -server https://server:6102
+# 服务器模式启动并指定配置文件
+./0e7_<platform>_<arch> --server -config <config_file>
+
+# 显示帮助信息
+./0e7_<platform>_<arch> --help
 ```
 
 ## 配置文件
@@ -100,7 +100,7 @@ debug            = false
 enable     = true
 port       = 6102
 db_engine  = sqlite3
-server_url = https://localhost:6102
+server_url = http://localhost:6102
 flag       = flag{.*}
 tls        = 
 pcap_zip   = 
@@ -109,7 +109,7 @@ pcap_zip   =
 enable     = true
 id         = 
 name       = 0e7
-server_url = https://remotehost:6102
+server_url = http://remotehost:6102
 pypi       = https://pypi.tuna.tsinghua.edu.cn/simple
 update     = true
 worker     = 
