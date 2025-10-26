@@ -107,10 +107,13 @@ func (t *tcpStream) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassem
 		}
 	}
 
-	// 保存原始数据包信息
+	// 保存原始数据包信息（只有在有载荷数据时才保存）
 	if context, ok := ac.(*Context); ok && context.OriginalPacket != nil {
-		originalPacketB64 := base64.StdEncoding.EncodeToString(context.OriginalPacket.Data())
-		t.originalPackets = append(t.originalPackets, originalPacketB64)
+		// 检查TCP载荷是否为空，只有非空载荷才保存原始数据包
+		if len(tcp.Payload) > 0 {
+			originalPacketB64 := base64.StdEncoding.EncodeToString(context.OriginalPacket.Data())
+			t.originalPackets = append(t.originalPackets, originalPacketB64)
+		}
 	}
 
 	// We just ignore the Checksum

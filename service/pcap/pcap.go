@@ -148,10 +148,19 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 				continue
 			}
 
-			// 创建数据包元数据（使用第一个FlowItem的时间戳作为基准）
+			// 解析原始数据包以获取正确的时间戳
+			packet := gopacket.NewPacket(packetData, layers.LayerTypeEthernet, gopacket.Default)
 			var timestamp time.Time
-			if len(entry.Flow) > 0 {
-				timestamp = time.Unix(int64(entry.Flow[0].Time/1000), int64((entry.Flow[0].Time%1000)*1000000))
+			if packet.Metadata() != nil && !packet.Metadata().CaptureInfo.Timestamp.IsZero() {
+				// 使用原始数据包的时间戳
+				timestamp = packet.Metadata().CaptureInfo.Timestamp
+			} else if i < len(entry.Flow) {
+				// 回退到使用对应FlowItem的时间戳
+				timestamp = time.Unix(int64(entry.Flow[i].Time/1000), int64((entry.Flow[i].Time%1000)*1000000))
+			} else if len(entry.Flow) > 0 {
+				// 如果原始数据包数量超过FlowItem数量，使用最后一个FlowItem的时间戳
+				lastFlowItem := entry.Flow[len(entry.Flow)-1]
+				timestamp = time.Unix(int64(lastFlowItem.Time/1000), int64((lastFlowItem.Time%1000)*1000000))
 			} else {
 				timestamp = time.Now()
 			}
