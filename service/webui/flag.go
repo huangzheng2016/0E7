@@ -5,6 +5,7 @@ import (
 	"0E7/service/database"
 	"0E7/service/flag"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -115,7 +116,7 @@ func GetFlagList(c *gin.Context) {
 func SubmitFlag(c *gin.Context) {
 	flagValue := c.PostForm("flag")
 	team := c.PostForm("team")
-	_ = c.PostForm("flag_regex") // 暂时不使用，但保留参数
+	flagRegex := c.PostForm("flag_regex")
 
 	if flagValue == "" {
 		c.JSON(400, gin.H{
@@ -125,21 +126,37 @@ func SubmitFlag(c *gin.Context) {
 		return
 	}
 
-	// 解析flag（支持多种格式）
+	// 确定使用的flag正则表达式
+	regexPattern := flagRegex
+	if regexPattern == "" {
+		regexPattern = config.Server_flag
+	}
+
+	if regexPattern == "" {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "未设置flag正则表达式",
+		})
+		return
+	}
+
+	// 编译正则表达式
+	regex, err := regexp.Compile(regexPattern)
+	if err != nil {
+		c.JSON(400, gin.H{
+			"message": "fail",
+			"error":   "flag正则表达式无效: " + err.Error(),
+		})
+		return
+	}
+
+	// 使用正则表达式匹配flag
 	var flags []string
-	lines := strings.Split(flagValue, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		// 支持逗号分隔
-		parts := strings.Split(line, ",")
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if part != "" {
-				flags = append(flags, part)
-			}
+	matches := regex.FindAllString(flagValue, -1)
+	for _, match := range matches {
+		match = strings.TrimSpace(match)
+		if match != "" {
+			flags = append(flags, match)
 		}
 	}
 
@@ -151,7 +168,7 @@ func SubmitFlag(c *gin.Context) {
 	if len(flags) == 0 {
 		c.JSON(400, gin.H{
 			"message": "fail",
-			"error":   "没有有效的flag",
+			"error":   "没有匹配到有效的flag",
 		})
 		return
 	}

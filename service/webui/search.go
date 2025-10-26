@@ -96,15 +96,8 @@ func search_pcap(c *gin.Context) {
 			}
 		}
 
-		// 先搜索关键词（如果有的话）
-		var searchQuery string
-		if keyword != "" {
-			searchQuery = keyword
-		} else {
-			searchQuery = "*" // 搜索所有内容
-		}
-
-		results, _, err := searchService.Search(searchQuery, page, pageSize, searchType)
+		// 直接查询数据库，使用标签过滤
+		results, total, err := searchPcapByTag("FLAG-IN", keyword, page, pageSize, searchType)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"message": "fail",
@@ -113,18 +106,10 @@ func search_pcap(c *gin.Context) {
 			return
 		}
 
-		// 过滤结果，只保留包含FLAG-IN标签的记录
-		var filteredResults []search.SearchResult
-		for _, result := range results {
-			if strings.Contains(result.Tags, "FLAG-IN") {
-				filteredResults = append(filteredResults, result)
-			}
-		}
-
 		c.JSON(200, gin.H{
 			"message":     "success",
-			"result":      filteredResults,
-			"total":       int64(len(filteredResults)),
+			"result":      results,
+			"total":       total,
 			"page":        page,
 			"page_size":   pageSize,
 			"search_type": int(searchType),
@@ -140,15 +125,8 @@ func search_pcap(c *gin.Context) {
 			}
 		}
 
-		// 先搜索关键词（如果有的话）
-		var searchQuery string
-		if keyword != "" {
-			searchQuery = keyword
-		} else {
-			searchQuery = "*" // 搜索所有内容
-		}
-
-		results, _, err := searchService.Search(searchQuery, page, pageSize, searchType)
+		// 直接查询数据库，使用标签过滤
+		results, total, err := searchPcapByTag("FLAG-OUT", keyword, page, pageSize, searchType)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"message": "fail",
@@ -157,18 +135,10 @@ func search_pcap(c *gin.Context) {
 			return
 		}
 
-		// 过滤结果，只保留包含FLAG-OUT标签的记录
-		var filteredResults []search.SearchResult
-		for _, result := range results {
-			if strings.Contains(result.Tags, "FLAG-OUT") {
-				filteredResults = append(filteredResults, result)
-			}
-		}
-
 		c.JSON(200, gin.H{
 			"message":     "success",
-			"result":      filteredResults,
-			"total":       int64(len(filteredResults)),
+			"result":      results,
+			"total":       total,
 			"page":        page,
 			"page_size":   pageSize,
 			"search_type": int(searchType),
@@ -184,15 +154,8 @@ func search_pcap(c *gin.Context) {
 			}
 		}
 
-		// 先搜索关键词（如果有的话）
-		var searchQuery string
-		if keyword != "" {
-			searchQuery = keyword
-		} else {
-			searchQuery = "*" // 搜索所有内容
-		}
-
-		results, _, err := searchService.Search(searchQuery, page, pageSize, searchType)
+		// 直接查询数据库，使用两个标签过滤
+		results, total, err := searchPcapByTags([]string{"FLAG-IN", "FLAG-OUT"}, keyword, page, pageSize, searchType)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"message": "fail",
@@ -201,18 +164,10 @@ func search_pcap(c *gin.Context) {
 			return
 		}
 
-		// 过滤结果，只保留同时包含两个标签的记录
-		var filteredResults []search.SearchResult
-		for _, result := range results {
-			if strings.Contains(result.Tags, "FLAG-IN") && strings.Contains(result.Tags, "FLAG-OUT") {
-				filteredResults = append(filteredResults, result)
-			}
-		}
-
 		c.JSON(200, gin.H{
 			"message":     "success",
-			"result":      filteredResults,
-			"total":       int64(len(filteredResults)),
+			"result":      results,
+			"total":       total,
 			"page":        page,
 			"page_size":   pageSize,
 			"search_type": int(searchType),
@@ -387,6 +342,133 @@ func searchPcapByString(query string, page, pageSize int, searchType search.Sear
 			Filename:   pcap.Filename,
 			Blocked:    pcap.Blocked,
 			Score:      1.0, // 字符串匹配固定分数
+		}
+		results = append(results, result)
+	}
+
+	return results, total, nil
+}
+
+// searchPcapByTag 通过标签搜索PCAP数据
+func searchPcapByTag(tag, keyword string, page, pageSize int, searchType search.SearchType) ([]search.SearchResult, int64, error) {
+	var results []search.SearchResult
+	var total int64
+
+	// 构建数据库查询
+	dbQuery := config.Db.Model(&database.Pcap{}).Where("tags LIKE ?", "%"+tag+"%")
+
+	// 如果有关键词，添加内容搜索条件
+	if keyword != "" && keyword != "*" {
+		// 根据搜索类型选择搜索字段
+		switch searchType {
+		case search.SearchTypeClient:
+			dbQuery = dbQuery.Where("client_content LIKE ?", "%"+keyword+"%")
+		case search.SearchTypeServer:
+			dbQuery = dbQuery.Where("server_content LIKE ?", "%"+keyword+"%")
+		default:
+			// 搜索全部内容，使用OR条件
+			dbQuery = dbQuery.Where("client_content LIKE ? OR server_content LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+		}
+	}
+
+	// 获取总数
+	err := dbQuery.Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 分页查询
+	var pcaps []database.Pcap
+	offset := (page - 1) * pageSize
+	err = dbQuery.Offset(offset).Limit(pageSize).Order("time DESC").Find(&pcaps).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 转换为搜索结果格式
+	for _, pcap := range pcaps {
+		result := search.SearchResult{
+			ID:         fmt.Sprintf("pcap_%d", pcap.ID),
+			PcapID:     pcap.ID,
+			Content:    pcap.ClientContent + " " + pcap.ServerContent,
+			SrcIP:      pcap.SrcIP,
+			DstIP:      pcap.DstIP,
+			SrcPort:    pcap.SrcPort,
+			DstPort:    pcap.DstPort,
+			Tags:       pcap.Tags,
+			Timestamp:  pcap.Time,
+			Duration:   pcap.Duration,
+			NumPackets: pcap.NumPackets,
+			Size:       pcap.Size,
+			Filename:   pcap.Filename,
+			Blocked:    pcap.Blocked,
+			Score:      1.0, // 固定分数
+		}
+		results = append(results, result)
+	}
+
+	return results, total, nil
+}
+
+// searchPcapByTags 通过多个标签搜索PCAP数据
+func searchPcapByTags(tags []string, keyword string, page, pageSize int, searchType search.SearchType) ([]search.SearchResult, int64, error) {
+	var results []search.SearchResult
+	var total int64
+
+	// 构建数据库查询
+	dbQuery := config.Db.Model(&database.Pcap{})
+
+	// 添加所有标签的过滤条件
+	for _, tag := range tags {
+		dbQuery = dbQuery.Where("tags LIKE ?", "%"+tag+"%")
+	}
+
+	// 如果有关键词，添加内容搜索条件
+	if keyword != "" && keyword != "*" {
+		// 根据搜索类型选择搜索字段
+		switch searchType {
+		case search.SearchTypeClient:
+			dbQuery = dbQuery.Where("client_content LIKE ?", "%"+keyword+"%")
+		case search.SearchTypeServer:
+			dbQuery = dbQuery.Where("server_content LIKE ?", "%"+keyword+"%")
+		default:
+			// 搜索全部内容，使用OR条件
+			dbQuery = dbQuery.Where("client_content LIKE ? OR server_content LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+		}
+	}
+
+	// 获取总数
+	err := dbQuery.Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 分页查询
+	var pcaps []database.Pcap
+	offset := (page - 1) * pageSize
+	err = dbQuery.Offset(offset).Limit(pageSize).Order("time DESC").Find(&pcaps).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 转换为搜索结果格式
+	for _, pcap := range pcaps {
+		result := search.SearchResult{
+			ID:         fmt.Sprintf("pcap_%d", pcap.ID),
+			PcapID:     pcap.ID,
+			Content:    pcap.ClientContent + " " + pcap.ServerContent,
+			SrcIP:      pcap.SrcIP,
+			DstIP:      pcap.DstIP,
+			SrcPort:    pcap.SrcPort,
+			DstPort:    pcap.DstPort,
+			Tags:       pcap.Tags,
+			Timestamp:  pcap.Time,
+			Duration:   pcap.Duration,
+			NumPackets: pcap.NumPackets,
+			Size:       pcap.Size,
+			Filename:   pcap.Filename,
+			Blocked:    pcap.Blocked,
+			Score:      1.0, // 固定分数
 		}
 		results = append(results, result)
 	}

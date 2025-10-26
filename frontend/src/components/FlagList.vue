@@ -620,13 +620,13 @@ onUnmounted(() => {
         <el-form-item label="Flag" required>
           <el-input
             v-model="submitDialog.flag"
-            placeholder="请输入flag，支持批量提交：&#10;1. 每行一个flag&#10;2. 逗号分隔多个flag&#10;3. 最多999条"
+            placeholder="请输入包含flag的文本内容，系统将自动使用flag正则表达式匹配并提取所有flag"
             type="textarea"
             :rows="8"
           />
           <div class="form-tip">
             <el-text type="info" size="small">
-              支持批量提交：每行一个flag，或用逗号分隔，最多999条
+              系统将自动使用flag正则表达式匹配并提取所有flag，最多999条
             </el-text>
           </div>
         </el-form-item>
