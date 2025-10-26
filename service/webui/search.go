@@ -418,9 +418,15 @@ func searchPcapByTags(tags []string, keyword string, page, pageSize int, searchT
 	// 构建数据库查询
 	dbQuery := config.Db.Model(&database.Pcap{})
 
-	// 添加所有标签的过滤条件
-	for _, tag := range tags {
-		dbQuery = dbQuery.Where("tags LIKE ?", "%"+tag+"%")
+	// 添加所有标签的过滤条件（使用OR逻辑）
+	if len(tags) > 0 {
+		var tagConditions []string
+		var tagArgs []interface{}
+		for _, tag := range tags {
+			tagConditions = append(tagConditions, "tags LIKE ?")
+			tagArgs = append(tagArgs, "%"+tag+"%")
+		}
+		dbQuery = dbQuery.Where(strings.Join(tagConditions, " OR "), tagArgs...)
 	}
 
 	// 如果有关键词，添加内容搜索条件

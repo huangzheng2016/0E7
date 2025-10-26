@@ -227,7 +227,7 @@ const fetchSearchResults = async () => {
       if (flagOutActive.value) flagTags.push('FLAG-OUT')
       
       if (flagTags.length > 0) {
-        // 如果同时激活两个按钮，查询同时包含两个标签的记录
+        // 如果同时激活两个按钮，查询包含任一标签的记录（OR逻辑）
         if (flagTags.length === 2) {
           query = `tags:FLAG-IN AND tags:FLAG-OUT ${query !== '*' ? 'AND ' + query : ''}`
         } else {
@@ -327,14 +327,28 @@ const handleSearch = () => {
 
 // FlagIn按钮切换
 const handleFlagInToggle = () => {
-  flagInActive.value = !flagInActive.value
+  if (flagInActive.value) {
+    // 如果当前激活，则关闭
+    flagInActive.value = false
+  } else {
+    // 如果当前未激活，则激活并关闭另一个按钮
+    flagInActive.value = true
+    flagOutActive.value = false
+  }
   console.log('FlagIn按钮切换:', flagInActive.value)
   updateFlagSearch()
 }
 
 // FlagOut按钮切换
 const handleFlagOutToggle = () => {
-  flagOutActive.value = !flagOutActive.value
+  if (flagOutActive.value) {
+    // 如果当前激活，则关闭
+    flagOutActive.value = false
+  } else {
+    // 如果当前未激活，则激活并关闭另一个按钮
+    flagOutActive.value = true
+    flagInActive.value = false
+  }
   console.log('FlagOut按钮切换:', flagOutActive.value)
   updateFlagSearch()
 }
