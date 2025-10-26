@@ -77,7 +77,7 @@ func (s *ElasticsearchService) Init() error {
 	defer res.Body.Close()
 
 	if res.IsError() {
-		return fmt.Errorf("Elasticsearch连接错误: %s", res.String())
+		return fmt.Errorf("elasticsearch连接错误: %s", res.String())
 	}
 
 	s.client = client
@@ -105,6 +105,16 @@ func (s *ElasticsearchService) createIndexMapping() error {
 					"analyzer": "standard",
 					"search_analyzer": "standard"
 				},
+				"client_content": {
+					"type": "text",
+					"analyzer": "standard",
+					"search_analyzer": "standard"
+				},
+				"server_content": {
+					"type": "text",
+					"analyzer": "standard",
+					"search_analyzer": "standard"
+				},
 				"src_ip": {
 					"type": "keyword"
 				},
@@ -122,6 +132,21 @@ func (s *ElasticsearchService) createIndexMapping() error {
 				},
 				"timestamp": {
 					"type": "integer"
+				},
+				"duration": {
+					"type": "integer"
+				},
+				"num_packets": {
+					"type": "integer"
+				},
+				"size": {
+					"type": "integer"
+				},
+				"filename": {
+					"type": "keyword"
+				},
+				"blocked": {
+					"type": "keyword"
 				},
 				"created_at": {
 					"type": "date"
@@ -307,7 +332,7 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int, searc
 		"from":  (page - 1) * pageSize,
 		"size":  pageSize,
 		"sort": []map[string]interface{}{
-			{"id": map[string]interface{}{"order": "desc"}},
+			{"pcap_id": map[string]interface{}{"order": "desc"}},
 		},
 		"highlight": map[string]interface{}{
 			"fields": map[string]interface{}{
@@ -349,7 +374,12 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int, searc
 	}
 
 	total, _ := hits["total"].(map[string]interface{})
-	totalValue, _ := total["value"].(float64)
+	var totalValue float64
+	if total != nil {
+		if val, ok := total["value"].(float64); ok {
+			totalValue = val
+		}
+	}
 
 	hitsArray, ok := hits["hits"].([]interface{})
 	if !ok {
@@ -368,8 +398,15 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int, searc
 			continue
 		}
 
-		score, _ := hitMap["_score"].(float64)
-		pcapID, _ := source["pcap_id"].(float64)
+		var score float64
+		if s, ok := hitMap["_score"].(float64); ok {
+			score = s
+		}
+
+		var pcapID float64
+		if p, ok := source["pcap_id"].(float64); ok {
+			pcapID = p
+		}
 
 		// 获取原始Pcap记录以获取其他字段
 		var pcapRecord database.Pcap
@@ -437,7 +474,12 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 			if boolQuery["filter"] == nil {
 				boolQuery["filter"] = []interface{}{}
 			}
-			filters := boolQuery["filter"].([]interface{})
+			filters, ok := boolQuery["filter"].([]interface{})
+			if !ok {
+				// 如果filter不是[]interface{}类型，重新创建
+				boolQuery["filter"] = []interface{}{}
+				filters = boolQuery["filter"].([]interface{})
+			}
 
 			// 添加端口过滤条件（源端口或目标端口匹配）
 			portFilter := map[string]interface{}{
@@ -479,7 +521,7 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 		"from":  (page - 1) * pageSize,
 		"size":  pageSize,
 		"sort": []map[string]interface{}{
-			{"id": map[string]interface{}{"order": "desc"}},
+			{"pcap_id": map[string]interface{}{"order": "desc"}},
 		},
 		"highlight": map[string]interface{}{
 			"fields": map[string]interface{}{
@@ -505,7 +547,7 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 	defer res.Body.Close()
 
 	if res.IsError() {
-		return nil, 0, fmt.Errorf("Elasticsearch搜索错误: %s", res.String())
+		return nil, 0, fmt.Errorf("elasticsearch搜索错误: %s", res.String())
 	}
 
 	// 解析搜索结果
@@ -520,7 +562,12 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 	}
 
 	total, _ := hits["total"].(map[string]interface{})
-	totalValue, _ := total["value"].(float64)
+	var totalValue float64
+	if total != nil {
+		if val, ok := total["value"].(float64); ok {
+			totalValue = val
+		}
+	}
 
 	hitsArray, ok := hits["hits"].([]interface{})
 	if !ok {
@@ -539,8 +586,15 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 			continue
 		}
 
-		score, _ := hitMap["_score"].(float64)
-		pcapID, _ := source["pcap_id"].(float64)
+		var score float64
+		if s, ok := hitMap["_score"].(float64); ok {
+			score = s
+		}
+
+		var pcapID float64
+		if p, ok := source["pcap_id"].(float64); ok {
+			pcapID = p
+		}
 
 		// 获取原始Pcap记录以获取其他字段
 		var pcapRecord database.Pcap
@@ -753,7 +807,7 @@ func (s *ElasticsearchService) SearchByPcapIDs(queryStr string, pcapIDs []int, s
 		"query": searchQuery,
 		"size":  10000, // 设置足够大的size以获取所有结果
 		"sort": []map[string]interface{}{
-			{"id": map[string]interface{}{"order": "desc"}},
+			{"pcap_id": map[string]interface{}{"order": "desc"}},
 		},
 	}
 
@@ -784,7 +838,7 @@ func (s *ElasticsearchService) SearchByPcapIDs(queryStr string, pcapIDs []int, s
 	defer res.Body.Close()
 
 	if res.IsError() {
-		return nil, fmt.Errorf("Elasticsearch搜索错误: %s", res.String())
+		return nil, fmt.Errorf("elasticsearch搜索错误: %s", res.String())
 	}
 
 	var searchResponse map[string]interface{}
@@ -799,25 +853,49 @@ func (s *ElasticsearchService) SearchByPcapIDs(queryStr string, pcapIDs []int, s
 			for _, hit := range hitsList {
 				if hitMap, ok := hit.(map[string]interface{}); ok {
 					if source, ok := hitMap["_source"].(map[string]interface{}); ok {
+						// 安全地获取字段值，避免nil指针异常
+						getString := func(field string) string {
+							if val, ok := source[field]; ok && val != nil {
+								if str, ok := val.(string); ok {
+									return str
+								}
+							}
+							return ""
+						}
+
+						getInt := func(field string) int {
+							if val, ok := source[field]; ok && val != nil {
+								if f, ok := val.(float64); ok {
+									return int(f)
+								}
+								if i, ok := val.(int); ok {
+									return i
+								}
+							}
+							return 0
+						}
+
 						result := SearchResult{
-							PcapID:     int(source["pcap_id"].(float64)),
-							SrcIP:      source["src_ip"].(string),
-							DstIP:      source["dst_ip"].(string),
-							SrcPort:    source["src_port"].(string),
-							DstPort:    source["dst_port"].(string),
-							Tags:       source["tags"].(string),
-							Timestamp:  int(source["timestamp"].(float64)),
-							Duration:   int(source["duration"].(float64)),
-							NumPackets: int(source["num_packets"].(float64)),
-							Size:       int(source["size"].(float64)),
-							Filename:   source["filename"].(string),
-							Blocked:    source["blocked"].(string),
+							PcapID:     getInt("pcap_id"),
+							SrcIP:      getString("src_ip"),
+							DstIP:      getString("dst_ip"),
+							SrcPort:    getString("src_port"),
+							DstPort:    getString("dst_port"),
+							Tags:       getString("tags"),
+							Timestamp:  getInt("timestamp"),
+							Duration:   getInt("duration"),
+							NumPackets: getInt("num_packets"),
+							Size:       getInt("size"),
+							Filename:   getString("filename"),
+							Blocked:    getString("blocked"),
 						}
 
 						// 添加高亮信息
 						if highlight, ok := hitMap["highlight"].(map[string]interface{}); ok {
 							if highlightContent, ok := highlight[highlightField].([]interface{}); ok && len(highlightContent) > 0 {
-								result.Highlight = highlightContent[0].(string)
+								if highlightStr, ok := highlightContent[0].(string); ok {
+									result.Highlight = highlightStr
+								}
 							}
 						}
 

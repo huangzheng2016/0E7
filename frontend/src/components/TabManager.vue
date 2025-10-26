@@ -26,6 +26,12 @@ interface Tab {
     flagOutActive?: boolean
     searchType?: number
   }
+  // 分页相关状态
+  paginationState?: {
+    currentPage: number
+    pageSize: number
+    totalItems: number
+  }
 }
 
 const tabs = ref<Tab[]>([
@@ -76,7 +82,9 @@ const saveState = () => {
       title: tab.title,
       type: tab.type,
       itemId: tab.itemId,
-      closable: tab.closable
+      closable: tab.closable,
+      searchState: tab.searchState,
+      paginationState: tab.paginationState
     })),
     activeTabId: activeTabId.value,
     isCollapsed: isCollapsed.value
@@ -131,9 +139,15 @@ const loadState = () => {
         const savedTabs = state.tabs || []
         const mergedTabs = [...defaultTabs]
         
-        // 添加保存的编辑标签页
+        // 恢复基础标签页的状态
         savedTabs.forEach((savedTab: any) => {
-          if (savedTab.type === 'action-edit' || savedTab.type === 'exploit-edit' || savedTab.type === 'pcap-detail') {
+          const defaultTab = mergedTabs.find(tab => tab.type === savedTab.type)
+          if (defaultTab) {
+            // 恢复基础标签页的状态
+            defaultTab.searchState = savedTab.searchState
+            defaultTab.paginationState = savedTab.paginationState
+          } else if (savedTab.type === 'action-edit' || savedTab.type === 'exploit-edit' || savedTab.type === 'pcap-detail') {
+            // 添加保存的编辑标签页
             mergedTabs.push(savedTab as Tab)
           }
         })
@@ -418,11 +432,15 @@ const handleExploitAdd = () => {
 
 // 简化的状态变化处理 - 保存搜索状态
 const handleStateChange = (tabType: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list', state: any) => {
-  // 只保存搜索状态，不保存分页状态
-  if (state.search) {
-    const tab = tabs.value.find(t => t.type === tabType)
-    if (tab) {
+  const tab = tabs.value.find(t => t.type === tabType)
+  if (tab) {
+    // 保存搜索状态
+    if (state.search) {
       tab.searchState = state.search
+    }
+    // 保存分页状态
+    if (state.pagination) {
+      tab.paginationState = state.pagination
     }
   }
 }
@@ -700,6 +718,7 @@ onUnmounted(() => {
       <div v-else-if="activeTab?.type === 'pcap-list'">
         <PcapList
           :search-state="activeTab.searchState"
+          :pagination-state="activeTab.paginationState"
           @view="handlePcapView"
           @state-change="(state) => handleStateChange('pcap-list', state)"
         />

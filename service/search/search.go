@@ -229,6 +229,7 @@ func (s *SearchService) createMapping() mapping.IndexMapping {
 
 	// 数值字段 - 数值类型
 	numericFieldMapping := bleve.NewNumericFieldMapping()
+	documentMapping.AddFieldMappingsAt("pcap_id", numericFieldMapping)
 	documentMapping.AddFieldMappingsAt("duration", numericFieldMapping)
 	documentMapping.AddFieldMappingsAt("num_packets", numericFieldMapping)
 	documentMapping.AddFieldMappingsAt("size", numericFieldMapping)
@@ -431,7 +432,7 @@ func (s *SearchService) searchBleve(query string, page, pageSize int, searchType
 	searchRequest := bleve.NewSearchRequest(searchQuery)
 	searchRequest.Size = pageSize
 	searchRequest.From = (page - 1) * pageSize
-	searchRequest.SortBy([]string{"-id"}) // 按id降序排序
+	searchRequest.SortBy([]string{"-pcap_id"}) // 按pcap_id降序排序
 	searchRequest.Highlight = bleve.NewHighlight()
 
 	// 根据搜索类型添加高亮字段
@@ -523,7 +524,8 @@ func (s *SearchService) searchBleveWithPort(query, port string, page, pageSize i
 	searchRequest := bleve.NewSearchRequest(searchQuery)
 	searchRequest.Size = pageSize
 	searchRequest.From = (page - 1) * pageSize
-	searchRequest.SortBy([]string{"-id"}) // 按id降序排序
+	searchRequest.SortBy([]string{"-pcap_id"}) // 按pcap_id降序排序
+	searchRequest.Fields = []string{"*"}       // 返回所有字段
 	searchRequest.Highlight = bleve.NewHighlight()
 
 	// 根据搜索类型添加高亮字段
@@ -547,21 +549,49 @@ func (s *SearchService) searchBleveWithPort(query, port string, page, pageSize i
 	// 转换搜索结果
 	var results []SearchResult
 	for _, hit := range searchResult.Hits {
+		// 安全地获取字段值，避免nil指针异常
+		getString := func(field string) string {
+			if val, ok := hit.Fields[field]; ok && val != nil {
+				if str, ok := val.(string); ok {
+					return str
+				}
+			}
+			return ""
+		}
+
+		getInt := func(field string) int {
+			if val, ok := hit.Fields[field]; ok && val != nil {
+				if f, ok := val.(float64); ok {
+					return int(f)
+				}
+			}
+			return 0
+		}
+
+		getBool := func(field string) bool {
+			if val, ok := hit.Fields[field]; ok && val != nil {
+				if b, ok := val.(bool); ok {
+					return b
+				}
+			}
+			return false
+		}
+
 		result := SearchResult{
 			ID:         hit.ID,
 			PcapID:     0, // 从ID中提取
-			Content:    hit.Fields["content"].(string),
-			SrcIP:      hit.Fields["src_ip"].(string),
-			DstIP:      hit.Fields["dst_ip"].(string),
-			SrcPort:    hit.Fields["src_port"].(string),
-			DstPort:    hit.Fields["dst_port"].(string),
-			Tags:       hit.Fields["tags"].(string),
-			Timestamp:  int(hit.Fields["timestamp"].(float64)),
-			Duration:   int(hit.Fields["duration"].(float64)),
-			NumPackets: int(hit.Fields["num_packets"].(float64)),
-			Size:       int(hit.Fields["size"].(float64)),
-			Filename:   hit.Fields["filename"].(string),
-			Blocked:    fmt.Sprintf("%t", hit.Fields["blocked"].(bool)),
+			Content:    getString("content"),
+			SrcIP:      getString("src_ip"),
+			DstIP:      getString("dst_ip"),
+			SrcPort:    getString("src_port"),
+			DstPort:    getString("dst_port"),
+			Tags:       getString("tags"),
+			Timestamp:  getInt("timestamp"),
+			Duration:   getInt("duration"),
+			NumPackets: getInt("num_packets"),
+			Size:       getInt("size"),
+			Filename:   getString("filename"),
+			Blocked:    fmt.Sprintf("%t", getBool("blocked")),
 			Score:      hit.Score,
 		}
 
@@ -775,31 +805,53 @@ func (s *SearchService) searchBleveByPcapIDs(queryStr string, pcapIDs []int, sea
 
 	// 执行搜索
 	searchRequest := bleve.NewSearchRequest(searchQuery)
-	searchRequest.Size = 10000            // 设置足够大的size以获取所有结果
-	searchRequest.SortBy([]string{"-id"}) // 按id降序排序
+	searchRequest.Size = 10000                 // 设置足够大的size以获取所有结果
+	searchRequest.SortBy([]string{"-pcap_id"}) // 按pcap_id降序排序
 	searchRequest.Fields = []string{"*"}
 
 	searchResult, err := s.index.Search(searchRequest)
 	if err != nil {
-		return nil, fmt.Errorf("Bleve搜索失败: %v", err)
+		return nil, fmt.Errorf("bleve搜索失败: %v", err)
 	}
 
 	// 转换结果
 	var results []SearchResult
 	for _, hit := range searchResult.Hits {
+		// 安全地获取字段值，避免nil指针异常
+		getString := func(field string) string {
+			if val, ok := hit.Fields[field]; ok && val != nil {
+				if str, ok := val.(string); ok {
+					return str
+				}
+			}
+			return ""
+		}
+
+		getInt := func(field string) int {
+			if val, ok := hit.Fields[field]; ok && val != nil {
+				if i, ok := val.(int); ok {
+					return i
+				}
+				if f, ok := val.(float64); ok {
+					return int(f)
+				}
+			}
+			return 0
+		}
+
 		result := SearchResult{
-			PcapID:     hit.Fields["pcap_id"].(int),
-			SrcIP:      hit.Fields["src_ip"].(string),
-			DstIP:      hit.Fields["dst_ip"].(string),
-			SrcPort:    hit.Fields["src_port"].(string),
-			DstPort:    hit.Fields["dst_port"].(string),
-			Tags:       hit.Fields["tags"].(string),
-			Timestamp:  hit.Fields["timestamp"].(int),
-			Duration:   hit.Fields["duration"].(int),
-			NumPackets: hit.Fields["num_packets"].(int),
-			Size:       hit.Fields["size"].(int),
-			Filename:   hit.Fields["filename"].(string),
-			Blocked:    hit.Fields["blocked"].(string),
+			PcapID:     getInt("pcap_id"),
+			SrcIP:      getString("src_ip"),
+			DstIP:      getString("dst_ip"),
+			SrcPort:    getString("src_port"),
+			DstPort:    getString("dst_port"),
+			Tags:       getString("tags"),
+			Timestamp:  getInt("timestamp"),
+			Duration:   getInt("duration"),
+			NumPackets: getInt("num_packets"),
+			Size:       getInt("size"),
+			Filename:   getString("filename"),
+			Blocked:    getString("blocked"),
 			Score:      hit.Score,
 		}
 		results = append(results, result)

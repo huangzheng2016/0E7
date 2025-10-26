@@ -49,7 +49,104 @@ const pcapItems = ref<PcapItem[]>([])
 const loading = ref(false)
 const uploadRef = ref()
 
-// 批量上传相关状态
+const isRestoringState = ref(false)
+const stateRestorationComplete = ref(!props.paginationState && !props.searchState)
+const needsStateRestoration = ref(!!(props.paginationState || props.searchState))
+
+const loadCachedData = () => {
+  try {
+    const cached = localStorage.getItem('pcap-list-cache')
+    if (cached) {
+      return JSON.parse(cached)
+    }
+  } catch (error) {
+    console.error('加载缓存失败:', error)
+  }
+  return null
+}
+
+const cachedData = ref<{
+  items: PcapItem[]
+  total: number
+  searchKey: string
+} | null>(loadCachedData())
+
+const generateStateKey = () => {
+  return JSON.stringify({
+    ip: searchFilters.value.ip,
+    tags: searchFilters.value.tags,
+    port: searchFilters.value.port,
+    fulltext: searchFilters.value.fulltext,
+    flagInActive: flagInActive.value,
+    flagOutActive: flagOutActive.value,
+    searchType: searchType.value,
+    searchMode: searchMode.value,
+    currentPage: currentPage.value,
+    pageSize: pageSize.value
+  })
+}
+
+const getCachedData = () => {
+  if (!cachedData.value) return null
+  
+  const stateKey = generateStateKey()
+  if (cachedData.value.searchKey === stateKey) {
+    return cachedData.value
+  }
+  return null
+}
+
+const getFullStateCachedData = () => {
+  if (!cachedData.value) return null
+  
+  try {
+    const currentSearchKey = JSON.stringify({
+      ip: searchFilters.value.ip,
+      tags: searchFilters.value.tags,
+      port: searchFilters.value.port,
+      fulltext: searchFilters.value.fulltext,
+      flagInActive: flagInActive.value,
+      flagOutActive: flagOutActive.value,
+      searchType: searchType.value,
+      searchMode: searchMode.value
+    })
+    
+    const cachedState = JSON.parse(cachedData.value.searchKey)
+    const cachedSearchKey = JSON.stringify({
+      ip: cachedState.ip,
+      tags: cachedState.tags,
+      port: cachedState.port,
+      fulltext: cachedState.fulltext,
+      flagInActive: cachedState.flagInActive,
+      flagOutActive: cachedState.flagOutActive,
+      searchType: cachedState.searchType,
+      searchMode: cachedState.searchMode
+    })
+    
+    if (currentSearchKey === cachedSearchKey) {
+      return cachedData.value
+    }
+  } catch (error) {
+    console.error('解析缓存状态失败:', error)
+  }
+  return null
+}
+
+const setCachedData = (items: PcapItem[], total: number) => {
+  const cacheData = {
+    items: [...items],
+    total,
+    searchKey: generateStateKey()
+  }
+  cachedData.value = cacheData
+  
+  try {
+    localStorage.setItem('pcap-list-cache', JSON.stringify(cacheData))
+  } catch (error) {
+    console.error('保存缓存失败:', error)
+  }
+}
+
 const uploadDialogVisible = ref(false)
 const uploadLoading = ref(false)
 const uploadProgress = ref(0)
@@ -67,12 +164,10 @@ const uploadResults = ref<{
   errors: []
 })
 
-// 分页相关
 const currentPage = ref(1)
 const pageSize = ref(20)
 const totalItems = ref(0)
 
-// 搜索相关
 const searchFilters = ref({
   ip: '',
   tags: '',
@@ -80,19 +175,17 @@ const searchFilters = ref({
   fulltext: ''
 })
 
-// 搜索类型：0=全部，1=客户端，2=服务器端
 const searchType = ref(0)
-
-// 搜索模式：keyword=关键词搜索，string=字符串匹配
 const searchMode = ref('keyword')
-
-// Flag按钮状态
 const flagInActive = ref(false)
 const flagOutActive = ref(false)
 
-// 状态同步
 watch(() => props.paginationState, (newState) => {
   if (newState) {
+    if (!isRestoringState.value) {
+      isRestoringState.value = true
+      stateRestorationComplete.value = false
+    }
     currentPage.value = newState.currentPage
     pageSize.value = newState.pageSize
     totalItems.value = newState.totalItems
@@ -101,44 +194,60 @@ watch(() => props.paginationState, (newState) => {
 
 watch(() => props.searchState, (newState) => {
   if (newState) {
-    let stateChanged = false
+    if (!isRestoringState.value) {
+      isRestoringState.value = true
+      stateRestorationComplete.value = false
+    }
     
     if (newState.ip !== undefined && newState.ip !== searchFilters.value.ip) {
       searchFilters.value.ip = newState.ip
-      stateChanged = true
     }
     if (newState.tags !== undefined && newState.tags !== searchFilters.value.tags) {
       searchFilters.value.tags = newState.tags
-      stateChanged = true
     }
     if (newState.fulltext !== undefined && newState.fulltext !== searchFilters.value.fulltext) {
       searchFilters.value.fulltext = newState.fulltext
-      stateChanged = true
     }
     if (newState.flagInActive !== undefined && newState.flagInActive !== flagInActive.value) {
       flagInActive.value = newState.flagInActive
-      stateChanged = true
     }
     if (newState.flagOutActive !== undefined && newState.flagOutActive !== flagOutActive.value) {
       flagOutActive.value = newState.flagOutActive
-      stateChanged = true
     }
     if (newState.searchType !== undefined && newState.searchType !== searchType.value) {
       searchType.value = newState.searchType
-      stateChanged = true
     }
     
-    // 如果状态发生变化，重新加载数据
-    if (stateChanged) {
-      currentPage.value = 1 // 重置到第一页
-      fetchPcapItems()
-    }
+    setTimeout(() => {
+      isRestoringState.value = false
+      stateRestorationComplete.value = true
+      
+      const cached = getFullStateCachedData()
+      if (cached) {
+        pcapItems.value = cached.items
+        totalItems.value = cached.total
+      } else if (isMounted.value && pcapItems.value.length === 0) {
+        fetchPcapItems()
+      }
+    }, 50)
   }
 }, { immediate: true, deep: true })
 
-// 监听状态变化并通知父组件
+watch([searchFilters, flagInActive, flagOutActive, searchType], () => {
+  if (isRestoringState.value) {
+    return
+  }
+  
+  setTimeout(() => {
+    if (!isRestoringState.value && (totalItems.value > 0 || pcapItems.value.length > 0)) {
+      currentPage.value = 1
+      fetchPcapItems()
+    }
+  }, 200)
+}, { deep: true })
+
 watch([currentPage, pageSize, totalItems], () => {
-  if (totalItems.value > 0 || pcapItems.value.length > 0) {
+  if (!isRestoringState.value && (totalItems.value > 0 || pcapItems.value.length > 0)) {
     emit('state-change', {
       pagination: {
         currentPage: currentPage.value,
@@ -158,7 +267,7 @@ watch([currentPage, pageSize, totalItems], () => {
 })
 
 watch([searchFilters, flagInActive, flagOutActive, searchType], () => {
-  if (totalItems.value > 0 || pcapItems.value.length > 0) {
+  if (!isRestoringState.value && (totalItems.value > 0 || pcapItems.value.length > 0)) {
     emit('state-change', {
       pagination: {
         currentPage: currentPage.value,
@@ -177,11 +286,13 @@ watch([searchFilters, flagInActive, flagOutActive, searchType], () => {
   }
 }, { deep: true })
 
-// 获取流量列表
 const fetchPcapItems = async () => {
+  if (isRestoringState.value) {
+    return
+  }
+
   loading.value = true
   try {
-    // 如果有全文搜索关键字、设置了搜索类型（IN/OUT）或者Flag按钮激活，使用搜索API
     if ((searchFilters.value.fulltext && searchFilters.value.fulltext.trim() !== '') || searchType.value > 0 || flagInActive.value || flagOutActive.value) {
       await fetchSearchResults()
       return
@@ -191,7 +302,6 @@ const fetchPcapItems = async () => {
     formData.append('page', currentPage.value.toString())
     formData.append('page_size', pageSize.value.toString())
     
-    // 添加搜索过滤器
     if (searchFilters.value.ip) {
       formData.append('ip', searchFilters.value.ip)
     }
@@ -210,7 +320,8 @@ const fetchPcapItems = async () => {
       pcapItems.value = result.result || []
       totalItems.value = result.total || 0
       
-      // 数据加载完成后触发状态同步
+      setCachedData(pcapItems.value, totalItems.value)
+      
       emit('state-change', {
         pagination: {
           currentPage: currentPage.value,
@@ -247,26 +358,28 @@ const fetchPcapItems = async () => {
   }
 }
 
-// 获取搜索结果
 const fetchSearchResults = async () => {
+  const cached = getCachedData()
+  if (cached && !isRestoringState.value) {
+    pcapItems.value = cached.items
+    totalItems.value = cached.total
+    return
+  }
+
   try {
     const formData = new FormData()
     
-    // 构建查询条件
     let query = searchFilters.value.fulltext.trim() || '*'
     
-    // 如果Flag按钮激活，构建标签查询
     if (flagInActive.value || flagOutActive.value) {
       const flagTags = []
       if (flagInActive.value) flagTags.push('FLAG-IN')
       if (flagOutActive.value) flagTags.push('FLAG-OUT')
       
       if (flagTags.length > 0) {
-        // 如果同时激活两个按钮，查询包含任一标签的记录（OR逻辑）
         if (flagTags.length === 2) {
           query = `tags:FLAG-IN AND tags:FLAG-OUT ${query !== '*' ? 'AND ' + query : ''}`
         } else {
-          // 只激活一个按钮，查询包含该标签的记录，并加上关键词搜索
           query = `tags:${flagTags[0]} ${query !== '*' ? 'AND ' + query : ''}`
         }
       }
@@ -275,7 +388,7 @@ const fetchSearchResults = async () => {
     formData.append('query', query)
     formData.append('page', currentPage.value.toString())
     formData.append('page_size', pageSize.value.toString())
-    formData.append('search_type', '0') // 固定搜索全部内容
+    formData.append('search_type', '0')
     formData.append('search_mode', searchMode.value)
     if (searchFilters.value.port) {
       formData.append('port', searchFilters.value.port)
@@ -289,7 +402,6 @@ const fetchSearchResults = async () => {
     const result = await response.json()
     
     if (result.message === 'success') {
-      // 将搜索结果转换为PcapItem格式
       const searchResults = result.result || []
       pcapItems.value = searchResults.map((item: any) => ({
         id: item.pcap_id,
@@ -298,25 +410,25 @@ const fetchSearchResults = async () => {
         dst_ip: item.dst_ip,
         dst_port: item.dst_port,
         time: item.timestamp,
-        duration: item.duration || 0, // 使用搜索结果中的duration
-        num_packets: item.num_packets || 0, // 使用搜索结果中的num_packets
-        blocked: item.blocked || 'false', // 使用搜索结果中的blocked
-        filename: item.filename || '', // 使用搜索结果中的filename
-        fingerprints: '', // 搜索结果中没有fingerprints
-        suricata: '', // 搜索结果中没有suricata
-        flow: '', // 搜索结果中没有flow
+        duration: item.duration || 0,
+        num_packets: item.num_packets || 0,
+        blocked: item.blocked || 'false',
+        filename: item.filename || '',
+        fingerprints: '',
+        suricata: '',
+        flow: '',
         tags: item.tags,
-        size: item.size || 0, // 使用搜索结果中的size
-        created_at: '', // 搜索结果中没有created_at
-        updated_at: '', // 搜索结果中没有updated_at
-        // 保存搜索相关信息
+        size: item.size || 0,
+        created_at: '',
+        updated_at: '',
         _searchScore: item.score,
         _searchHighlights: item.highlights,
         _searchKeyword: searchFilters.value.fulltext
       }))
       totalItems.value = result.total || 0
       
-      // 数据加载完成后触发状态同步
+      setCachedData(pcapItems.value, totalItems.value)
+      
       emit('state-change', {
         pagination: {
           currentPage: currentPage.value,
@@ -353,49 +465,37 @@ const fetchSearchResults = async () => {
   }
 }
 
-// 查看流量详情
 const viewPcap = (pcapItem: PcapItem) => {
   emit('view', pcapItem)
 }
 
-// 搜索
 const handleSearch = () => {
-  searchType.value = 0 // 搜索所有内容
+  searchType.value = 0
   currentPage.value = 1
   fetchPcapItems()
 }
 
-// FlagIn按钮切换
 const handleFlagInToggle = () => {
   if (flagInActive.value) {
-    // 如果当前激活，则关闭
     flagInActive.value = false
   } else {
-    // 如果当前未激活，则激活并关闭另一个按钮
     flagInActive.value = true
     flagOutActive.value = false
   }
-  console.log('FlagIn按钮切换:', flagInActive.value)
   updateFlagSearch()
 }
 
-// FlagOut按钮切换
 const handleFlagOutToggle = () => {
   if (flagOutActive.value) {
-    // 如果当前激活，则关闭
     flagOutActive.value = false
   } else {
-    // 如果当前未激活，则激活并关闭另一个按钮
     flagOutActive.value = true
     flagInActive.value = false
   }
-  console.log('FlagOut按钮切换:', flagOutActive.value)
   updateFlagSearch()
 }
 
-// 更新Flag搜索状态
 const updateFlagSearch = () => {
-  // 清除其他搜索条件
   searchFilters.value.tags = ''
   searchFilters.value.port = ''
   searchFilters.value.fulltext = ''
@@ -405,7 +505,6 @@ const updateFlagSearch = () => {
   fetchPcapItems()
 }
 
-// 重置搜索
 const resetSearch = () => {
   searchFilters.value = {
     ip: '',
@@ -413,17 +512,32 @@ const resetSearch = () => {
     port: '',
     fulltext: ''
   }
-  searchType.value = 0 // 重置搜索类型
-  flagInActive.value = false // 重置Flag按钮状态
+  searchType.value = 0
+  flagInActive.value = false
   flagOutActive.value = false
   currentPage.value = 1
   fetchPcapItems()
 }
 
-// 分页处理
 const handlePageChange = (page: number) => {
   currentPage.value = page
   fetchPcapItems()
+  
+  emit('state-change', {
+    pagination: {
+      currentPage: currentPage.value,
+      pageSize: pageSize.value,
+      totalItems: totalItems.value
+    },
+    search: {
+      ip: searchFilters.value.ip,
+      tags: searchFilters.value.tags,
+      fulltext: searchFilters.value.fulltext,
+      flagInActive: flagInActive.value,
+      flagOutActive: flagOutActive.value,
+      searchType: searchType.value
+    }
+  })
 }
 
 const handleSizeChange = (size: number) => {
@@ -443,13 +557,10 @@ const handleSizeChange = (size: number) => {
   fetchPcapItems()
 }
 
-// 格式化时间戳
 const formatTimestamp = (timestamp: number) => {
-  // 判断时间戳是秒级还是毫秒级
   const isMilliseconds = timestamp > 1000000000000
   const date = new Date(isMilliseconds ? timestamp : timestamp * 1000)
   
-  // 检查日期是否有效
   if (isNaN(date.getTime())) {
     return '无效时间'
   }
@@ -464,17 +575,15 @@ const formatTimestamp = (timestamp: number) => {
   })
 }
 
-// 解析标签
 const parseTags = (tagsStr: string) => {
   try {
     if (!tagsStr || tagsStr === '[]') {
       return []
     }
     
-    // 处理Unicode引号问题：将Unicode左右单引号替换为标准双引号
     let normalizedStr = tagsStr
-      .replace(/[\u2018\u2019]/g, '"')  // 替换Unicode单引号为双引号
-      .replace(/[\u201c\u201d]/g, '"')  // 替换Unicode双引号为标准双引号
+      .replace(/[\u2018\u2019]/g, '"')
+      .replace(/[\u201c\u201d]/g, '"')
     
     return JSON.parse(normalizedStr)
   } catch (error) {
@@ -483,7 +592,6 @@ const parseTags = (tagsStr: string) => {
   }
 }
 
-// 获取标签颜色
 const getTagType = (tag: string) => {
   const tagColors: { [key: string]: string } = {
     'FLAG-OUT': 'success',
@@ -504,13 +612,11 @@ const getTagType = (tag: string) => {
     'BOF': 'danger',
     'STARRED': 'primary'
   }
-  // 确保返回有效的Element Plus标签类型
   const validTypes = ['primary', 'success', 'warning', 'danger', 'info']
   const type = tagColors[tag] || 'info'
   return validTypes.includes(type) ? type : 'info'
 }
 
-// 格式化文件大小
 const formatSize = (size: number) => {
   if (size === 0) return '0 B'
   if (size < 1024) return `${size} B`
@@ -519,7 +625,6 @@ const formatSize = (size: number) => {
   return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
-// 复制到剪贴板
 const copyToClipboard = async (text: string, type: string) => {
   try {
     await navigator.clipboard.writeText(text)
@@ -541,7 +646,6 @@ const copyToClipboard = async (text: string, type: string) => {
   }
 }
 
-// 打开批量上传对话框
 const openUploadDialog = () => {
   uploadDialogVisible.value = true
   uploadProgress.value = 0
@@ -555,7 +659,6 @@ const openUploadDialog = () => {
   }
 }
 
-// 关闭批量上传对话框
 const closeUploadDialog = () => {
   uploadDialogVisible.value = false
   uploadLoading.value = false
@@ -570,13 +673,8 @@ const closeUploadDialog = () => {
   }
 }
 
-// 批量上传文件
 const handleBatchUpload = async () => {
-  console.log('handleBatchUpload called')
-  console.log('Selected files:', selectedFiles.value.map(f => f.name))
-  
   if (selectedFiles.value.length === 0) {
-    console.log('No files to upload')
     ElNotification({
       title: '上传失败',
       message: '请选择要上传的文件',
@@ -585,8 +683,6 @@ const handleBatchUpload = async () => {
     })
     return
   }
-  
-  console.log('Starting upload with files:', selectedFiles.value.map(f => f.name))
 
   uploadLoading.value = true
   uploadProgress.value = 0
@@ -598,7 +694,6 @@ const handleBatchUpload = async () => {
   })
 
   try {
-    // 模拟上传进度
     const progressInterval = setInterval(() => {
       if (uploadProgress.value < 90) {
         uploadProgress.value += Math.random() * 20
@@ -626,7 +721,6 @@ const handleBatchUpload = async () => {
       uploadProgress.value = 100
       uploadStatus.value = '上传完成'
       
-      // 显示上传结果
       const totalFiles = selectedFiles.value.length
       const successMsg = `成功上传 ${result.success_count || 0} 个文件`
       const skippedMsg = result.skipped_count > 0 ? `，跳过 ${result.skipped_count} 个重复文件` : ''
@@ -640,18 +734,15 @@ const handleBatchUpload = async () => {
         duration: 5000
       })
       
-      // 清空文件列表并关闭对话框
       selectedFiles.value = []
       if (uploadRef.value && uploadRef.value.clearFiles) {
         uploadRef.value.clearFiles()
       }
       
-      // 延迟关闭对话框，让用户看到结果
       setTimeout(() => {
         closeUploadDialog()
       }, 2000)
       
-      // 刷新列表
       fetchPcapItems()
     } else {
       throw new Error(result.error || '上传失败')
@@ -672,7 +763,6 @@ const handleBatchUpload = async () => {
   }
 }
 
-// 文件上传前的验证
 const beforeUpload = (file: File) => {
   const isValidType = file.name.endsWith('.pcap') || file.name.endsWith('.pcapng')
   if (!isValidType) {
@@ -685,7 +775,7 @@ const beforeUpload = (file: File) => {
     return false
   }
   
-  const isValidSize = file.size <= 100 * 1024 * 1024 // 100MB
+  const isValidSize = file.size <= 100 * 1024 * 1024
   if (!isValidSize) {
     ElNotification({
       title: '文件过大',
@@ -699,27 +789,21 @@ const beforeUpload = (file: File) => {
   return true
 }
 
-// 处理文件变化
 const handleFileChange = (file: any, fileList: any[]) => {
-  console.log('Files changed:', { file, fileList })
-  console.log('File details:', {
-    name: file.name,
-    size: file.size,
-    raw: file.raw,
-    status: file.status
-  })
-  
-  // 更新选中的文件列表
   selectedFiles.value = fileList
     .filter(f => f.raw && f.status !== 'fail')
     .map(f => f.raw)
-  
-  console.log('Selected files updated:', selectedFiles.value.map(f => f.name))
 }
 
 
+const isMounted = ref(false)
+
 onMounted(() => {
-  fetchPcapItems()
+  isMounted.value = true
+  
+  if (!needsStateRestoration.value) {
+    fetchPcapItems()
+  }
 })
 </script>
 
