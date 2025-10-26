@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -379,17 +380,22 @@ func (s *SearchService) getFlowData(pcapRecord database.Pcap) ([]FlowItem, error
 
 // Search 执行搜索
 func (s *SearchService) Search(query string, page, pageSize int, searchType SearchType) ([]SearchResult, int64, error) {
+	return s.SearchWithPort(query, "", page, pageSize, searchType)
+}
+
+// SearchWithPort 执行带端口过滤的搜索
+func (s *SearchService) SearchWithPort(query, port string, page, pageSize int, searchType SearchType) ([]SearchResult, int64, error) {
 	switch s.engine {
 	case SearchEngineElasticsearch:
 		if s.esService != nil && s.esService.IsAvailable() {
-			return s.esService.Search(query, page, pageSize, searchType)
+			return s.esService.SearchWithPort(query, port, page, pageSize, searchType)
 		}
 		// 如果Elasticsearch不可用，回退到Bleve
 		fallthrough
 	case SearchEngineBleve:
 		fallthrough
 	default:
-		return s.searchBleve(query, page, pageSize, searchType)
+		return s.searchBleveWithPort(query, port, page, pageSize, searchType)
 	}
 }
 
@@ -473,6 +479,108 @@ func (s *SearchService) searchBleve(query string, page, pageSize int, searchType
 			result.Size = pcapRecord.Size
 			result.Filename = pcapRecord.Filename
 			result.Blocked = pcapRecord.Blocked
+		}
+
+		results = append(results, result)
+	}
+
+	return results, int64(searchResult.Total), nil
+}
+
+// searchBleveWithPort 使用Bleve执行带端口过滤的搜索
+func (s *SearchService) searchBleveWithPort(query, port string, page, pageSize int, searchType SearchType) ([]SearchResult, int64, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	if s.index == nil {
+		return nil, 0, fmt.Errorf("Bleve搜索索引未初始化")
+	}
+
+	// 构建搜索查询
+	searchQuery := s.buildSearchQuery(query, searchType)
+
+	// 如果指定了端口，添加端口过滤条件
+	if port != "" {
+		// 创建端口过滤查询
+		portQuery := bleve.NewBooleanQuery()
+		srcPortQuery := bleve.NewTermQuery(port)
+		srcPortQuery.SetField("src_port")
+		dstPortQuery := bleve.NewTermQuery(port)
+		dstPortQuery.SetField("dst_port")
+		portQuery.AddShould(srcPortQuery)
+		portQuery.AddShould(dstPortQuery)
+		portQuery.SetMinShould(1) // 至少匹配一个端口字段
+
+		// 将端口查询与主查询组合
+		combinedQuery := bleve.NewBooleanQuery()
+		combinedQuery.AddMust(searchQuery)
+		combinedQuery.AddMust(portQuery)
+
+		searchQuery = combinedQuery
+	}
+
+	// 创建搜索请求
+	searchRequest := bleve.NewSearchRequest(searchQuery)
+	searchRequest.Size = pageSize
+	searchRequest.From = (page - 1) * pageSize
+	searchRequest.SortBy([]string{"-id"}) // 按id降序排序
+	searchRequest.Highlight = bleve.NewHighlight()
+
+	// 根据搜索类型添加高亮字段
+	switch searchType {
+	case SearchTypeClient:
+		searchRequest.Highlight.AddField("client_content")
+	case SearchTypeServer:
+		searchRequest.Highlight.AddField("server_content")
+	default:
+		searchRequest.Highlight.AddField("content")
+		searchRequest.Highlight.AddField("client_content")
+		searchRequest.Highlight.AddField("server_content")
+	}
+
+	// 执行搜索
+	searchResult, err := s.index.Search(searchRequest)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 转换搜索结果
+	var results []SearchResult
+	for _, hit := range searchResult.Hits {
+		result := SearchResult{
+			ID:         hit.ID,
+			PcapID:     0, // 从ID中提取
+			Content:    hit.Fields["content"].(string),
+			SrcIP:      hit.Fields["src_ip"].(string),
+			DstIP:      hit.Fields["dst_ip"].(string),
+			SrcPort:    hit.Fields["src_port"].(string),
+			DstPort:    hit.Fields["dst_port"].(string),
+			Tags:       hit.Fields["tags"].(string),
+			Timestamp:  int(hit.Fields["timestamp"].(float64)),
+			Duration:   int(hit.Fields["duration"].(float64)),
+			NumPackets: int(hit.Fields["num_packets"].(float64)),
+			Size:       int(hit.Fields["size"].(float64)),
+			Filename:   hit.Fields["filename"].(string),
+			Blocked:    fmt.Sprintf("%t", hit.Fields["blocked"].(bool)),
+			Score:      hit.Score,
+		}
+
+		// 从ID中提取PcapID
+		if strings.HasPrefix(result.ID, "pcap_") {
+			if pcapID, err := strconv.Atoi(strings.TrimPrefix(result.ID, "pcap_")); err == nil {
+				result.PcapID = pcapID
+			}
+		}
+
+		// 添加高亮信息
+		if len(hit.Fragments) > 0 {
+			highlights := make([]string, 0)
+			for field, fragments := range hit.Fragments {
+				if len(fragments) > 0 {
+					highlights = append(highlights, fmt.Sprintf("%s: %s", field, strings.Join(fragments, " ... ")))
+				}
+			}
+			result.Highlight = strings.Join(highlights, " | ")
 		}
 
 		results = append(results, result)

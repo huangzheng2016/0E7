@@ -177,7 +177,7 @@ func search_pcap(c *gin.Context) {
 	}
 
 	// 普通搜索
-	results, total, err := searchService.Search(query, page, pageSize, searchType)
+	results, total, err := searchService.SearchWithPort(query, port, page, pageSize, searchType)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"message": "fail",

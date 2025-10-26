@@ -418,6 +418,174 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int, searc
 	return results, int64(totalValue), nil
 }
 
+// SearchWithPort 执行带端口过滤的搜索
+func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageSize int, searchType SearchType) ([]SearchResult, int64, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	if s.client == nil {
+		return nil, 0, fmt.Errorf("Elasticsearch客户端未初始化")
+	}
+
+	// 构建搜索查询
+	searchQuery := s.buildSearchQuery(queryStr, searchType)
+
+	// 如果指定了端口，添加端口过滤条件
+	if port != "" {
+		// 添加端口过滤到bool查询的filter部分
+		if boolQuery, ok := searchQuery["bool"].(map[string]interface{}); ok {
+			if boolQuery["filter"] == nil {
+				boolQuery["filter"] = []interface{}{}
+			}
+			filters := boolQuery["filter"].([]interface{})
+
+			// 添加端口过滤条件（源端口或目标端口匹配）
+			portFilter := map[string]interface{}{
+				"bool": map[string]interface{}{
+					"should": []interface{}{
+						map[string]interface{}{
+							"term": map[string]interface{}{
+								"src_port": port,
+							},
+						},
+						map[string]interface{}{
+							"term": map[string]interface{}{
+								"dst_port": port,
+							},
+						},
+					},
+					"minimum_should_match": 1,
+				},
+			}
+			filters = append(filters, portFilter)
+			boolQuery["filter"] = filters
+		}
+	}
+
+	// 根据搜索类型选择高亮字段
+	var highlightField string
+	switch searchType {
+	case SearchTypeClient:
+		highlightField = "client_content"
+	case SearchTypeServer:
+		highlightField = "server_content"
+	default:
+		highlightField = "content"
+	}
+
+	// 构建搜索请求
+	searchRequest := map[string]interface{}{
+		"query": searchQuery,
+		"from":  (page - 1) * pageSize,
+		"size":  pageSize,
+		"sort": []map[string]interface{}{
+			{"id": map[string]interface{}{"order": "desc"}},
+		},
+		"highlight": map[string]interface{}{
+			"fields": map[string]interface{}{
+				highlightField: map[string]interface{}{},
+			},
+		},
+	}
+
+	// 执行搜索
+	searchBody, err := json.Marshal(searchRequest)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	res, err := s.client.Search(
+		s.client.Search.WithIndex("pcap_index"),
+		s.client.Search.WithBody(strings.NewReader(string(searchBody))),
+		s.client.Search.WithPretty(),
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return nil, 0, fmt.Errorf("Elasticsearch搜索错误: %s", res.String())
+	}
+
+	// 解析搜索结果
+	var searchResponse map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&searchResponse); err != nil {
+		return nil, 0, err
+	}
+
+	hits, ok := searchResponse["hits"].(map[string]interface{})
+	if !ok {
+		return nil, 0, fmt.Errorf("搜索结果格式错误")
+	}
+
+	total, _ := hits["total"].(map[string]interface{})
+	totalValue, _ := total["value"].(float64)
+
+	hitsArray, ok := hits["hits"].([]interface{})
+	if !ok {
+		return nil, 0, fmt.Errorf("搜索结果hits格式错误")
+	}
+
+	var results []SearchResult
+	for _, hit := range hitsArray {
+		hitMap, ok := hit.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		source, ok := hitMap["_source"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		score, _ := hitMap["_score"].(float64)
+		pcapID, _ := source["pcap_id"].(float64)
+
+		// 获取原始Pcap记录以获取其他字段
+		var pcapRecord database.Pcap
+		err := config.Db.Where("id = ?", int(pcapID)).First(&pcapRecord).Error
+		if err != nil {
+			log.Printf("搜索结果中找不到对应的PCAP记录 (ID: %d): %v", int(pcapID), err)
+			continue
+		}
+
+		// 获取高亮信息
+		var highlights []string
+		if highlight, ok := hitMap["highlight"].(map[string]interface{}); ok {
+			if highlightFragments, ok := highlight[highlightField].([]interface{}); ok {
+				for _, fragment := range highlightFragments {
+					if fragmentStr, ok := fragment.(string); ok {
+						highlights = append(highlights, fragmentStr)
+					}
+				}
+			}
+		}
+
+		result := SearchResult{
+			ID:         fmt.Sprintf("pcap_%d", int(pcapID)),
+			PcapID:     int(pcapID),
+			Content:    pcapRecord.ClientContent + " " + pcapRecord.ServerContent,
+			SrcIP:      pcapRecord.SrcIP,
+			DstIP:      pcapRecord.DstIP,
+			SrcPort:    pcapRecord.SrcPort,
+			DstPort:    pcapRecord.DstPort,
+			Tags:       pcapRecord.Tags,
+			Timestamp:  pcapRecord.Time,
+			Duration:   pcapRecord.Duration,
+			NumPackets: pcapRecord.NumPackets,
+			Size:       pcapRecord.Size,
+			Filename:   pcapRecord.Filename,
+			Blocked:    pcapRecord.Blocked,
+			Score:      score,
+			Highlight:  strings.Join(highlights, " | "),
+		}
+		results = append(results, result)
+	}
+
+	return results, int64(totalValue), nil
+}
+
 // buildSearchQuery 构建搜索查询
 func (s *ElasticsearchService) buildSearchQuery(queryStr string, searchType SearchType) map[string]interface{} {
 	// 根据搜索类型选择字段
