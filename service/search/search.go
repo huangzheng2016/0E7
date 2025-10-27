@@ -163,11 +163,16 @@ func (s *SearchService) initIndex() {
 func (s *SearchService) initBleveIndex() {
 	indexPath := "bleve"
 
+	// 确保索引目录存在
+	if err := os.MkdirAll(indexPath, 0755); err != nil {
+		log.Printf("创建Bleve索引目录失败: %v", err)
+		return
+	}
+
 	// 检查索引是否存在
-	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-		// 创建新索引
-		mapping := s.createMapping()
-		index, err := bleve.New(indexPath, mapping)
+	if _, err := os.Stat(indexPath + "/index_meta.json"); os.IsNotExist(err) {
+		// 创建新索引，使用优化的配置
+		index, err := s.createOptimizedBleveIndex(indexPath)
 		if err != nil {
 			log.Printf("创建Bleve搜索索引失败: %v", err)
 			return
@@ -175,14 +180,18 @@ func (s *SearchService) initBleveIndex() {
 		s.index = index
 		log.Println("Bleve搜索索引创建成功")
 	} else {
-		// 打开现有索引
-		index, err := bleve.Open(indexPath)
+		// 打开现有索引，使用优化的配置
+		index, err := s.openOptimizedBleveIndex(indexPath)
 		if err != nil {
 			log.Printf("打开Bleve搜索索引失败: %v", err)
+			log.Printf("索引文件可能已损坏，请手动删除以下目录后重启服务:")
+			log.Printf("  rm -rf %s", indexPath)
+			log.Printf("或者删除 bleve/ 目录下的所有文件")
 			return
+		} else {
+			s.index = index
+			log.Println("Bleve搜索索引加载成功")
 		}
-		s.index = index
-		log.Println("Bleve搜索索引加载成功")
 	}
 }
 
@@ -244,7 +253,135 @@ func (s *SearchService) createMapping() mapping.IndexMapping {
 	indexMapping := bleve.NewIndexMapping()
 	indexMapping.DefaultMapping = documentMapping
 
+	// 设置内存优化
+	indexMapping.DefaultAnalyzer = "standard"
+	indexMapping.DefaultDateTimeParser = "dateTimeOptional"
+
 	return indexMapping
+}
+
+// createOptimizedBleveIndex 创建优化的 bleve 索引
+func (s *SearchService) createOptimizedBleveIndex(indexPath string) (bleve.Index, error) {
+	// 创建映射
+	mapping := s.createMapping()
+
+	// 使用 SQLite 作为存储后端，独立的 bleve.db 文件，优化性能
+	config := map[string]interface{}{
+		"store": map[string]interface{}{
+			"type": "scorch",
+			"config": map[string]interface{}{
+				"kvstore": map[string]interface{}{
+					"type": "sqlite",
+					"config": map[string]interface{}{
+						"path": "bleve.db", // 独立的 bleve 数据库文件
+						"dsn": "file:bleve.db?mode=rwc" +
+							"&_journal_mode=WAL" +
+							"&_synchronous=NORMAL" +
+							"&_cache_size=-4000" + // 4GB 缓存
+							"&_auto_vacuum=FULL" +
+							"&_page_size=4096" +
+							"&_mmap_size=536870912" + // 512MB 内存映射
+							"&_temp_store=2" +
+							"&_busy_timeout=10000" + // 10秒超时
+							"&_foreign_keys=1" +
+							"&_secure_delete=OFF" +
+							"&_journal_size_limit=67108864" + // 64MB WAL 限制
+							"&_wal_autocheckpoint=1000", // WAL 检查点
+					},
+				},
+				// Scorch 特定优化
+				"forceSegmentType":     "zap",
+				"forceSegmentVersion":  15,
+				"persistSnapshotEpoch": 1,
+				"persistSegmentEpoch":  1,
+				// ZAP 段内存缓存优化
+				"segmentCacheSize":    1000,       // 1000个段缓存
+				"segmentCacheMaxSize": 4294967296, // 4GB 段缓存最大大小
+				"segmentCacheMaxAge":  7200,       // 2小时段缓存最大年龄
+				"segmentCacheWarmup":  true,       // 预热段缓存
+				"segmentCachePersist": true,       // 持久化段缓存
+				// 内存映射优化 - 4GB 内存映射
+				"mmap":     true,       // 启用内存映射
+				"mmapSize": 4294967296, // 4GB 内存映射大小
+				// 减少磁盘 I/O 优化
+				"noSync":          true,       // 禁用同步写入
+				"noFreelist":      true,       // 禁用空闲列表
+				"initialMmapSize": 1073741824, // 1GB 初始内存映射
+				// 索引合并优化
+				"mergeMaxSegments":    10,        // 最大合并段数
+				"mergeMaxSegmentSize": 268435456, // 256MB 最大段大小
+				"mergeMaxSegmentAge":  3600,      // 1小时最大段年龄
+			},
+		},
+	}
+
+	// 创建索引，使用 SQLite 配置
+	index, err := bleve.NewUsing(indexPath, mapping, "scorch", "scorch", config)
+	if err != nil {
+		return nil, err
+	}
+
+	return index, nil
+}
+
+// openOptimizedBleveIndex 打开优化的 bleve 索引
+func (s *SearchService) openOptimizedBleveIndex(indexPath string) (bleve.Index, error) {
+	// 使用 SQLite 配置打开现有索引，优化性能
+	config := map[string]interface{}{
+		"store": map[string]interface{}{
+			"type": "scorch",
+			"config": map[string]interface{}{
+				"kvstore": map[string]interface{}{
+					"type": "sqlite",
+					"config": map[string]interface{}{
+						"path": "bleve.db", // 独立的 bleve 数据库文件
+						"dsn": "file:bleve.db?mode=rwc" +
+							"&_journal_mode=WAL" +
+							"&_synchronous=NORMAL" +
+							"&_cache_size=-4000" + // 4GB 缓存
+							"&_auto_vacuum=FULL" +
+							"&_page_size=4096" +
+							"&_mmap_size=536870912" + // 512MB 内存映射
+							"&_temp_store=2" +
+							"&_busy_timeout=10000" + // 10秒超时
+							"&_foreign_keys=1" +
+							"&_secure_delete=OFF" +
+							"&_journal_size_limit=67108864" + // 64MB WAL 限制
+							"&_wal_autocheckpoint=1000", // WAL 检查点
+					},
+				},
+				// Scorch 特定优化
+				"forceSegmentType":     "zap",
+				"forceSegmentVersion":  15,
+				"persistSnapshotEpoch": 1,
+				"persistSegmentEpoch":  1,
+				// ZAP 段内存缓存优化
+				"segmentCacheSize":    1000,       // 1000个段缓存
+				"segmentCacheMaxSize": 4294967296, // 4GB 段缓存最大大小
+				"segmentCacheMaxAge":  7200,       // 2小时段缓存最大年龄
+				"segmentCacheWarmup":  true,       // 预热段缓存
+				"segmentCachePersist": true,       // 持久化段缓存
+				// 内存映射优化 - 4GB 内存映射
+				"mmap":     true,       // 启用内存映射
+				"mmapSize": 4294967296, // 4GB 内存映射大小
+				// 减少磁盘 I/O 优化
+				"noSync":          true,       // 禁用同步写入
+				"noFreelist":      true,       // 禁用空闲列表
+				"initialMmapSize": 1073741824, // 1GB 初始内存映射
+				// 索引合并优化
+				"mergeMaxSegments":    10,        // 最大合并段数
+				"mergeMaxSegmentSize": 268435456, // 256MB 最大段大小
+				"mergeMaxSegmentAge":  3600,      // 1小时最大段年龄
+			},
+		},
+	}
+
+	index, err := bleve.OpenUsing(indexPath, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return index, nil
 }
 
 // IndexPcap 索引PCAP数据
@@ -263,13 +400,129 @@ func (s *SearchService) IndexPcap(pcapRecord database.Pcap) error {
 	}
 }
 
+// BatchIndexPcaps 批量索引PCAP数据（提高索引速度）
+func (s *SearchService) BatchIndexPcaps(pcapRecords []database.Pcap) error {
+	switch s.engine {
+	case SearchEngineElasticsearch:
+		if s.esService != nil && s.esService.IsAvailable() {
+			// Elasticsearch 批量索引
+			for _, pcapRecord := range pcapRecords {
+				if err := s.esService.IndexPcap(pcapRecord); err != nil {
+					log.Printf("批量索引PCAP失败 (ID: %d): %v", pcapRecord.ID, err)
+				}
+			}
+			return nil
+		}
+		// 如果Elasticsearch不可用，回退到Bleve
+		fallthrough
+	case SearchEngineBleve:
+		fallthrough
+	default:
+		return s.batchIndexPcapsBleve(pcapRecords)
+	}
+}
+
+// batchIndexPcapsBleve 使用Bleve批量索引PCAP数据
+func (s *SearchService) batchIndexPcapsBleve(pcapRecords []database.Pcap) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.index == nil {
+		// 尝试重新初始化索引
+		log.Println("Bleve搜索索引未初始化，尝试重新初始化...")
+		s.initBleveIndex()
+		if s.index == nil {
+			return fmt.Errorf("Bleve搜索索引初始化失败")
+		}
+	}
+
+	// 创建批量索引请求
+	batch := s.index.NewBatch()
+
+	for _, pcapRecord := range pcapRecords {
+		// 获取流量数据
+		flowData, err := s.getFlowData(pcapRecord)
+		if err != nil {
+			log.Printf("获取流量数据失败 (ID: %d): %v", pcapRecord.ID, err)
+			continue
+		}
+
+		// 分别处理客户端和服务器端内容
+		var allContentBuilder, clientContentBuilder, serverContentBuilder strings.Builder
+
+		for _, flowItem := range flowData {
+			decoded, err := base64.StdEncoding.DecodeString(flowItem.B64)
+			if err != nil {
+				log.Printf("解码B64数据失败: %v", err)
+				continue
+			}
+
+			decodedStr := string(decoded)
+
+			// 添加到总内容
+			allContentBuilder.WriteString(decodedStr)
+			allContentBuilder.WriteString(" ")
+
+			// 根据方向分别添加到客户端或服务器端内容
+			if flowItem.From == "c" {
+				// 客户端到服务器
+				clientContentBuilder.WriteString(decodedStr)
+				clientContentBuilder.WriteString(" ")
+			} else if flowItem.From == "s" {
+				// 服务器到客户端
+				serverContentBuilder.WriteString(decodedStr)
+				serverContentBuilder.WriteString(" ")
+			}
+		}
+
+		// 创建搜索文档
+		doc := SearchDocument{
+			ID:            fmt.Sprintf("pcap_%d", pcapRecord.ID),
+			PcapID:        pcapRecord.ID,
+			Content:       allContentBuilder.String(),
+			ClientContent: clientContentBuilder.String(),
+			ServerContent: serverContentBuilder.String(),
+			SrcIP:         pcapRecord.SrcIP,
+			DstIP:         pcapRecord.DstIP,
+			SrcPort:       pcapRecord.SrcPort,
+			DstPort:       pcapRecord.DstPort,
+			Tags:          pcapRecord.Tags,
+			Timestamp:     pcapRecord.Time,
+			Duration:      pcapRecord.Duration,
+			NumPackets:    pcapRecord.NumPackets,
+			Size:          pcapRecord.Size,
+			Filename:      pcapRecord.Filename,
+			Blocked:       pcapRecord.Blocked,
+			CreatedAt:     pcapRecord.CreatedAt,
+		}
+
+		// 添加到批量请求
+		batch.Index(doc.ID, doc)
+	}
+
+	// 执行批量索引
+	err := s.index.Batch(batch)
+	if err != nil {
+		log.Printf("批量索引文档失败: %v", err)
+		return err
+	}
+
+	log.Printf("成功批量索引 %d 条PCAP数据到Bleve", len(pcapRecords))
+	return nil
+}
+
 // indexPcapBleve 使用Bleve索引PCAP数据
 func (s *SearchService) indexPcapBleve(pcapRecord database.Pcap) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	if s.index == nil {
-		return fmt.Errorf("Bleve搜索索引未初始化")
+		// 尝试重新初始化索引
+		log.Println("Bleve搜索索引未初始化，尝试重新初始化...")
+		s.initBleveIndex()
+		if s.index == nil {
+			return fmt.Errorf("Bleve搜索索引初始化失败")
+		}
 	}
 
 	// 获取流量数据
@@ -773,6 +1026,7 @@ func (s *SearchService) Close() error {
 		s.index = nil
 		log.Println("Bleve搜索索引已关闭")
 	}
+
 	return nil
 }
 

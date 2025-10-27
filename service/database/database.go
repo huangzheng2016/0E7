@@ -32,15 +32,17 @@ func Init_database(section *ini.Section) (db *gorm.DB, err error) {
 		engine = "sqlite"
 		dsn := "file:sqlite.db?mode=rwc" +
 			"&_journal_mode=WAL" +
-			"&_synchronous=FULL" +
-			"&_cache_size=-2000" +
+			"&_synchronous=NORMAL" + // 改为 NORMAL 提高性能
+			"&_cache_size=-4000" + // 4GB 缓存
 			"&_auto_vacuum=FULL" +
 			"&_page_size=4096" +
-			"&_mmap_size=268435456" +
+			"&_mmap_size=536870912" + // 512MB 内存映射
 			"&_temp_store=2" +
-			"&_busy_timeout=5000" +
+			"&_busy_timeout=10000" + // 10秒超时
 			"&_foreign_keys=1" +
-			"&_secure_delete=OFF"
+			"&_secure_delete=OFF" +
+			"&_journal_size_limit=67108864" + // 64MB WAL 限制
+			"&_wal_autocheckpoint=1000" // WAL 检查点
 		db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{
 			SkipDefaultTransaction: true,
 			Logger:                 logger.Default.LogMode(logger.Silent),

@@ -3,7 +3,6 @@ package pcap
 import (
 	"0E7/service/config"
 	"0E7/service/database"
-	"0E7/service/search"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/base64"
@@ -398,14 +397,8 @@ func reassemblyCallback(entry FlowEntry) {
 		return
 	}
 
-	// 建立搜索索引
-	go func() {
-		searchService := search.GetSearchService()
-		err := searchService.IndexPcap(pcapRecord)
-		if err != nil {
-			log.Printf("Failed to index pcap record: %v", err)
-		}
-	}()
+	// 不立即建立搜索索引，等待 PENDING 状态处理完成后再索引
+	// 搜索索引将在 flag 检测器处理 PENDING 状态时异步建立
 
 }
 
