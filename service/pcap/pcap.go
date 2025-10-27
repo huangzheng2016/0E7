@@ -476,7 +476,7 @@ func InitPcapQueue() {
 	}
 
 	// 创建文件处理通道
-	pcapFileChan = make(chan string, pcapWorkers*2) // 缓冲区大小为worker数量的2倍
+	pcapFileChan = make(chan string, 8192) // 缓冲区大小为8192
 
 	// 启动并行处理worker
 	for i := 0; i < pcapWorkers; i++ {
@@ -514,13 +514,10 @@ func QueuePcapFile(filePath string) {
 		return
 	}
 
-	select {
-	case pcapFileChan <- filePath:
-		log.Printf("已排队处理文件: %s", filePath)
-	default:
-		log.Printf("文件处理队列已满，直接处理文件: %s", filePath)
-		go handlePcapUri(filePath, bpf, true)
-	}
+	// 使用阻塞式发送，确保文件不会被丢弃
+	// 如果队列满了，这里会阻塞等待直到有空间
+	pcapFileChan <- filePath
+	log.Printf("已排队处理文件: %s", filePath)
 }
 
 func ParsePcapfile(fname string, check bool) {

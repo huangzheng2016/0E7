@@ -233,7 +233,8 @@ watch(() => props.searchState, (newState) => {
   }
 }, { immediate: true, deep: true })
 
-watch([searchFilters, flagInActive, flagOutActive, searchType], () => {
+// 只监听 flag 和 searchType 的变化，不监听 searchFilters
+watch([flagInActive, flagOutActive, searchType], () => {
   if (isRestoringState.value) {
     return
   }
