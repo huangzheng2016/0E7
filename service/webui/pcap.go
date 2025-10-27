@@ -164,13 +164,9 @@ func savefile(file *multipart.FileHeader, c *gin.Context) error {
 		return fmt.Errorf("failed to save file: %v", err)
 	}
 
-	// 手动触发 pcap 文件处理
-	go func() {
-		// 调用 pcap 处理函数
-		log.Printf("Starting pcap processing for uploaded file: %s\n", filePath)
-		pcap.ParsePcapfile(filePath, false)
-		log.Printf("Completed pcap processing for file: %s\n", filePath)
-	}()
+	// 将上传的文件加入全局处理队列
+	log.Printf("将上传的文件加入处理队列: %s", filePath)
+	pcap.QueuePcapFile(filePath)
 
 	return nil
 }

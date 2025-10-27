@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"log"
 	"regexp"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -247,10 +246,6 @@ func (fd *FlagDetector) detectPendingFlags() {
 				log.Printf("成功批量索引 %d 条记录到 bleve (批次 %d-%d)", len(batch), i, end-1)
 			}
 
-			// 强制垃圾回收，释放内存，减少内存压力
-			if i%4000 == 0 { // 减少 GC 频率，提高性能
-				runtime.GC()
-			}
 		}
 	}
 }

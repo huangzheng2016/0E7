@@ -32,6 +32,7 @@ var (
 	Server_url                    string
 	Server_flag                   string
 	Server_pcap_zip               bool
+	Server_pcap_workers           int
 	Client_mode                   bool
 	Client_name                   string
 	Client_id                     int
@@ -113,6 +114,10 @@ func Init_conf(configFile string) error {
 		Server_pcap_zip, err = section.Key("pcap_zip").Bool()
 		if err != nil {
 			Server_pcap_zip = true
+		}
+		Server_pcap_workers, err = section.Key("pcap_workers").Int()
+		if err != nil || Server_pcap_workers <= 0 {
+			Server_pcap_workers = 0 // 0 表示使用 CPU 核心数
 		}
 
 		// 读取数据库配置

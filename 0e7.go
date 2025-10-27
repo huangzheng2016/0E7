@@ -155,6 +155,10 @@ func main() {
 		go udpcast.Udp_sent(config.Server_tls, config.Server_port)
 
 		pcap.SetFlagRegex(config.Server_flag)
+
+		// 初始化全局 pcap 文件处理队列
+		pcap.InitGlobalQueue()
+
 		go pcap.WatchDir("pcap")
 	}
 
