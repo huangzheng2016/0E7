@@ -45,12 +45,12 @@ var (
 	experimental = false
 	flushAfter   = ""
 
-	// 全局文件处理队列
-	globalFileChan chan string
-	globalWg       sync.WaitGroup
-	globalWorkers  int
-	queueMutex     sync.RWMutex
-	queueStarted   bool
+	// 文件处理队列
+	pcapFileChan chan string
+	pcapWg       sync.WaitGroup
+	pcapWorkers  int
+	queueMutex   sync.RWMutex
+	queueStarted bool
 )
 
 // calculateFileMD5 计算文件的MD5值
@@ -417,8 +417,8 @@ func SetFlagRegex(flag string) {
 	flag_regex = flag
 }
 
-// InitGlobalQueue 初始化全局文件处理队列
-func InitGlobalQueue() {
+// InitPcapQueue 初始化文件处理队列
+func InitPcapQueue() {
 	queueMutex.Lock()
 	defer queueMutex.Unlock()
 
@@ -427,46 +427,46 @@ func InitGlobalQueue() {
 	}
 
 	// 获取CPU核心数，设置并行处理数量
-	globalWorkers = runtime.NumCPU()
-	if globalWorkers > 8 {
-		globalWorkers = 8 // 限制最大并行数，避免过度并发
+	pcapWorkers = runtime.NumCPU()
+	if pcapWorkers > 8 {
+		pcapWorkers = 8 // 限制最大并行数，避免过度并发
 	}
 
 	// 可以通过环境变量或配置文件调整并行数
-	if config.Server_pcap_workers > 0 && config.Server_pcap_workers <= 16 {
-		globalWorkers = config.Server_pcap_workers
-		log.Printf("使用配置的全局并行处理数量: %d", globalWorkers)
+	if config.Server_pcap_workers > 0 && config.Server_pcap_workers <= 32 {
+		pcapWorkers = config.Server_pcap_workers
+		log.Printf("使用配置的并行处理数量: %d", pcapWorkers)
 	}
 
 	// 创建文件处理通道
-	globalFileChan = make(chan string, globalWorkers*2) // 缓冲区大小为worker数量的2倍
+	pcapFileChan = make(chan string, pcapWorkers*2) // 缓冲区大小为worker数量的2倍
 
 	// 启动并行处理worker
-	for i := 0; i < globalWorkers; i++ {
-		globalWg.Add(1)
+	for i := 0; i < pcapWorkers; i++ {
+		pcapWg.Add(1)
 		go func(workerID int) {
-			defer globalWg.Done()
-			log.Printf("全局Pcap处理Worker %d 已启动", workerID)
+			defer pcapWg.Done()
+			log.Printf("Pcap处理Worker %d 已启动", workerID)
 
-			for filePath := range globalFileChan {
-				log.Printf("全局Worker %d 开始处理文件: %s", workerID, filePath)
+			for filePath := range pcapFileChan {
+				log.Printf("Worker %d 开始处理文件: %s", workerID, filePath)
 				startTime := time.Now()
 
 				handlePcapUri(filePath, bpf, true)
 
 				duration := time.Since(startTime)
-				log.Printf("全局Worker %d 完成处理文件: %s (耗时: %v)", workerID, filePath, duration)
+				log.Printf("Worker %d 完成处理文件: %s (耗时: %v)", workerID, filePath, duration)
 			}
 
-			log.Printf("全局Pcap处理Worker %d 已停止", workerID)
+			log.Printf("Pcap处理Worker %d 已停止", workerID)
 		}(i)
 	}
 
 	queueStarted = true
-	log.Printf("全局文件处理队列已启动，%d 个 worker", globalWorkers)
+	log.Printf("文件处理队列已启动，%d 个 worker", pcapWorkers)
 }
 
-// QueuePcapFile 将 pcap 文件加入全局处理队列
+// QueuePcapFile 将 pcap 文件加入处理队列
 func QueuePcapFile(filePath string) {
 	queueMutex.RLock()
 	defer queueMutex.RUnlock()
@@ -478,10 +478,10 @@ func QueuePcapFile(filePath string) {
 	}
 
 	select {
-	case globalFileChan <- filePath:
+	case pcapFileChan <- filePath:
 		log.Printf("已排队处理文件: %s", filePath)
 	default:
-		log.Printf("全局文件处理队列已满，直接处理文件: %s", filePath)
+		log.Printf("文件处理队列已满，直接处理文件: %s", filePath)
 		go handlePcapUri(filePath, bpf, true)
 	}
 }
@@ -528,44 +528,8 @@ func WatchDir(watch_dir string) {
 
 	log.Println("Monitoring dir: ", watch_dir)
 
-	// 获取CPU核心数，设置并行处理数量
-	numWorkers := runtime.NumCPU()
-	if numWorkers > 8 {
-		numWorkers = 8 // 限制最大并行数，避免过度并发
-	}
-
-	// 可以通过环境变量或配置文件调整并行数
-	if config.Server_pcap_workers > 0 && config.Server_pcap_workers <= 32 {
-		numWorkers = config.Server_pcap_workers
-		log.Printf("使用配置的并行处理数量: %d", numWorkers)
-	}
-
-	log.Printf("启动 %d 个并行 pcap 处理 worker (CPU核心数: %d)", numWorkers, runtime.NumCPU())
-
-	// 创建文件处理通道
-	fileChan := make(chan string, 4096)
-	var wg sync.WaitGroup
-
-	// 启动并行处理worker
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			log.Printf("Pcap处理Worker %d 已启动", workerID)
-
-			for filePath := range fileChan {
-				log.Printf("Worker %d 开始处理文件: %s", workerID, filePath)
-				startTime := time.Now()
-
-				handlePcapUri(filePath, bpf, true)
-
-				duration := time.Since(startTime)
-				log.Printf("Worker %d 完成处理文件: %s (耗时: %v)", workerID, filePath, duration)
-			}
-
-			log.Printf("Pcap处理Worker %d 已停止", workerID)
-		}(i)
-	}
+	// 确保队列已初始化
+	InitPcapQueue()
 
 	// 处理现有文件
 	files, err := ioutil.ReadDir(watch_dir)
@@ -573,16 +537,11 @@ func WatchDir(watch_dir string) {
 		log.Fatal(err)
 	}
 
-	// 将现有文件发送到处理通道
+	// 将现有文件发送到全局处理队列
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".pcap") || strings.HasSuffix(file.Name(), ".pcapng") {
 			filePath := filepath.Join(watch_dir, file.Name())
-			select {
-			case fileChan <- filePath:
-				log.Printf("已排队处理现有文件: %s", filePath)
-			default:
-				log.Printf("文件处理队列已满，跳过文件: %s", filePath)
-			}
+			QueuePcapFile(filePath)
 		}
 	}
 
@@ -609,13 +568,8 @@ func WatchDir(watch_dir string) {
 						// 等待文件写入完成
 						time.Sleep(1 * time.Second)
 
-						// 将新文件发送到处理通道
-						select {
-						case fileChan <- event.Name:
-							log.Printf("已排队处理新文件: %s", event.Name)
-						default:
-							log.Printf("文件处理队列已满，跳过新文件: %s", event.Name)
-						}
+						// 将新文件发送到全局处理队列
+						QueuePcapFile(event.Name)
 					}
 				}
 			case err, ok := <-watcher.Errors:
@@ -632,13 +586,7 @@ func WatchDir(watch_dir string) {
 		log.Fatal(err)
 	}
 
-	// 等待所有worker完成
-	go func() {
-		wg.Wait()
-		close(fileChan)
-		log.Println("所有 pcap 处理 worker 已完成")
-	}()
-
+	// 保持程序运行
 	select {}
 }
 

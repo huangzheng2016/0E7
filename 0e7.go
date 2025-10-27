@@ -157,7 +157,7 @@ func main() {
 		pcap.SetFlagRegex(config.Server_flag)
 
 		// 初始化全局 pcap 文件处理队列
-		pcap.InitGlobalQueue()
+		pcap.InitPcapQueue()
 
 		go pcap.WatchDir("pcap")
 	}
