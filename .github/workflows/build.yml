@@ -19,6 +19,15 @@ jobs:
       with:
         go-version: '1.21'
         
+    - name: Cache apt packages
+      uses: actions/cache@v3
+      with:
+        path: /var/cache/apt
+        key: apt-libpcap-${{ runner.os }}-${{ hashFiles('**/build.yml') }}
+        restore-keys: |
+          apt-libpcap-${{ runner.os }}-
+          apt-${{ runner.os }}-
+          
     - name: Install libpcap-dev
       run: |
         sudo apt-get update
@@ -90,6 +99,18 @@ jobs:
       with:
         go-version: '1.21'
         
+    - name: Cache Homebrew packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          /usr/local/Cellar
+          /usr/local/var/homebrew/locks
+          /usr/local/Homebrew/Library/Taps
+        key: brew-libpcap-${{ runner.os }}-${{ hashFiles('**/build.yml') }}
+        restore-keys: |
+          brew-libpcap-${{ runner.os }}-
+          brew-${{ runner.os }}-
+          
     - name: Install libpcap
       run: |
         brew install libpcap
@@ -154,48 +175,73 @@ jobs:
       with:
         go-version: '1.21'
         
-    - name: Install 7-Zip
+    - name: Cache 7-Zip
+      id: cache-7zip
+      uses: actions/cache@v3
+      with:
+        path: C:\ProgramData\chocolatey\bin\7z.exe
+        key: 7zip-v1
+        restore-keys: |
+          7zip-
+          
+    - name: Install 7-Zip (if not cached)
+      if: steps.cache-7zip.outputs.cache-hit != 'true'
       run: |
         Write-Host "Installing 7-Zip..."
         choco install 7zip -y
         Write-Host "7-Zip installed successfully"
         
-    - name: Install WinPcap from Nmap
+    - name: Cache WinPcap installer
+      id: cache-winpcap
+      uses: actions/cache@v3
+      with:
+        path: winpcap-nmap-4.13.exe
+        key: winpcap-nmap-4.13-v1
+        restore-keys: |
+          winpcap-nmap-4.13-
+          
+    - name: Download WinPcap installer (if not cached)
+      if: steps.cache-winpcap.outputs.cache-hit != 'true'
+      run: |
+        Write-Host "Downloading Nmap 7.12 setup to extract WinPcap..."
+        try {
+          # Download Nmap 7.12 setup
+          Invoke-WebRequest -Uri "https://nmap.org/dist/nmap-7.12-setup.exe" -OutFile "nmap-7.12-setup.exe" -TimeoutSec 300 -UseBasicParsing
+          Write-Host "Nmap setup downloaded successfully"
+          
+          # Extract WinPcap from Nmap setup using 7-Zip
+          Write-Host "Extracting WinPcap from Nmap setup..."
+          & "C:\ProgramData\chocolatey\bin\7z.exe" e nmap-7.12-setup.exe winpcap-nmap-4.13.exe
+          Write-Host "WinPcap extracted successfully using 7-Zip"
+        } catch {
+          Write-Host "WinPcap download/extraction failed: $($_.Exception.Message)"
+          exit 1
+        } finally {
+          # Clean up
+          if (Test-Path "nmap-7.12-setup.exe") { Remove-Item "nmap-7.12-setup.exe" -Force }
+        }
+        
+    - name: Install WinPcap
       run: |
         # Check if WinPcap is already installed
         $winpcapInstalled = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*WinPcap*"}
         if ($winpcapInstalled) {
           Write-Host "WinPcap is already installed. Version: $($winpcapInstalled.Version)"
         } else {
-          Write-Host "Downloading Nmap 7.12 setup to extract WinPcap..."
-          try {
-            # Download Nmap 7.12 setup
-            Invoke-WebRequest -Uri "https://nmap.org/dist/nmap-7.12-setup.exe" -OutFile "nmap-7.12-setup.exe" -TimeoutSec 300 -UseBasicParsing
-            Write-Host "Nmap setup downloaded successfully"
-            
-            # Extract WinPcap from Nmap setup using 7-Zip
-            Write-Host "Extracting WinPcap from Nmap setup..."
-            & "C:\ProgramData\chocolatey\bin\7z.exe" e nmap-7.12-setup.exe winpcap-nmap-4.13.exe
-            Write-Host "WinPcap extracted successfully using 7-Zip"
-            
-            # Install WinPcap
-            Write-Host "Installing WinPcap from Nmap package..."
+          if (Test-Path "winpcap-nmap-4.13.exe") {
+            Write-Host "Installing WinPcap from cached installer..."
             $process = Start-Process -FilePath "winpcap-nmap-4.13.exe" -ArgumentList "/S", "/v/qn" -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -eq 0) {
-              Write-Host "WinPcap installed successfully from Nmap package"
+              Write-Host "WinPcap installed successfully from cached installer"
             } else {
               Write-Host "WinPcap installation failed with exit code: $($process.ExitCode)"
               # Try alternative installation method
               Start-Process -FilePath "winpcap-nmap-4.13.exe" -ArgumentList "/SILENT", "/NORESTART" -Wait
               Write-Host "WinPcap installation completed with alternative method"
             }
-          } catch {
-            Write-Host "WinPcap installation failed: $($_.Exception.Message)"
+          } else {
+            Write-Host "WinPcap installer not found, installation skipped"
             exit 1
-          } finally {
-            # Clean up
-            if (Test-Path "nmap-7.12-setup.exe") { Remove-Item "nmap-7.12-setup.exe" -Force }
-            if (Test-Path "winpcap-nmap-4.13.exe") { Remove-Item "winpcap-nmap-4.13.exe" -Force }
           }
         }
         
