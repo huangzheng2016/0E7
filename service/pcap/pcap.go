@@ -535,7 +535,7 @@ func WatchDir(watch_dir string) {
 	}
 
 	// 可以通过环境变量或配置文件调整并行数
-	if config.Server_pcap_workers > 0 && config.Server_pcap_workers <= 16 {
+	if config.Server_pcap_workers > 0 && config.Server_pcap_workers <= 32 {
 		numWorkers = config.Server_pcap_workers
 		log.Printf("使用配置的并行处理数量: %d", numWorkers)
 	}
