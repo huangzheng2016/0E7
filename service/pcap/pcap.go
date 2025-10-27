@@ -3,6 +3,7 @@ package pcap
 import (
 	"0E7/service/config"
 	"0E7/service/database"
+	"0E7/service/search"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/base64"
@@ -69,11 +70,8 @@ func calculateFileMD5(filePath string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-type FlowItem struct {
-	From string `json:"f"`
-	B64  string `json:"b"`
-	Time int    `json:"t"`
-}
+// 使用 search 包中的 FlowItem 类型
+type FlowItem = search.FlowItem
 
 type FlowEntry struct {
 	SrcPort      int
@@ -387,6 +385,9 @@ func reassemblyCallback(entry FlowEntry) {
 		log.Println("Failed to save JSON file for flow")
 		return
 	}
+
+	// 立即将数据加入缓存，避免后续读取时需要再次解析文件
+	search.CacheFlowData(jsonFile, entry.Flow)
 
 	// 保存TCP流为pcap格式
 	pcapFile := SaveFlowAsPcap(entry)

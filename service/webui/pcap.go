@@ -4,9 +4,11 @@ import (
 	"0E7/service/config"
 	"0E7/service/database"
 	"0E7/service/pcap"
+	"0E7/service/search"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +22,96 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// FlowEntry Flow 文件的完整结构
+type FlowEntry struct {
+	SrcPort      int               `json:"SrcPort,omitempty"`
+	DstPort      int               `json:"DstPort,omitempty"`
+	SrcIp        string            `json:"SrcIp,omitempty"`
+	DstIp        string            `json:"DstIp,omitempty"`
+	Time         int               `json:"Time,omitempty"`
+	Duration     int               `json:"Duration,omitempty"`
+	NumPackets   int               `json:"NumPackets,omitempty"`
+	Blocked      bool              `json:"Blocked,omitempty"`
+	Filename     string            `json:"Filename,omitempty"`
+	Fingerprints []uint32          `json:"Fingerprints,omitempty"`
+	Suricata     []int             `json:"Suricata,omitempty"`
+	Flow         []search.FlowItem `json:"Flow"`
+	Tags         []string          `json:"Tags,omitempty"`
+	Size         int               `json:"Size,omitempty"`
+}
+
+// getFlowFileDataWithCache 使用缓存读取 Flow 文件数据
+func getFlowFileDataWithCache(filePath string, pcap database.Pcap) ([]byte, error) {
+	// 优先从缓存获取 Flow 数据
+	flowCache := search.GetFlowCache()
+	if flowCache != nil {
+		if cachedFlow, found := flowCache.Get(pcap.FlowFile); found {
+			// 缓存命中，重新构建完整的 FlowEntry 并序列化
+			flowEntry := FlowEntry{
+				Flow: cachedFlow,
+			}
+
+			// 序列化为 JSON
+			jsonData, err := json.Marshal(flowEntry)
+			if err != nil {
+				return nil, fmt.Errorf("序列化缓存数据失败: %v", err)
+			}
+
+			log.Printf("从缓存读取 Flow 数据: %s", pcap.FlowFile)
+			return jsonData, nil
+		}
+	}
+
+	// 缓存未命中，从文件读取
+	log.Printf("缓存未命中，从文件读取 Flow 数据: %s", filePath)
+
+	var rawData []byte
+	var err error
+
+	if strings.HasSuffix(filePath, ".gz") {
+		// 处理压缩文件
+		file, err := os.Open(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("打开文件失败: %v", err)
+		}
+		defer file.Close()
+
+		reader, err := gzip.NewReader(file)
+		if err != nil {
+			return nil, fmt.Errorf("解压缩失败: %v", err)
+		}
+		defer reader.Close()
+
+		rawData, err = io.ReadAll(reader)
+		if err != nil {
+			return nil, fmt.Errorf("读取解压数据失败: %v", err)
+		}
+	} else {
+		// 处理普通文件
+		rawData, err = os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("读取文件失败: %v", err)
+		}
+	}
+
+	// 解析 JSON 以提取 Flow 数据并加入缓存
+	var flowEntry FlowEntry
+	if err := json.Unmarshal(rawData, &flowEntry); err != nil {
+		// 如果解析失败，直接返回原始数据
+		log.Printf("解析 Flow JSON 失败，返回原始数据: %v", err)
+		return rawData, nil
+	}
+
+	// 将 Flow 数据加入缓存
+	if flowCache != nil && len(flowEntry.Flow) > 0 {
+		flowCache.Put(pcap.FlowFile, flowEntry.Flow)
+		log.Printf("已将 Flow 数据加入缓存: %s (条目数: %d)", pcap.FlowFile, len(flowEntry.Flow))
+	}
+
+	// 返回原始 JSON 数据
+	return rawData, nil
+}
 
 // calculateFileMD5 计算文件的MD5值
 func calculateFileMD5(file *multipart.FileHeader) (string, error) {
@@ -359,45 +451,59 @@ func pcap_download(c *gin.Context) {
 
 	// 读取文件
 	var fileData []byte
-	if filepath.Ext(cleanPath) == ".gz" {
-		// 处理压缩文件
-		file, err := os.Open(cleanPath)
-		if err != nil {
-			c.JSON(500, gin.H{
-				"message": "fail",
-				"error":   "read file failed",
-			})
-			return
-		}
-		defer file.Close()
 
-		reader, err := gzip.NewReader(file)
+	// 对于 parsed 类型的 Flow JSON 文件，优先使用缓存
+	if fileType == "parsed" {
+		fileData, err = getFlowFileDataWithCache(cleanPath, pcap)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"message": "fail",
-				"error":   "decompress file failed",
-			})
-			return
-		}
-		defer reader.Close()
-
-		fileData, err = io.ReadAll(reader)
-		if err != nil {
-			c.JSON(500, gin.H{
-				"message": "fail",
-				"error":   "read decompressed file failed",
+				"error":   "read flow file failed: " + err.Error(),
 			})
 			return
 		}
 	} else {
-		// 处理普通文件
-		fileData, err = os.ReadFile(cleanPath)
-		if err != nil {
-			c.JSON(500, gin.H{
-				"message": "fail",
-				"error":   "read file failed",
-			})
-			return
+		// 对于其他类型的文件，直接读取
+		if filepath.Ext(cleanPath) == ".gz" {
+			// 处理压缩文件
+			file, err := os.Open(cleanPath)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": "fail",
+					"error":   "read file failed",
+				})
+				return
+			}
+			defer file.Close()
+
+			reader, err := gzip.NewReader(file)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": "fail",
+					"error":   "decompress file failed",
+				})
+				return
+			}
+			defer reader.Close()
+
+			fileData, err = io.ReadAll(reader)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": "fail",
+					"error":   "read decompressed file failed",
+				})
+				return
+			}
+		} else {
+			// 处理普通文件
+			fileData, err = os.ReadFile(cleanPath)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": "fail",
+					"error":   "read file failed",
+				})
+				return
+			}
 		}
 	}
 

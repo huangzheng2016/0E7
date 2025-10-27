@@ -265,13 +265,21 @@ func (s *ElasticsearchService) IndexPcap(pcapRecord database.Pcap) error {
 	return nil
 }
 
-// getFlowData 获取流量数据（复用Bleve中的逻辑）
+// getFlowData 获取流量数据（带缓存）
 func (s *ElasticsearchService) getFlowData(pcapRecord database.Pcap) ([]FlowItem, error) {
 	if pcapRecord.FlowFile == "" {
 		return nil, fmt.Errorf("流量文件路径为空")
 	}
 
-	// 读取JSON文件
+	// 优先从全局缓存读取
+	flowCache := GetFlowCache()
+	if flowCache != nil {
+		if cachedData, found := flowCache.Get(pcapRecord.FlowFile); found {
+			return cachedData, nil
+		}
+	}
+
+	// 缓存未命中，从文件读取
 	jsonData, err := os.ReadFile(pcapRecord.FlowFile)
 	if err != nil {
 		return nil, fmt.Errorf("读取流量文件失败: %v", err)
@@ -298,6 +306,11 @@ func (s *ElasticsearchService) getFlowData(pcapRecord database.Pcap) ([]FlowItem
 	err = json.Unmarshal(jsonData, &flowEntry)
 	if err != nil {
 		return nil, fmt.Errorf("解析流量数据失败: %v", err)
+	}
+
+	// 存入缓存
+	if flowCache != nil {
+		flowCache.Put(pcapRecord.FlowFile, flowEntry.Flow)
 	}
 
 	return flowEntry.Flow, nil

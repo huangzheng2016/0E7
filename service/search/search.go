@@ -5,6 +5,7 @@ import (
 	"0E7/service/database"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -21,6 +22,10 @@ import (
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
 	"github.com/blevesearch/bleve/v2/mapping"
 	"github.com/blevesearch/bleve/v2/search/query"
+	ristretto "github.com/dgraph-io/ristretto/v2"
+	gocache "github.com/eko/gocache/lib/v4/cache"
+	"github.com/eko/gocache/lib/v4/store"
+	ristretto_store "github.com/eko/gocache/store/ristretto/v4"
 )
 
 // FlowItem 流量项结构（避免循环导入）
@@ -94,18 +99,121 @@ const (
 	SearchTypeServer                   // 只搜索服务器端内容
 )
 
+// FlowCache Flow数据缓存包装器
+type FlowCache struct {
+	cache *gocache.Cache[[]FlowItem]
+}
+
+// NewFlowCache 创建新的Flow缓存，capacity单位：字节
+func NewFlowCache(capacity int64) *FlowCache {
+	// 创建 ristretto client，让它自己管理缓存
+	// ristretto 会自动处理 LRU 淘汰和容量管理
+	ristrettoClient, err := ristretto.NewCache(&ristretto.Config[string, []FlowItem]{
+		NumCounters: 1000000,  // 支持约 100000 个缓存项（10倍）
+		MaxCost:     capacity, // 4GB 容量
+		BufferItems: 64,
+	})
+	if err != nil {
+		log.Printf("创建 ristretto client 失败: %v", err)
+		return nil
+	}
+
+	// 创建 ristretto store
+	ristrettoStore := ristretto_store.NewRistretto[string, []FlowItem](ristrettoClient)
+
+	// 创建 cache manager
+	cacheManager := gocache.New[[]FlowItem](ristrettoStore)
+
+	fc := &FlowCache{
+		cache: cacheManager,
+	}
+
+	log.Printf("Flow缓存初始化完成，容量: %.2f GB（由 Ristretto 自动管理）", float64(capacity)/1024/1024/1024)
+	return fc
+}
+
+// Get 从缓存获取数据
+func (fc *FlowCache) Get(key string) ([]FlowItem, bool) {
+	ctx := context.Background()
+	value, err := fc.cache.Get(ctx, key)
+
+	if err != nil {
+		return nil, false
+	}
+
+	return value, true
+}
+
+// Put 添加数据到缓存，让 ristretto 自动计算和管理大小
+func (fc *FlowCache) Put(key string, data []FlowItem) {
+	// 估算数据大小，传递给 ristretto 用于容量管理
+	size := int64(0)
+	for _, item := range data {
+		size += int64(len(item.From) + len(item.B64) + 8 + 50) // 50字节overhead
+	}
+
+	ctx := context.Background()
+
+	// 设置缓存，ristretto 会根据 cost 自动淘汰旧数据
+	err := fc.cache.Set(
+		ctx,
+		key,
+		data,
+		store.WithExpiration(30*time.Minute), // 30分钟自动过期
+		store.WithCost(size),                 // 告诉 ristretto 这个条目的大小
+	)
+
+	if err != nil {
+		log.Printf("添加数据到缓存失败: %s, error: %v", key, err)
+	}
+}
+
+// GetCacheStats 获取缓存统计信息
+func (fc *FlowCache) GetCacheStats() map[string]interface{} {
+	return map[string]interface{}{
+		"status": "缓存由 Ristretto 自动管理",
+	}
+}
+
+// Clear 清空缓存
+func (fc *FlowCache) Clear() {
+	ctx := context.Background()
+	fc.cache.Clear(ctx)
+}
+
 // SearchService 搜索服务
 type SearchService struct {
 	index     bleve.Index
 	mutex     sync.RWMutex
 	engine    SearchEngine
 	esService *ElasticsearchService
+	flowCache *FlowCache // Flow数据缓存
 }
 
 var (
 	searchService *SearchService
 	once          sync.Once
+	// 全局Flow缓存实例，4GB容量
+	globalFlowCache *FlowCache
+	cacheOnce       sync.Once
 )
+
+// GetFlowCache 获取全局Flow缓存实例
+func GetFlowCache() *FlowCache {
+	cacheOnce.Do(func() {
+		// 4GB = 4 * 1024 * 1024 * 1024 字节
+		globalFlowCache = NewFlowCache(4 * 1024 * 1024 * 1024)
+	})
+	return globalFlowCache
+}
+
+// CacheFlowData 将Flow数据加入缓存（供其他包调用）
+func CacheFlowData(flowFile string, flowData []FlowItem) {
+	cache := GetFlowCache()
+	if cache != nil {
+		cache.Put(flowFile, flowData)
+	}
+}
 
 // GetSearchService 获取搜索服务单例
 func GetSearchService() *SearchService {
@@ -122,7 +230,8 @@ func GetSearchService() *SearchService {
 		}
 
 		searchService = &SearchService{
-			engine: engine,
+			engine:    engine,
+			flowCache: GetFlowCache(), // 初始化4GB缓存
 		}
 		searchService.initIndex()
 	})
@@ -133,7 +242,8 @@ func GetSearchService() *SearchService {
 func GetSearchServiceWithEngine(engine SearchEngine) *SearchService {
 	once.Do(func() {
 		searchService = &SearchService{
-			engine: engine,
+			engine:    engine,
+			flowCache: GetFlowCache(), // 初始化4GB缓存
 		}
 		searchService.initIndex()
 	})
@@ -592,13 +702,20 @@ func (s *SearchService) indexPcapBleve(pcapRecord database.Pcap) error {
 	return nil
 }
 
-// getFlowData 获取流量数据
+// getFlowData 获取流量数据（带缓存）
 func (s *SearchService) getFlowData(pcapRecord database.Pcap) ([]FlowItem, error) {
 	if pcapRecord.FlowFile == "" {
 		return nil, fmt.Errorf("流量文件路径为空")
 	}
 
-	// 读取JSON文件
+	// 优先从缓存读取
+	if s.flowCache != nil {
+		if cachedData, found := s.flowCache.Get(pcapRecord.FlowFile); found {
+			return cachedData, nil
+		}
+	}
+
+	// 缓存未命中，从文件读取
 	jsonData, err := os.ReadFile(pcapRecord.FlowFile)
 	if err != nil {
 		return nil, fmt.Errorf("读取流量文件失败: %v", err)
@@ -627,6 +744,11 @@ func (s *SearchService) getFlowData(pcapRecord database.Pcap) ([]FlowItem, error
 	err = json.Unmarshal(dataToParse, &flowEntry)
 	if err != nil {
 		return nil, fmt.Errorf("解析流量数据失败: %v", err)
+	}
+
+	// 存入缓存
+	if s.flowCache != nil {
+		s.flowCache.Put(pcapRecord.FlowFile, flowEntry.Flow)
 	}
 
 	return flowEntry.Flow, nil
