@@ -214,9 +214,11 @@ id         =
 name       = 
 server_url = http://remotehost:6102
 pypi       = https://pypi.tuna.tsinghua.edu.cn/simple
-update     = true
+update     = false
 worker     = 5
 monitor    = false
+only_monitor = false
+pcap_workers = 0
 
 [server]
 enable      = true
