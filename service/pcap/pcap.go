@@ -543,7 +543,7 @@ func WatchDir(watch_dir string) {
 	log.Printf("启动 %d 个并行 pcap 处理 worker (CPU核心数: %d)", numWorkers, runtime.NumCPU())
 
 	// 创建文件处理通道
-	fileChan := make(chan string, numWorkers*2) // 缓冲区大小为worker数量的2倍
+	fileChan := make(chan string, 4096)
 	var wg sync.WaitGroup
 
 	// 启动并行处理worker
