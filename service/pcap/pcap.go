@@ -94,6 +94,21 @@ type FlowEntry struct {
 	OriginalPackets []string `json:"op,omitempty"` // 原始数据包的base64编码列表
 }
 
+// getFlowStoragePath 根据UUID生成分层存储路径
+func getFlowStoragePath(uuid string) string {
+	// 使用UUID的前2个字符作为第一层目录
+	// 使用第3-4个字符作为第二层目录
+	if len(uuid) < 4 {
+		// 如果UUID太短，使用默认目录
+		return filepath.Join("flow", "00", "00")
+	}
+
+	firstLevel := uuid[0:2]
+	secondLevel := uuid[2:4]
+
+	return filepath.Join("flow", firstLevel, secondLevel)
+}
+
 // SaveFlowAsPcap 将TCP流数据保存为pcap格式文件
 func SaveFlowAsPcap(entry FlowEntry) string {
 	flowUUID := uuid.New().String()
@@ -104,13 +119,24 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 	flowInfo = strings.ReplaceAll(flowInfo, ":", "_")
 	flowInfo = strings.ReplaceAll(flowInfo, ".", "_")
 
-	// 根据压缩设置确定文件扩展名
-	var pcapFile string
+	// 生成文件名
+	var filename string
 	if config.Server_pcap_zip {
-		pcapFile = filepath.Join("flow", fmt.Sprintf("flow_%s_%s.pcap.gz", flowInfo, flowUUID))
+		filename = fmt.Sprintf("flow_%s_%s.pcap.gz", flowInfo, flowUUID)
 	} else {
-		pcapFile = filepath.Join("flow", fmt.Sprintf("flow_%s_%s.pcap", flowInfo, flowUUID))
+		filename = fmt.Sprintf("flow_%s_%s.pcap", flowInfo, flowUUID)
 	}
+
+	// 生成分层存储路径
+	storageDir := getFlowStoragePath(flowUUID)
+
+	// 确保目录存在
+	if err := os.MkdirAll(storageDir, os.ModePerm); err != nil {
+		log.Printf("创建存储目录失败 %s: %v", storageDir, err)
+		return ""
+	}
+
+	pcapFile := filepath.Join(storageDir, filename)
 
 	// 创建pcap文件
 	file, err := os.Create(pcapFile)
@@ -280,13 +306,24 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 func SaveFlowAsJson(entry FlowEntry) string {
 	flowUUID := uuid.New().String()
 
-	// 根据压缩设置确定文件扩展名
-	var jsonFile string
+	// 生成文件名
+	var filename string
 	if config.Server_pcap_zip {
-		jsonFile = filepath.Join("flow", flowUUID+".json.gz")
+		filename = flowUUID + ".json.gz"
 	} else {
-		jsonFile = filepath.Join("flow", flowUUID+".json")
+		filename = flowUUID + ".json"
 	}
+
+	// 生成分层存储路径
+	storageDir := getFlowStoragePath(flowUUID)
+
+	// 确保目录存在
+	if err := os.MkdirAll(storageDir, os.ModePerm); err != nil {
+		log.Printf("创建存储目录失败 %s: %v", storageDir, err)
+		return ""
+	}
+
+	jsonFile := filepath.Join(storageDir, filename)
 
 	// 将FlowEntry转换为JSON
 	jsonData, err := json.Marshal(entry)
