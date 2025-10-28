@@ -84,7 +84,7 @@ func (ExploitOutput) TableName() string {
 // Action 动作表
 type Action struct {
 	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
-	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;unique;default:'';"`
+	Name      string    `json:"name" gorm:"column:name;type:varchar(255);not null;default:'';index;"`
 	Code      string    `json:"code" gorm:"column:code;type:text;"`
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
 	Error     string    `json:"error" gorm:"column:error;type:text;"`
