@@ -51,7 +51,6 @@ const flowSelections = ref<Map<number, { selectedByte: number, selectedRange: { 
 const flowSize = ref<number>(0)
 const showSizeWarning = ref(false)
 const showDownloadOption = ref(false)
-const flowSizeInfo = ref<{ raw_size?: number, flow_size?: number, parsed_size?: number } | null>(null)
 
 // 拖拽选择状态
 const dragSelection = ref<{ flowIndex: number, startByte: number, isDragging: boolean } | null>(null)
@@ -147,51 +146,6 @@ const fetchPcapDetail = async () => {
   }
 }
 
-// 获取flow文件信息
-const fetchFlowInfo = async () => {
-  try {
-    const formData = new FormData()
-    formData.append('pcap_id', props.pcapId.toString())
-    formData.append('type', 'parsed')
-    formData.append('i', 'true') // 添加信息参数
-
-    const response = await fetch('/webui/pcap_download', {
-      method: 'POST',
-      body: formData
-    })
-    
-    if (response.ok) {
-      const result = await response.json()
-      if (result.message === 'success' && result.result) {
-        flowSizeInfo.value = result.result
-        flowSize.value = result.result.parsed_size || 0
-        
-        // 根据文件大小决定显示策略
-        const sizeKB = flowSize.value / 1024
-        
-        if (sizeKB > 300) {
-          // 大于300KB，显示下载选项
-          showDownloadOption.value = true
-          showSizeWarning.value = false
-        } else if (sizeKB > 100) {
-          // 100KB-300KB，显示警告但不默认加载
-          showSizeWarning.value = true
-          showDownloadOption.value = false
-        } else {
-          // 小于100KB，正常加载
-          showSizeWarning.value = false
-          showDownloadOption.value = false
-          await fetchFlowData()
-        }
-      }
-    } else {
-      console.error('获取flow文件信息失败:', response.status, response.statusText)
-    }
-  } catch (error) {
-    console.error('获取flow文件信息失败:', error)
-  }
-}
-
 // 获取flow数据
 const fetchFlowData = async () => {
   try {
@@ -237,37 +191,64 @@ const forceLoadFlowData = async () => {
 }
 
 
-// 下载原始文件（未解析的原始pcap文件）
-const downloadOriginalFile = async () => {
+// 通用下载文件函数
+const downloadFile = async (type: 'raw' | 'original' | 'parsed') => {
   if (!pcapDetail.value) return
   
-  // 获取原始文件大小
-  let fileSize = '未知大小'
-  if (flowSizeInfo.value && flowSizeInfo.value.raw_size) {
-    fileSize = formatFileSize(flowSizeInfo.value.raw_size)
-  } else if (pcapDetail.value.size) {
-    fileSize = formatFileSize(pcapDetail.value.size)
+  const typeNames = {
+    raw: '原始文件',
+    original: '流量文件',
+    parsed: '解析文件'
   }
   
-  // 二次确认
+  const fileNames = {
+    raw: `raw_${props.pcapId}.pcap`,
+    original: `flow_${props.pcapId}.pcap`,
+    parsed: `parsed_${props.pcapId}.json`
+  }
+  
+  const typeName = typeNames[type]
+  const fileName = fileNames[type]
+  
   try {
-    await ElMessageBox.confirm(
-      `原始文件大小为 ${fileSize}，确定要下载吗？`,
-      '确认下载',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
+    // 先查询文件大小
+    const infoFormData = new FormData()
+    infoFormData.append('pcap_id', props.pcapId.toString())
+    infoFormData.append('type', type)
+    infoFormData.append('i', 'true')
+
+    const infoResponse = await fetch('/webui/pcap_download', {
+      method: 'POST',
+      body: infoFormData
+    })
+    
+    let fileSize = '未知大小'
+    if (infoResponse.ok) {
+      const infoResult = await infoResponse.json()
+      if (infoResult.message === 'success' && infoResult.result.size) {
+        fileSize = formatFileSize(infoResult.result.size)
       }
-    )
-  } catch {
-    return // 用户取消
-  }
-  
-  try {
+    }
+    
+    // 二次确认
+    try {
+      await ElMessageBox.confirm(
+        `${typeName}大小为 ${fileSize}，确定要下载吗？`,
+        '确认下载',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }
+      )
+    } catch {
+      return // 用户取消
+    }
+    
+    // 下载文件
     const formData = new FormData()
     formData.append('pcap_id', props.pcapId.toString())
-    formData.append('type', 'raw')
+    formData.append('type', type)
     formData.append('d', 'true')
 
     const response = await fetch('/webui/pcap_download', {
@@ -280,53 +261,18 @@ const downloadOriginalFile = async () => {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `raw_${props.pcapId}.pcap`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } else {
-      console.error('下载原始文件失败:', response.status, response.statusText)
-      ElMessage.error('下载原始文件失败')
-    }
-  } catch (error) {
-    console.error('下载原始文件失败:', error)
-    ElMessage.error('下载原始文件失败')
-  }
-}
-
-// 下载pcap文件
-const downloadPcapFile = async (type: 'original' | 'parsed') => {
-  if (!pcapDetail.value) return
-  
-  try {
-    const formData = new FormData()
-    formData.append('pcap_id', props.pcapId.toString())
-    formData.append('type', type)
-
-    const response = await fetch('/webui/pcap_download', {
-      method: 'POST',
-      body: formData
-    })
-    
-    if (response.ok) {
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const fileName = type === 'original' ? `flow_${props.pcapId}.pcap` : `parsed_${props.pcapId}.json`
       a.download = fileName
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } else {
-      console.error(`下载${type}文件失败:`, response.status, response.statusText)
-      ElMessage.error(`下载${type === 'original' ? '流量' : '解析'}文件失败`)
+      console.error(`下载${typeName}失败:`, response.status, response.statusText)
+      ElMessage.error(`下载${typeName}失败`)
     }
   } catch (error) {
-    console.error(`下载${type}文件失败:`, error)
-    ElMessage.error(`下载${type === 'original' ? '流量' : '解析'}文件失败`)
+    console.error(`下载${typeName}失败:`, error)
+    ElMessage.error(`下载${typeName}失败`)
   }
 }
 
@@ -799,7 +745,6 @@ watch(() => props.pcapId, (newPcapId, oldPcapId) => {
     flowSize.value = 0
     showSizeWarning.value = false
     showDownloadOption.value = false
-    flowSizeInfo.value = null
     
     // 重新获取数据
     fetchPcapDetail()
@@ -824,7 +769,7 @@ onUnmounted(() => {
             <el-button 
               type="warning" 
               size="small" 
-              @click="downloadOriginalFile"
+              @click="downloadFile('raw')"
               :disabled="!pcapDetail.filename"
             >
               <el-icon><Download /></el-icon>
@@ -833,7 +778,7 @@ onUnmounted(() => {
             <el-button 
               type="primary" 
               size="small" 
-              @click="downloadPcapFile('original')"
+              @click="downloadFile('original')"
             >
               <el-icon><Download /></el-icon>
               下载流量文件
@@ -841,7 +786,7 @@ onUnmounted(() => {
             <el-button 
               type="success" 
               size="small" 
-              @click="downloadPcapFile('parsed')"
+              @click="downloadFile('parsed')"
             >
               <el-icon><Download /></el-icon>
               下载解析文件
@@ -933,7 +878,7 @@ onUnmounted(() => {
           <template #default>
             <div class="download-actions">
               <el-button type="primary" @click="forceLoadFlowData" :loading="loading">点击加载 Flow 数据</el-button>
-              <el-button @click="downloadPcapFile('parsed')">或下载到本地</el-button>
+              <el-button @click="downloadFile('parsed')">或下载到本地</el-button>
             </div>
           </template>
         </el-alert>

@@ -370,6 +370,26 @@ func pcap_download(c *gin.Context) {
 			})
 			return
 		}
+
+		// 如果请求文件信息
+		if info == "true" {
+			fileInfo, err := os.Stat(pcap.Filename)
+			if err != nil {
+				c.JSON(404, gin.H{
+					"message": "fail",
+					"error":   "raw pcap file not found: " + err.Error(),
+				})
+				return
+			}
+			c.JSON(200, gin.H{
+				"message": "success",
+				"result": gin.H{
+					"size": fileInfo.Size(),
+				},
+			})
+			return
+		}
+
 		filePath = pcap.Filename
 		fileName = fmt.Sprintf("raw_%s.pcap", pcapId)
 	} else if fileType == "original" {
@@ -412,8 +432,8 @@ func pcap_download(c *gin.Context) {
 			if download == "true" {
 				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 			}
-			c.Header("Content-Type", "application/vnd.tcpdump.pcap")
-			c.Data(200, "application/vnd.tcpdump.pcap", pcapBytes)
+			c.Header("Content-Type", "application/octet-stream")
+			c.Data(200, "application/octet-stream", pcapBytes)
 			return
 		}
 
@@ -443,9 +463,9 @@ func pcap_download(c *gin.Context) {
 				return
 			}
 
-			// 返回JSON数据
-			c.Header("Content-Type", "application/json")
+			// 返回JSON数据（作为下载文件）
 			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=parsed_%s.json", pcapId))
+			c.Header("Content-Type", "application/octet-stream")
 			c.String(200, pcap.FlowData)
 			return
 		}
@@ -483,67 +503,19 @@ func pcap_download(c *gin.Context) {
 		return
 	}
 
-	// 读取文件
-	var fileData []byte
-
-	// 直接读取文件，不使用缓存
-	if fileType == "parsed" {
-		fileData, err = getFlowFileData(cleanPath)
-		if err != nil {
-			c.JSON(500, gin.H{
-				"message": "fail",
-				"error":   "read flow file failed: " + err.Error(),
-			})
-			return
-		}
-	} else {
-		// 对于其他类型的文件，直接读取
-		if filepath.Ext(cleanPath) == ".gz" {
-			// 处理压缩文件
-			file, err := os.Open(cleanPath)
-			if err != nil {
-				c.JSON(500, gin.H{
-					"message": "fail",
-					"error":   "read file failed",
-				})
-				return
-			}
-			defer file.Close()
-
-			reader, err := gzip.NewReader(file)
-			if err != nil {
-				c.JSON(500, gin.H{
-					"message": "fail",
-					"error":   "decompress file failed",
-				})
-				return
-			}
-			defer reader.Close()
-
-			fileData, err = io.ReadAll(reader)
-			if err != nil {
-				c.JSON(500, gin.H{
-					"message": "fail",
-					"error":   "read decompressed file failed",
-				})
-				return
-			}
-		} else {
-			// 处理普通文件
-			fileData, err = os.ReadFile(cleanPath)
-			if err != nil {
-				c.JSON(500, gin.H{
-					"message": "fail",
-					"error":   "read file failed",
-				})
-				return
-			}
-		}
+	// 读取文件（不解压，直接返回原始文件）
+	fileData, err := os.ReadFile(cleanPath)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"message": "fail",
+			"error":   "read file failed",
+		})
+		return
 	}
 
 	// 如果请求文件信息
 	if info == "true" {
-		// 返回实际解压后的文件大小（fileData已经读取并解压）
+		// 返回原始文件大小（压缩后的）
 		c.JSON(200, gin.H{
 			"message": "success",
 			"result": gin.H{
@@ -555,28 +527,13 @@ func pcap_download(c *gin.Context) {
 
 	// 如果请求下载文件
 	if download == "true" {
-		// 设置下载头
-		// 如果原始文件是.gz格式，下载时去掉.gz后缀
-		if filepath.Ext(cleanPath) == ".gz" {
-			// 去掉文件名中的.gz后缀
-			fileName = strings.TrimSuffix(fileName, ".gz")
-		}
+		// 设置下载头（保留.gz后缀，让用户自己解压）
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 		c.Header("Content-Type", "application/octet-stream")
 		c.Data(200, "application/octet-stream", fileData)
 		return
 	}
 
-	// 默认行为：返回JSON数据（仅对parsed类型）
-	if fileType == "parsed" {
-		c.Data(200, "application/json", fileData)
-	} else {
-		// 其他类型默认下载
-		if filepath.Ext(cleanPath) == ".gz" {
-			fileName = strings.TrimSuffix(fileName, ".gz")
-		}
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
-		c.Header("Content-Type", "application/octet-stream")
-		c.Data(200, "application/octet-stream", fileData)
-	}
+	// 默认行为：直接返回文件内容（可能是压缩的）
+	c.Data(200, "application/octet-stream", fileData)
 }
