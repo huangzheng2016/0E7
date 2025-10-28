@@ -142,15 +142,16 @@ func (fd *FlagDetector) detectPendingFlags() bool {
 				continue
 			}
 
-			// 移除PENDING标签
+			// 移除PENDING标签和旧的FLAG标签（准备重新判断）
 			newTags := make([]string, 0)
 			for _, tag := range tags {
+				// 保留所有标签，除了PENDING、FLAG-IN、FLAG-OUT
 				if tag != "PENDING" && tag != "FLAG-IN" && tag != "FLAG-OUT" {
 					newTags = append(newTags, tag)
 				}
 			}
 
-			// 如果有flag正则表达式且检测到flag，添加方向标签
+			// 根据本次检测结果，重新添加FLAG标签
 			if flagRegex != nil {
 				if hasClientFlag {
 					newTags = append(newTags, "FLAG-IN")
@@ -206,25 +207,18 @@ func (fd *FlagDetector) detectPendingFlags() bool {
 
 				batch := updateData[i:end]
 
-				// 构建批量更新的 Pcap 对象
-				var pcapUpdates []database.Pcap
+				// 使用 Updates 方法只更新 tags 字段，不影响其他字段
 				for _, data := range batch {
-					pcapUpdates = append(pcapUpdates, database.Pcap{
-						ID:   data["id"].(int),
-						Tags: data["tags"].(string),
-					})
+					err := tx.Model(&database.Pcap{}).Where("id = ?", data["id"]).Update("tags", data["tags"]).Error
+					if err != nil {
+						tx.Rollback()
+						log.Printf("更新标签失败 (ID: %d): %v", data["id"].(int), err)
+						return false
+					}
+					successCount++
 				}
 
-				// 使用 GORM 的 Save 方法进行批量更新
-				err := tx.Save(&pcapUpdates).Error
-				if err != nil {
-					tx.Rollback()
-					log.Printf("批量更新标签失败 (批次 %d-%d): %v", i, end-1, err)
-					return false
-				}
-
-				successCount += len(pcapUpdates)
-				log.Printf("成功更新批次 %d-%d，共 %d 条记录", i, end-1, len(pcapUpdates))
+				log.Printf("成功更新批次 %d-%d，共 %d 条记录", i, end-1, len(batch))
 			}
 
 			// 最终提交
