@@ -265,52 +265,46 @@ func (s *ElasticsearchService) IndexPcap(pcapRecord database.Pcap) error {
 	return nil
 }
 
-// getFlowData 获取流量数据（带缓存）
+// getFlowData 获取流量数据
+// 优先从数据库FlowData字段读取（<128KB），如果为空则从FlowFile文件读取（>=128KB）
 func (s *ElasticsearchService) getFlowData(pcapRecord database.Pcap) ([]FlowItem, error) {
-	if pcapRecord.FlowFile == "" {
-		return nil, fmt.Errorf("流量文件路径为空")
-	}
+	var dataToParse []byte
 
-	// 优先从全局缓存读取
-	flowCache := GetFlowCache()
-	if flowCache != nil {
-		if cachedData, found := flowCache.Get(pcapRecord.FlowFile); found {
-			return cachedData, nil
-		}
-	}
-
-	// 缓存未命中，从文件读取
-	jsonData, err := os.ReadFile(pcapRecord.FlowFile)
-	if err != nil {
-		return nil, fmt.Errorf("读取流量文件失败: %v", err)
-	}
-
-	// 检查是否是压缩文件（通过文件扩展名或内容判断）
-	if strings.HasSuffix(pcapRecord.FlowFile, ".gz") || (len(jsonData) > 2 && jsonData[0] == 0x1f && jsonData[1] == 0x8b) {
-		// 解压缩gzip数据
-		reader, err := gzip.NewReader(bytes.NewReader(jsonData))
+	// 优先从数据库FlowData字段读取
+	if pcapRecord.FlowData != "" {
+		dataToParse = []byte(pcapRecord.FlowData)
+	} else if pcapRecord.FlowFile != "" {
+		// 从文件读取
+		jsonData, err := os.ReadFile(pcapRecord.FlowFile)
 		if err != nil {
-			return nil, fmt.Errorf("创建gzip读取器失败: %v", err)
+			return nil, fmt.Errorf("读取流量文件失败: %v", err)
 		}
-		defer reader.Close()
 
-		decompressedData, err := io.ReadAll(reader)
-		if err != nil {
-			return nil, fmt.Errorf("解压缩数据失败: %v", err)
+		// 检查是否是压缩文件（通过文件扩展名或内容判断）
+		if strings.HasSuffix(pcapRecord.FlowFile, ".gz") || (len(jsonData) > 2 && jsonData[0] == 0x1f && jsonData[1] == 0x8b) {
+			// 解压缩gzip数据
+			reader, err := gzip.NewReader(bytes.NewReader(jsonData))
+			if err != nil {
+				return nil, fmt.Errorf("创建gzip读取器失败: %v", err)
+			}
+			defer reader.Close()
+
+			dataToParse, err = io.ReadAll(reader)
+			if err != nil {
+				return nil, fmt.Errorf("解压缩数据失败: %v", err)
+			}
+		} else {
+			dataToParse = jsonData
 		}
-		jsonData = decompressedData
+	} else {
+		return nil, fmt.Errorf("流量数据为空（FlowData和FlowFile都为空）")
 	}
 
 	// 解析JSON
 	var flowEntry FlowEntry
-	err = json.Unmarshal(jsonData, &flowEntry)
+	err := json.Unmarshal(dataToParse, &flowEntry)
 	if err != nil {
 		return nil, fmt.Errorf("解析流量数据失败: %v", err)
-	}
-
-	// 存入缓存
-	if flowCache != nil {
-		flowCache.Put(pcapRecord.FlowFile, flowEntry.Flow)
 	}
 
 	return flowEntry.Flow, nil

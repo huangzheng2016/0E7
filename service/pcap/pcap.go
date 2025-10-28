@@ -301,7 +301,25 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 }
 
 // SaveFlowAsJson 将流量数据保存为JSON格式文件
-func SaveFlowAsJson(entry FlowEntry) string {
+// SaveFlowAsJson 保存flow数据，返回(文件路径, JSON数据)
+// 如果flow大小小于128KB，不写入文件，返回空路径和JSON数据
+// 如果flow大小大于128KB，写入文件，返回文件路径和空数据
+func SaveFlowAsJson(entry FlowEntry) (string, string) {
+	// 将FlowEntry转换为JSON
+	jsonData, err := json.Marshal(entry)
+	if err != nil {
+		log.Println("Marshal JSON failed:", err)
+		return "", ""
+	}
+
+	// 判断大小，小于128KB直接返回数据，不写文件
+	const sizeThreshold = 128 * 1024 // 128KB
+	if len(jsonData) < sizeThreshold {
+		// 小文件：不落地，直接返回JSON数据
+		return "", string(jsonData)
+	}
+
+	// 大文件：写入文件
 	flowUUID := uuid.New().String()
 
 	// 生成文件名
@@ -318,23 +336,16 @@ func SaveFlowAsJson(entry FlowEntry) string {
 	// 确保目录存在
 	if err := os.MkdirAll(storageDir, os.ModePerm); err != nil {
 		log.Printf("创建存储目录失败 %s: %v", storageDir, err)
-		return ""
+		return "", ""
 	}
 
 	jsonFile := filepath.Join(storageDir, filename)
-
-	// 将FlowEntry转换为JSON
-	jsonData, err := json.Marshal(entry)
-	if err != nil {
-		log.Println("Marshal JSON failed:", err)
-		return ""
-	}
 
 	// 创建文件
 	file, err := os.Create(jsonFile)
 	if err != nil {
 		log.Println("Create JSON file failed:", err)
-		return ""
+		return "", ""
 	}
 	defer file.Close()
 
@@ -349,10 +360,10 @@ func SaveFlowAsJson(entry FlowEntry) string {
 
 	if err != nil {
 		log.Println("Write JSON file failed:", err)
-		return ""
+		return "", ""
 	}
 
-	return jsonFile
+	return jsonFile, ""
 }
 
 func reassemblyCallback(entry FlowEntry) {
@@ -380,14 +391,11 @@ func reassemblyCallback(entry FlowEntry) {
 	}
 
 	// 保存流量数据为JSON格式
-	jsonFile := SaveFlowAsJson(entry)
-	if jsonFile == "" {
-		log.Println("Failed to save JSON file for flow")
+	jsonFile, jsonData := SaveFlowAsJson(entry)
+	if jsonFile == "" && jsonData == "" {
+		log.Println("Failed to save flow data")
 		return
 	}
-
-	// 立即将数据加入缓存，避免后续读取时需要再次解析文件
-	search.CacheFlowData(jsonFile, entry.Flow)
 
 	// 保存TCP流为pcap格式
 	pcapFile := SaveFlowAsPcap(entry)
@@ -431,7 +439,8 @@ func reassemblyCallback(entry FlowEntry) {
 		Tags:          string(Tags),
 		ClientContent: clientContentBuilder.String(),
 		ServerContent: serverContentBuilder.String(),
-		FlowFile:      jsonFile, // JSON文件路径
+		FlowFile:      jsonFile, // JSON文件路径（大文件，>=128KB）
+		FlowData:      jsonData, // JSON数据（小文件，<128KB）
 		PcapFile:      pcapFile, // PCAP文件路径
 		Size:          entry.Size,
 	}

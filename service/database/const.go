@@ -148,6 +148,7 @@ type Pcap struct {
 	Fingerprints  string    `json:"fingerprints" gorm:"column:fingerprints;type:text;"`
 	Suricata      string    `json:"suricata" gorm:"column:suricata;type:text;"`
 	FlowFile      string    `json:"flow_file" gorm:"column:flow_file;type:text;"`
+	FlowData      string    `json:"flow_data" gorm:"column:flow_data;type:longtext;"` // 小于128KB的flow数据直接存储在数据库中
 	PcapFile      string    `json:"pcap_file" gorm:"column:pcap_file;type:varchar(255);"`
 	Tags          string    `json:"tags" gorm:"column:tags;type:text;index;"`
 	ClientContent string    `json:"client_content" gorm:"column:client_content;type:text;index;"`

@@ -417,6 +417,29 @@ func pcap_download(c *gin.Context) {
 		fileName = fmt.Sprintf("flow_%s.pcap", pcapId)
 	} else {
 		// 下载解析文件（json文件）
+		// 优先从数据库FlowData字段读取，如果没有再从FlowFile文件读取
+		if pcap.FlowData != "" {
+			// 小文件：直接从数据库返回
+			if info == "true" {
+				// 返回文件信息
+				c.JSON(200, gin.H{
+					"message": "success",
+					"result": gin.H{
+						"parsed_size": len(pcap.FlowData),
+						"flow_size":   len(pcap.FlowData),
+					},
+				})
+				return
+			}
+
+			// 返回JSON数据
+			c.Header("Content-Type", "application/json")
+			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=parsed_%s.json", pcapId))
+			c.String(200, pcap.FlowData)
+			return
+		}
+
+		// 大文件：从FlowFile读取
 		if pcap.FlowFile == "" {
 			c.JSON(404, gin.H{
 				"message": "fail",
