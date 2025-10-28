@@ -152,16 +152,16 @@ const fetchFlowInfo = async () => {
         // 根据文件大小决定显示策略
         const sizeKB = flowSize.value / 1024
         
-        if (sizeKB > 30) {
-          // 大于30KB，显示下载选项
+        if (sizeKB > 300) {
+          // 大于300KB，显示下载选项
           showDownloadOption.value = true
           showSizeWarning.value = false
-        } else if (sizeKB > 10) {
-          // 10KB-30KB，显示警告但不默认加载
+        } else if (sizeKB > 100) {
+          // 100KB-300KB，显示警告但不默认加载
           showSizeWarning.value = true
           showDownloadOption.value = false
         } else {
-          // 小于10KB，正常加载
+          // 小于100KB，正常加载
           showSizeWarning.value = false
           showDownloadOption.value = false
           await fetchFlowData()
@@ -1167,17 +1167,13 @@ onUnmounted(() => {
   border: 1px solid #e6e8eb;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   padding: 20px;
-  height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .detail-content {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .section-title {
@@ -1336,19 +1332,14 @@ onUnmounted(() => {
 }
 
 .flow-section {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .flow-list {
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 15px;
-  overflow-y: auto;
-  min-height: 0;
 }
 
 .flow-item {
@@ -1356,8 +1347,6 @@ onUnmounted(() => {
   border-radius: 6px;
   overflow: hidden;
   transition: all 0.3s;
-  flex-shrink: 0;
-  max-height: 600px;
   display: flex;
   flex-direction: column;
 }
@@ -1397,16 +1386,13 @@ onUnmounted(() => {
 
 .flow-content {
   padding: 0;
-  flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .content-tabs {
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 .tab-buttons {
@@ -1457,8 +1443,8 @@ onUnmounted(() => {
 }
 
 .tab-content {
-  flex: 1;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .content-display {
@@ -1466,10 +1452,7 @@ onUnmounted(() => {
   background: #fafafa;
   border-radius: 4px;
   margin: 10px;
-  flex: 1;
-  overflow-y: auto;
   overflow-x: auto;
-  max-height: 400px;
   min-height: 200px;
   scrollbar-width: thin;
   scrollbar-color: #c1c1c1 #f1f1f1;
@@ -1546,25 +1529,20 @@ onUnmounted(() => {
 }
 
 .hex-editor-display {
-  flex: 1;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .hex-editor {
-  flex: 1;
   display: flex;
   flex-direction: column;
   background: #fafafa;
   color: #303133;
   font-family: 'Courier New', monospace;
   font-size: 13px;
-  overflow: hidden;
   border-radius: 4px;
   margin: 10px;
   min-height: 300px;
-  max-height: 500px;
 }
 
 .hex-header {
@@ -1597,11 +1575,9 @@ onUnmounted(() => {
 }
 
 .hex-content {
-  flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   overflow-x: auto;
-  min-height: 0;
-  max-height: 400px;
   scrollbar-width: thin;
   scrollbar-color: #c1c1c1 #f1f1f1;
 }
@@ -1780,6 +1756,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: center;
   padding-top: 20px;
+  margin-top: 20px;
   border-top: 1px solid #e6e8eb;
 }
 
