@@ -145,14 +145,13 @@ type Pcap struct {
 	NumPackets    int       `json:"num_packets" gorm:"column:num_packets;type:int;"`
 	Blocked       string    `json:"blocked" gorm:"column:blocked;type:varchar(255);index;"`
 	Filename      string    `json:"filename" gorm:"column:filename;type:varchar(255);index;"`
-	Fingerprints  string    `json:"fingerprints" gorm:"column:fingerprints;type:text;"`
-	Suricata      string    `json:"suricata" gorm:"column:suricata;type:text;"`
-	FlowFile      string    `json:"flow_file" gorm:"column:flow_file;type:text;"`
-	FlowData      string    `json:"flow_data" gorm:"column:flow_data;type:longtext;"` // 小于128KB的flow数据直接存储在数据库中
-	PcapFile      string    `json:"pcap_file" gorm:"column:pcap_file;type:varchar(255);"`
+	FlowFile      string    `json:"flow_file" gorm:"column:flow_file;type:text;"`               // 大文件路径（前端通过有无判断是否需要点击加载）
+	FlowData      string    `json:"flow_data,omitempty" gorm:"column:flow_data;type:longtext;"` // 小文件时的JSON字符串（前端自己解析）
+	PcapFile      string    `json:"pcap_file" gorm:"column:pcap_file;type:varchar(255);"`       // pcap文件路径
+	PcapData      string    `json:"-" gorm:"column:pcap_data;type:longblob;"`                   // 不返回（小pcap数据，base64编码）
 	Tags          string    `json:"tags" gorm:"column:tags;type:text;index;"`
-	ClientContent string    `json:"client_content" gorm:"column:client_content;type:text;index;"`
-	ServerContent string    `json:"server_content" gorm:"column:server_content;type:text;index;"`
+	ClientContent string    `json:"-" gorm:"column:client_content;type:text;index;"` // 不返回（用于搜索）
+	ServerContent string    `json:"-" gorm:"column:server_content;type:text;index;"` // 不返回（用于搜索）
 	Size          int       `json:"size" gorm:"column:size;type:int;"`
 	CreatedAt     time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
 	UpdatedAt     time.Time `json:"updated_at" gorm:"autoUpdateTime"`

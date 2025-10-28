@@ -238,7 +238,6 @@ func (t *tcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 		Duration:        duration,
 		NumPackets:      t.num_packets,
 		Blocked:         false,
-		Suricata:        make([]int, 0),
 		Filename:        t.source,
 		Flow:            t.FlowItems,
 		Size:            t.total_size,

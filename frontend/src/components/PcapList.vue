@@ -14,9 +14,9 @@ interface PcapItem {
   num_packets: number
   blocked: string
   filename: string
-  fingerprints: string
-  suricata: string
-  flow: string
+  flow_file: string
+  flow_data?: string
+  pcap_file: string
   tags: string
   size: number
   created_at: string
@@ -417,7 +417,6 @@ const fetchSearchResults = async () => {
         filename: item.filename || '',
         fingerprints: '',
         suricata: '',
-        flow: '',
         tags: item.tags,
         size: item.size || 0,
         created_at: '',

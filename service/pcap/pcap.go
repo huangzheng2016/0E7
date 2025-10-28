@@ -4,6 +4,7 @@ import (
 	"0E7/service/config"
 	"0E7/service/database"
 	"0E7/service/search"
+	"bytes"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/base64"
@@ -74,20 +75,18 @@ func calculateFileMD5(filePath string) (string, error) {
 type FlowItem = search.FlowItem
 
 type FlowEntry struct {
-	SrcPort      int
-	DstPort      int
-	SrcIp        string
-	DstIp        string
-	Time         int
-	Duration     int
-	NumPackets   int
-	Blocked      bool
-	Filename     string
-	Fingerprints []uint32
-	Suricata     []int
-	Flow         []FlowItem
-	Tags         []string
-	Size         int
+	SrcPort    int
+	DstPort    int
+	SrcIp      string
+	DstIp      string
+	Time       int
+	Duration   int
+	NumPackets int
+	Blocked    bool
+	Filename   string
+	Flow       []FlowItem
+	Tags       []string
+	Size       int
 	// 保存所有原始数据包，用于Wireshark分析
 	OriginalPackets []string `json:"op,omitempty"` // 原始数据包的base64编码列表
 }
@@ -107,58 +106,30 @@ func getFlowStoragePath(uuid string) string {
 	return filepath.Join("flow", firstLevel, secondLevel)
 }
 
-// SaveFlowAsPcap 将TCP流数据保存为pcap格式文件
-func SaveFlowAsPcap(entry FlowEntry) string {
-	flowUUID := uuid.New().String()
-
-	// 创建包含流信息的文件名，便于在Wireshark中识别
-	flowInfo := fmt.Sprintf("%s_%d_to_%s_%d", entry.SrcIp, entry.SrcPort, entry.DstIp, entry.DstPort)
-	// 清理文件名中的特殊字符
-	flowInfo = strings.ReplaceAll(flowInfo, ":", "_")
-	flowInfo = strings.ReplaceAll(flowInfo, ".", "_")
-
-	// 生成文件名
-	var filename string
-	if config.Server_pcap_zip {
-		filename = fmt.Sprintf("flow_%s_%s.pcap.gz", flowInfo, flowUUID)
-	} else {
-		filename = fmt.Sprintf("flow_%s_%s.pcap", flowInfo, flowUUID)
-	}
-
-	// 生成分层存储路径
-	storageDir := getFlowStoragePath(flowUUID)
-
-	// 确保目录存在
-	if err := os.MkdirAll(storageDir, os.ModePerm); err != nil {
-		log.Printf("创建存储目录失败 %s: %v", storageDir, err)
-		return ""
-	}
-
-	pcapFile := filepath.Join(storageDir, filename)
-
-	// 创建pcap文件
-	file, err := os.Create(pcapFile)
-	if err != nil {
-		log.Println("Create pcap file failed:", err)
-		return ""
-	}
-	defer file.Close()
+// SaveFlowAsPcap 将TCP流数据保存为pcap格式
+// 返回 (文件路径, pcap数据的base64编码)
+// 如果pcap大小小于128KB，不写入文件，返回空路径和base64数据
+// 如果pcap大小大于128KB，写入文件，返回文件路径和空数据
+func SaveFlowAsPcap(entry FlowEntry) (string, string) {
+	// 首先生成pcap数据到内存缓冲区
+	buf := new(bytes.Buffer)
 
 	var writer *pcapgo.Writer
+	var gzWriter *gzip.Writer
+
 	if config.Server_pcap_zip {
-		// 创建gzip writer
-		gzWriter := gzip.NewWriter(file)
-		defer gzWriter.Close()
+		// 使用gzip压缩
+		gzWriter = gzip.NewWriter(buf)
 		writer = pcapgo.NewWriter(gzWriter)
 	} else {
-		writer = pcapgo.NewWriter(file)
+		writer = pcapgo.NewWriter(buf)
 	}
 
 	// 写入pcap文件头
-	err = writer.WriteFileHeader(65536, layers.LinkTypeEthernet)
+	err := writer.WriteFileHeader(65536, layers.LinkTypeEthernet)
 	if err != nil {
 		log.Println("Write pcap file header failed:", err)
-		return ""
+		return "", ""
 	}
 
 	// 解析源IP和目标IP
@@ -166,7 +137,7 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 	dstIP := net.ParseIP(entry.DstIp)
 	if srcIP == nil || dstIP == nil {
 		log.Println("Invalid IP address:", entry.SrcIp, entry.DstIp)
-		return ""
+		return "", ""
 	}
 
 	// 优先使用原始数据包列表（如果可用）
@@ -202,14 +173,21 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 				Length:        len(packetData),
 			}
 
-			// 写入pcap文件
+			// 写入pcap数据到缓冲区
 			err = writer.WritePacket(ci, packetData)
 			if err != nil {
 				log.Printf("Write original packet %d to pcap failed: %v", i, err)
 				continue
 			}
 		}
-		return pcapFile
+
+		// 完成写入
+		if gzWriter != nil {
+			gzWriter.Close()
+		}
+
+		// 判断大小
+		return savePcapData(buf.Bytes(), entry)
 	}
 
 	// 如果没有原始数据包列表，则使用FlowItem重建数据包
@@ -261,14 +239,14 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 		tcp.SetNetworkLayerForChecksum(ip)
 
 		// 创建数据包缓冲区
-		buf := gopacket.NewSerializeBuffer()
+		packetBuf := gopacket.NewSerializeBuffer()
 		opts := gopacket.SerializeOptions{
 			ComputeChecksums: true,
 			FixLengths:       true,
 		}
 
 		// 序列化数据包
-		err = gopacket.SerializeLayers(buf, opts,
+		err = gopacket.SerializeLayers(packetBuf, opts,
 			ethernet,
 			ip,
 			tcp,
@@ -279,7 +257,7 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 			continue
 		}
 
-		packetData := buf.Bytes()
+		packetData := packetBuf.Bytes()
 
 		// 创建数据包元数据
 		timestamp := time.Unix(int64(flowItem.Time/1000), int64((flowItem.Time%1000)*1000000))
@@ -289,7 +267,7 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 			Length:        len(packetData),
 		}
 
-		// 写入pcap文件
+		// 写入pcap数据到缓冲区
 		err = writer.WritePacket(ci, packetData)
 		if err != nil {
 			log.Println("Write packet to pcap failed:", err)
@@ -297,7 +275,63 @@ func SaveFlowAsPcap(entry FlowEntry) string {
 		}
 	}
 
-	return pcapFile
+	// 完成写入
+	if gzWriter != nil {
+		gzWriter.Close()
+	}
+
+	// 判断大小并保存
+	return savePcapData(buf.Bytes(), entry)
+}
+
+// savePcapData 根据pcap数据大小决定存储方式
+// 小于128KB：返回空路径和base64编码的数据
+// 大于等于128KB：保存到文件，返回文件路径和空数据
+func savePcapData(pcapData []byte, entry FlowEntry) (string, string) {
+	const sizeThreshold = 128 * 1024 // 128KB
+
+	if len(pcapData) < sizeThreshold {
+		// 小文件：不落地，直接返回base64编码的数据
+		pcapDataB64 := base64.StdEncoding.EncodeToString(pcapData)
+		return "", pcapDataB64
+	}
+
+	// 大文件：写入文件
+	flowUUID := uuid.New().String()
+
+	// 创建包含流信息的文件名，便于在Wireshark中识别
+	flowInfo := fmt.Sprintf("%s_%d_to_%s_%d", entry.SrcIp, entry.SrcPort, entry.DstIp, entry.DstPort)
+	// 清理文件名中的特殊字符
+	flowInfo = strings.ReplaceAll(flowInfo, ":", "_")
+	flowInfo = strings.ReplaceAll(flowInfo, ".", "_")
+
+	// 生成文件名
+	var filename string
+	if config.Server_pcap_zip {
+		filename = fmt.Sprintf("flow_%s_%s.pcap.gz", flowInfo, flowUUID)
+	} else {
+		filename = fmt.Sprintf("flow_%s_%s.pcap", flowInfo, flowUUID)
+	}
+
+	// 生成分层存储路径
+	storageDir := getFlowStoragePath(flowUUID)
+
+	// 确保目录存在
+	if err := os.MkdirAll(storageDir, os.ModePerm); err != nil {
+		log.Printf("创建存储目录失败 %s: %v", storageDir, err)
+		return "", ""
+	}
+
+	pcapFile := filepath.Join(storageDir, filename)
+
+	// 写入文件
+	err := ioutil.WriteFile(pcapFile, pcapData, 0644)
+	if err != nil {
+		log.Printf("写入pcap文件失败: %v", err)
+		return "", ""
+	}
+
+	return pcapFile, ""
 }
 
 // SaveFlowAsJson 将流量数据保存为JSON格式文件
@@ -373,16 +407,6 @@ func reassemblyCallback(entry FlowEntry) {
 	entry.Tags = append(entry.Tags, "PENDING")
 
 	// B64字段已经在tcp.go中设置，这里不需要额外处理
-	Fingerprints, err := json.Marshal(entry.Fingerprints)
-	if err != nil {
-		log.Println("Fingerprints Error:", err)
-		return
-	}
-	Suricata, err := json.Marshal(entry.Suricata)
-	if err != nil {
-		log.Println("Suricata Error:", err)
-		return
-	}
 
 	Tags, err := json.Marshal(entry.Tags)
 	if err != nil {
@@ -398,8 +422,8 @@ func reassemblyCallback(entry FlowEntry) {
 	}
 
 	// 保存TCP流为pcap格式
-	pcapFile := SaveFlowAsPcap(entry)
-	if pcapFile == "" {
+	pcapFile, pcapData := SaveFlowAsPcap(entry)
+	if pcapFile == "" && pcapData == "" {
 		log.Println("Failed to save pcap file for flow")
 	}
 
@@ -434,14 +458,13 @@ func reassemblyCallback(entry FlowEntry) {
 		NumPackets:    entry.NumPackets,
 		Blocked:       fmt.Sprintf("%t", entry.Blocked),
 		Filename:      entry.Filename,
-		Fingerprints:  string(Fingerprints),
-		Suricata:      string(Suricata),
 		Tags:          string(Tags),
 		ClientContent: clientContentBuilder.String(),
 		ServerContent: serverContentBuilder.String(),
 		FlowFile:      jsonFile, // JSON文件路径（大文件，>=128KB）
 		FlowData:      jsonData, // JSON数据（小文件，<128KB）
-		PcapFile:      pcapFile, // PCAP文件路径
+		PcapFile:      pcapFile, // PCAP文件路径（大文件，>=128KB）
+		PcapData:      pcapData, // PCAP数据（小文件，<128KB，base64编码）
 		Size:          entry.Size,
 	}
 	err = config.Db.Create(&pcapRecord).Error

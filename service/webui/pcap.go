@@ -7,8 +7,8 @@ import (
 	"0E7/service/search"
 	"compress/gzip"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,47 +25,22 @@ import (
 
 // FlowEntry Flow 文件的完整结构
 type FlowEntry struct {
-	SrcPort      int               `json:"SrcPort,omitempty"`
-	DstPort      int               `json:"DstPort,omitempty"`
-	SrcIp        string            `json:"SrcIp,omitempty"`
-	DstIp        string            `json:"DstIp,omitempty"`
-	Time         int               `json:"Time,omitempty"`
-	Duration     int               `json:"Duration,omitempty"`
-	NumPackets   int               `json:"NumPackets,omitempty"`
-	Blocked      bool              `json:"Blocked,omitempty"`
-	Filename     string            `json:"Filename,omitempty"`
-	Fingerprints []uint32          `json:"Fingerprints,omitempty"`
-	Suricata     []int             `json:"Suricata,omitempty"`
-	Flow         []search.FlowItem `json:"Flow"`
-	Tags         []string          `json:"Tags,omitempty"`
-	Size         int               `json:"Size,omitempty"`
+	SrcPort    int               `json:"SrcPort,omitempty"`
+	DstPort    int               `json:"DstPort,omitempty"`
+	SrcIp      string            `json:"SrcIp,omitempty"`
+	DstIp      string            `json:"DstIp,omitempty"`
+	Time       int               `json:"Time,omitempty"`
+	Duration   int               `json:"Duration,omitempty"`
+	NumPackets int               `json:"NumPackets,omitempty"`
+	Blocked    bool              `json:"Blocked,omitempty"`
+	Filename   string            `json:"Filename,omitempty"`
+	Flow       []search.FlowItem `json:"Flow"`
+	Tags       []string          `json:"Tags,omitempty"`
+	Size       int               `json:"Size,omitempty"`
 }
 
-// getFlowFileDataWithCache 使用缓存读取 Flow 文件数据
-func getFlowFileDataWithCache(filePath string, pcap database.Pcap) ([]byte, error) {
-	// 优先从缓存获取 Flow 数据
-	flowCache := search.GetFlowCache()
-	if flowCache != nil {
-		if cachedFlow, found := flowCache.Get(pcap.FlowFile); found {
-			// 缓存命中，重新构建完整的 FlowEntry 并序列化
-			flowEntry := FlowEntry{
-				Flow: cachedFlow,
-			}
-
-			// 序列化为 JSON
-			jsonData, err := json.Marshal(flowEntry)
-			if err != nil {
-				return nil, fmt.Errorf("序列化缓存数据失败: %v", err)
-			}
-
-			log.Printf("从缓存读取 Flow 数据: %s", pcap.FlowFile)
-			return jsonData, nil
-		}
-	}
-
-	// 缓存未命中，从文件读取
-	log.Printf("缓存未命中，从文件读取 Flow 数据: %s", filePath)
-
+// getFlowFileData 读取 Flow 文件数据（不使用缓存）
+func getFlowFileData(filePath string) ([]byte, error) {
 	var rawData []byte
 	var err error
 
@@ -95,21 +70,6 @@ func getFlowFileDataWithCache(filePath string, pcap database.Pcap) ([]byte, erro
 		}
 	}
 
-	// 解析 JSON 以提取 Flow 数据并加入缓存
-	var flowEntry FlowEntry
-	if err := json.Unmarshal(rawData, &flowEntry); err != nil {
-		// 如果解析失败，直接返回原始数据
-		log.Printf("解析 Flow JSON 失败，返回原始数据: %v", err)
-		return rawData, nil
-	}
-
-	// 将 Flow 数据加入缓存
-	if flowCache != nil && len(flowEntry.Flow) > 0 {
-		flowCache.Put(pcap.FlowFile, flowEntry.Flow)
-		log.Printf("已将 Flow 数据加入缓存: %s (条目数: %d)", pcap.FlowFile, len(flowEntry.Flow))
-	}
-
-	// 返回原始 JSON 数据
 	return rawData, nil
 }
 
@@ -321,6 +281,14 @@ func pcap_show(c *gin.Context) {
 		return
 	}
 
+	// 列表中清空不需要的字段
+	for i := range pcaps {
+		pcaps[i].Filename = ""
+		pcaps[i].FlowFile = ""
+		pcaps[i].FlowData = "" // 列表不需要flow数据
+		pcaps[i].PcapFile = ""
+	}
+
 	c.JSON(200, gin.H{
 		"message": "success",
 		"result":  pcaps,
@@ -406,6 +374,50 @@ func pcap_download(c *gin.Context) {
 		fileName = fmt.Sprintf("raw_%s.pcap", pcapId)
 	} else if fileType == "original" {
 		// 下载流量文件（重组后的pcap文件）
+		// 优先从数据库PcapData字段读取，如果没有再从PcapFile文件读取
+		if pcap.PcapData != "" {
+			// 小文件：直接从数据库返回
+			if info == "true" {
+				// 返回文件信息
+				// 需要解码base64来获取实际大小
+				pcapBytes, err := base64.StdEncoding.DecodeString(pcap.PcapData)
+				if err != nil {
+					c.JSON(500, gin.H{
+						"message": "fail",
+						"error":   "decode pcap data failed: " + err.Error(),
+					})
+					return
+				}
+				c.JSON(200, gin.H{
+					"message": "success",
+					"result": gin.H{
+						"size": len(pcapBytes),
+					},
+				})
+				return
+			}
+
+			// 解码base64数据
+			pcapBytes, err := base64.StdEncoding.DecodeString(pcap.PcapData)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": "fail",
+					"error":   "decode pcap data failed: " + err.Error(),
+				})
+				return
+			}
+
+			// 返回pcap数据
+			fileName = fmt.Sprintf("flow_%s.pcap", pcapId)
+			if download == "true" {
+				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+			}
+			c.Header("Content-Type", "application/vnd.tcpdump.pcap")
+			c.Data(200, "application/vnd.tcpdump.pcap", pcapBytes)
+			return
+		}
+
+		// 大文件：从PcapFile读取
 		if pcap.PcapFile == "" {
 			c.JSON(404, gin.H{
 				"message": "fail",
@@ -425,8 +437,7 @@ func pcap_download(c *gin.Context) {
 				c.JSON(200, gin.H{
 					"message": "success",
 					"result": gin.H{
-						"parsed_size": len(pcap.FlowData),
-						"flow_size":   len(pcap.FlowData),
+						"size": len(pcap.FlowData),
 					},
 				})
 				return
@@ -475,9 +486,9 @@ func pcap_download(c *gin.Context) {
 	// 读取文件
 	var fileData []byte
 
-	// 对于 parsed 类型的 Flow JSON 文件，优先使用缓存
+	// 直接读取文件，不使用缓存
 	if fileType == "parsed" {
-		fileData, err = getFlowFileDataWithCache(cleanPath, pcap)
+		fileData, err = getFlowFileData(cleanPath)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"message": "fail",
@@ -532,32 +543,12 @@ func pcap_download(c *gin.Context) {
 
 	// 如果请求文件信息
 	if info == "true" {
-		result := gin.H{}
-
-		// 获取原始文件大小
-		if pcap.Filename != "" {
-			if rawFileInfo, err := os.Stat(pcap.Filename); err == nil {
-				result["raw_size"] = rawFileInfo.Size()
-			}
-		}
-
-		// 获取流量文件大小
-		if pcap.PcapFile != "" {
-			if flowFileInfo, err := os.Stat(pcap.PcapFile); err == nil {
-				result["flow_size"] = flowFileInfo.Size()
-			}
-		}
-
-		// 获取解析文件大小
-		if pcap.FlowFile != "" {
-			if parsedFileInfo, err := os.Stat(pcap.FlowFile); err == nil {
-				result["parsed_size"] = parsedFileInfo.Size()
-			}
-		}
-
+		// 返回实际解压后的文件大小（fileData已经读取并解压）
 		c.JSON(200, gin.H{
 			"message": "success",
-			"result":  result,
+			"result": gin.H{
+				"size": len(fileData),
+			},
 		})
 		return
 	}

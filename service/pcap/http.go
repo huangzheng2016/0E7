@@ -4,11 +4,9 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/base64"
-	"hash/crc32"
 	"io"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"strings"
 
 	"github.com/andybalholm/brotli"
@@ -16,15 +14,9 @@ import (
 
 const DecompressionSizeLimit = int64(streamdoc_limit)
 
+// AddFingerprints 已废弃，不再使用
 func AddFingerprints(cookies []*http.Cookie, fingerPrints map[uint32]bool) {
-	for _, cookie := range cookies {
-
-		// Prevent exploitation by encoding :pray:, who cares about collisions
-		checksum := crc32.Checksum([]byte(url.QueryEscape(cookie.Name)), crc32.IEEETable)
-		checksum = crc32.Update(checksum, crc32.IEEETable, []byte("="))
-		checksum = crc32.Update(checksum, crc32.IEEETable, []byte(url.QueryEscape(cookie.Value)))
-		fingerPrints[checksum] = true
-	}
+	// 功能已禁用
 }
 
 // Parse and simplify every item in the flow. Items that were not successfuly
@@ -32,9 +24,6 @@ func AddFingerprints(cookies []*http.Cookie, fingerPrints map[uint32]bool) {
 //
 // If we manage to simplify a flow, the new data is placed in flowEntry.data
 func ParseHttpFlow(flow *FlowEntry) {
-	// Use a set to get rid of duplicates
-	fingerprintsSet := make(map[uint32]bool)
-
 	for idx := 0; idx < len(flow.Flow); idx++ {
 		flowItem := &flow.Flow[idx]
 		// 从B64解码数据
@@ -46,12 +35,8 @@ func ParseHttpFlow(flow *FlowEntry) {
 
 		if flowItem.From == "c" {
 			// HTTP Request
-			req, err := http.ReadRequest(reader)
+			_, err := http.ReadRequest(reader)
 			if err != nil {
-				if experimental {
-					// Parse cookie and grab fingerprints
-					AddFingerprints(req.Cookies(), fingerprintsSet)
-				}
 				continue
 			}
 
@@ -60,11 +45,6 @@ func ParseHttpFlow(flow *FlowEntry) {
 			res, err := http.ReadResponse(reader, nil)
 			if err != nil {
 				continue
-			}
-
-			if experimental {
-				// Parse cookie and grab fingerprints
-				AddFingerprints(res.Cookies(), fingerprintsSet)
 			}
 
 			// Substitute body
@@ -118,13 +98,7 @@ func ParseHttpFlow(flow *FlowEntry) {
 		}
 	}
 
-	if experimental {
-		// Use maps.Keys(fingerprintsSet) in the future
-		flow.Fingerprints = make([]uint32, 0, len(fingerprintsSet))
-		for k := range fingerprintsSet {
-			flow.Fingerprints = append(flow.Fingerprints, k)
-		}
-	}
+	// Fingerprints 功能已禁用
 }
 
 func handleGzip(r io.Reader) (io.Reader, error) {

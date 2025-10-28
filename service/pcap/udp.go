@@ -202,7 +202,6 @@ func (s *udpStream) finalize() {
 		Duration:        duration,
 		NumPackets:      s.num_packets,
 		Blocked:         false,
-		Suricata:        make([]int, 0),
 		Filename:        s.source,
 		Flow:            s.FlowItems,
 		Size:            s.total_size,

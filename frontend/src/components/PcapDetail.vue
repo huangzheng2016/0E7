@@ -24,9 +24,8 @@ interface PcapDetail {
   num_packets: number
   blocked: string
   filename: string
-  fingerprints: string
-  suricata: string
   flow_file: string
+  flow_data?: string  // 小文件时的JSON字符串，需要前端解析
   pcap_file: string
   tags: string
   size: number
@@ -105,9 +104,27 @@ const fetchPcapDetail = async () => {
     if (result.message === 'success' && result.result) {
       pcapDetail.value = result.result
       
-      // 获取flow文件信息并决定加载策略
-      if (result.result.flow_file) {
-        await fetchFlowInfo()
+      // 判断数据状态
+      if (result.result.flow_data) {
+        // 小文件：flow_data有JSON字符串，前端解析
+        try {
+          const flowJson = JSON.parse(result.result.flow_data)
+          if (flowJson.Flow && Array.isArray(flowJson.Flow)) {
+            flowData.value = flowJson.Flow.sort((a: FlowItem, b: FlowItem) => a.t - b.t)
+            showSizeWarning.value = false
+            showDownloadOption.value = false
+          }
+        } catch (e) {
+          console.error('解析flow_data失败:', e)
+        }
+      } else if (result.result.flow_file) {
+        // 大文件：显示"点击加载"按钮
+        showDownloadOption.value = true
+        showSizeWarning.value = false
+      } else {
+        // 无flow数据
+        showDownloadOption.value = false
+        showSizeWarning.value = false
       }
     } else {
       ElNotification({
@@ -214,11 +231,9 @@ const fetchFlowData = async () => {
 
 // 强制加载流量数据
 const forceLoadFlowData = async () => {
-  if (pcapDetail.value?.flow_file) {
-    showSizeWarning.value = false
-    showDownloadOption.value = false
-    await fetchFlowData()
-  }
+  showSizeWarning.value = false
+  showDownloadOption.value = false
+  await fetchFlowData()
 }
 
 
@@ -819,7 +834,6 @@ onUnmounted(() => {
               type="primary" 
               size="small" 
               @click="downloadPcapFile('original')"
-              :disabled="!pcapDetail.pcap_file"
             >
               <el-icon><Download /></el-icon>
               下载流量文件
@@ -828,7 +842,6 @@ onUnmounted(() => {
               type="success" 
               size="small" 
               @click="downloadPcapFile('parsed')"
-              :disabled="!pcapDetail.flow_file"
             >
               <el-icon><Download /></el-icon>
               下载解析文件
@@ -908,18 +921,19 @@ onUnmounted(() => {
         </el-alert>
       </div>
 
-      <!-- 流量下载选项 -->
-      <div class="flow-download-section" v-if="showDownloadOption">
+      <!-- 流量加载提示 -->
+      <div class="flow-download-section" v-if="showDownloadOption && !flowData.length">
         <el-alert
-          title="流量文件过大"
+          title="流量数据较大"
           type="info"
-          :description="`流量文件大小为 ${formatFileSize(flowSize)}，建议下载到本地查看。`"
+          description="此流量数据较大，点击按钮加载查看"
           show-icon
           :closable="false"
         >
           <template #default>
             <div class="download-actions">
-              <el-button type="primary" @click="forceLoadFlowData">仍要在线查看</el-button>
+              <el-button type="primary" @click="forceLoadFlowData" :loading="loading">点击加载 Flow 数据</el-button>
+              <el-button @click="downloadPcapFile('parsed')">或下载到本地</el-button>
             </div>
           </template>
         </el-alert>
