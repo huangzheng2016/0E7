@@ -1,8 +1,11 @@
 # 0E7 For Security
 
-> **警告**：本项目的部分代码由AI生成，并仅由AI维护。如果存在相关PR，Pls show me the talk。
+> **警告**：本项目的部分代码由AI生成，并仅由AI维护。作者本人并不会写代码，也不懂安全，长期直接vibe代替思考。如果存在AI相关PR，pls show me the talk。
+
 
 [查看平台图文示例](demo/DEMO.md)
+
+> 在少量比赛中完成了测试， 使用Sqlite+Bleve的快捷部署方式能承受约14队伍，8小时，6G流量的拷打，再长没有进行相关测试。如果要长期使用建议使用Mysql+lasticsearch的方案（未完全测试）
 
 
 ## AWD攻防演练工具箱
