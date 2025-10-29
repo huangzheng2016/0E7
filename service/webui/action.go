@@ -25,7 +25,7 @@ func action(c *gin.Context) {
 	configStr := c.PostForm("config")
 
 	if code != "" {
-		match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(code)
+		match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang|bash));base64,(.*)$`).FindStringSubmatch(code)
 		if match == nil {
 			c.JSON(400, gin.H{
 				"message": "fail",
