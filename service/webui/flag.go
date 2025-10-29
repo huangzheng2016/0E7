@@ -94,11 +94,33 @@ func GetFlagList(c *gin.Context) {
 	}
 
 	// 获取exploit名称
+	// 收集唯一的 ExploitId
+	exploitIDSet := make(map[int]struct{})
 	for i := range flags {
 		if flags[i].ExploitId > 0 {
-			var exploit database.Exploit
-			if err := config.Db.Where("id = ?", flags[i].ExploitId).First(&exploit).Error; err == nil {
-				flags[i].ExploitName = exploit.Name
+			exploitIDSet[flags[i].ExploitId] = struct{}{}
+		}
+	}
+
+	// 如果有需要查询的 ExploitId，则批量查询
+	if len(exploitIDSet) > 0 {
+		ids := make([]int, 0, len(exploitIDSet))
+		for id := range exploitIDSet {
+			ids = append(ids, id)
+		}
+
+		var exploits []database.Exploit
+		if err := config.Db.Where("id IN ?", ids).Find(&exploits).Error; err == nil {
+			// 构建 id -> name 映射
+			idToName := make(map[int]string, len(exploits))
+			for i := range exploits {
+				idToName[exploits[i].ID] = exploits[i].Name
+			}
+			// 回填
+			for i := range flags {
+				if name, ok := idToName[flags[i].ExploitId]; ok {
+					flags[i].ExploitName = name
+				}
 			}
 		}
 	}

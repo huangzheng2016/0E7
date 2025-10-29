@@ -210,6 +210,11 @@ const updateFormFromAction = (action: Action) => {
       } else if (action.code.includes('package main') || 
                  action.code.includes('func main()')) {
         form.value.code_language = 'golang'
+      } else if (action.code.includes('#!/bin/bash') || 
+                 action.code.includes('#!/usr/bin/env bash') ||
+                 action.code.includes('echo ') ||
+                 action.code.includes('$')) {
+        form.value.code_language = 'bash'
       }
     }
   }

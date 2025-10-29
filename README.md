@@ -1,4 +1,9 @@
-# 0E7
+# 0E7 For Security
+
+> **警告**：本项目的部分代码由AI生成，并仅由AI维护。如果存在相关PR，Pls show me the talk。
+
+[查看平台图文示例](demo/DEMO.md)
+
 
 ## AWD攻防演练工具箱
 
@@ -11,7 +16,7 @@
 - **多语言执行**: 支持Python、Go等脚本的执行
 - **定时任务**: 支持定时执行和周期性任务
 - **参数化配置**: 支持环境变量、命令行参数等灵活配置
-- **参数注入**: 支持将BUCKET值批量注入利用
+- **参数注入**: 支持将BUCKET值批量注入利用（队伍批量攻击）
 - **结果收集**: 自动收集执行结果和输出信息
 - **团队协作**: 支持多用户并行使用
 
@@ -36,7 +41,7 @@
 
 - **Go 1.19+**: 后端开发环境
 - **Node.js 16+**: 前端开发环境
-·～- **npm**: 包管理工具
+- **npm**: 包管理工具
 
 ### 构建方式
 
@@ -85,52 +90,6 @@ chmod +x build.sh
 
 # 显示帮助信息
 ./0e7_<platform>_<arch> --help
-```
-
-## 配置文件
-
-### 默认配置 (config.ini)
-```ini
-[global]
-timeout_http     = 5
-timeout_download = 60
-debug            = false
-
-[server]
-enable     = true
-port       = 6102
-db_engine  = sqlite3
-server_url = http://localhost:6102
-flag       = flag{.*}
-tls        = 
-pcap_zip   = 
-
-[client]
-enable     = true
-id         = 
-name       = 0e7
-server_url = http://remotehost:6102
-pypi       = https://pypi.tuna.tsinghua.edu.cn/simple
-update     = true
-worker     = 
-monitor    = 
-```
-
-## 项目结构
-```
-0E7/
-├── frontend/              # 前端代码
-├── service/               # 后端服务
-│   ├── client/            # 客户端代码
-│   ├── config/            # 配置管理
-│   ├── database/          # 数据库模型
-│   ├── route/             # API路由
-│   ├── webui/             # Web界面
-│   └── pcap/              # PCAP处理
-├── build.sh               # 基础构建脚本
-├── build-advanced.sh      # 高级构建脚本
-├── config.ini             # 配置文件
-└── 0e7.go                 # 主程序入口
 ```
 
 ## 许可证

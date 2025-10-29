@@ -28,13 +28,15 @@ const currentLanguage = ref(props.language)
 const extensions: Record<string, any> = {
   'python2': python(),
   'python3': python(),
-  'golang': javascript()
+  'golang': javascript(),
+  'bash': javascript() // 使用javascript提供基本语法高亮
 }
 
 const languageOptions = [
   { label: 'Python 3', value: 'python3' },
   { label: 'Python 2', value: 'python2' },
-  { label: 'Golang', value: 'golang' }
+  { label: 'Golang', value: 'golang' },
+  { label: 'Bash', value: 'bash' }
 ]
 
 const handleChange = (value: string) => {

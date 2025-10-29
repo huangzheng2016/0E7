@@ -185,12 +185,12 @@ func Init_conf(configFile string) error {
 
 		Client_update, err = section.Key("update").Bool()
 		if err != nil {
-			Client_update = true
+			Client_update = false
 		}
 
 		Client_worker, err = section.Key("worker").Int()
 		if err != nil {
-			Client_worker = 5
+			Client_worker = 20
 		}
 
 		Client_monitor, err = section.Key("monitor").Bool()

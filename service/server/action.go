@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -183,7 +184,7 @@ func executeActionCode(actionRecord *database.Action, ctx context.Context) error
 	}
 
 	// 其他类型需要执行代码
-	match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang));base64,(.*)$`).FindStringSubmatch(actionRecord.Code)
+	match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang|bash));base64,(.*)$`).FindStringSubmatch(actionRecord.Code)
 	if match == nil {
 		return fmt.Errorf("代码格式错误")
 	}
@@ -214,6 +215,8 @@ func executeActionCode(actionRecord *database.Action, ctx context.Context) error
 		new_output, err = executePythonCode(code, ctx, "python3", flags)
 	case "code/golang":
 		new_output, err = executeGolangCode(code, ctx, flags)
+	case "code/bash":
+		new_output, err = executeBashCode(code, ctx, flags)
 	default:
 		return fmt.Errorf("未知的文件类型: %s", fileType)
 	}
@@ -322,6 +325,54 @@ func executeGolangCode(code string, ctx context.Context, flags []string) (string
 	case <-ctx.Done():
 		return "", fmt.Errorf("go代码执行超时")
 	}
+}
+
+// 执行Bash代码
+func executeBashCode(code string, ctx context.Context, flags []string) (string, error) {
+	// 创建临时脚本文件
+	tmpFile, err := os.CreateTemp("", "0e7_bash_*.sh")
+	if err != nil {
+		return "", fmt.Errorf("创建临时文件失败: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// 如果有flags，在脚本开头注入flags变量
+	if len(flags) > 0 {
+		flagsJSON, err := json.Marshal(flags)
+		if err != nil {
+			return "", fmt.Errorf("序列化flags失败: %v", err)
+		}
+		// 在脚本开头注入flags变量
+		code = fmt.Sprintf("#!/bin/bash\nflags='%s'\n%s", string(flagsJSON), code)
+	} else {
+		code = "#!/bin/bash\n" + code
+	}
+
+	// 写入代码到临时文件
+	_, err = tmpFile.WriteString(code)
+	if err != nil {
+		return "", fmt.Errorf("写入临时文件失败: %v", err)
+	}
+	tmpFile.Close()
+
+	// 设置执行权限
+	err = os.Chmod(tmpFile.Name(), 0755)
+	if err != nil {
+		return "", fmt.Errorf("设置执行权限失败: %v", err)
+	}
+
+	// 执行bash脚本
+	cmd := exec.CommandContext(ctx, "bash", tmpFile.Name())
+	var stdout, stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+
+	err = cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("bash执行错误: %v, stderr: %s", err, stderr.String())
+	}
+
+	return stdout.String(), nil
 }
 
 // 获取待提交的flags
