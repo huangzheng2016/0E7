@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch, shallowRef } from 'vue'
 import { ElNotification, ElMessage, ElMessageBox } from 'element-plus'
 import { Download, CopyDocument, ArrowDown, InfoFilled } from '@element-plus/icons-vue'
 import { Codemirror } from 'vue-codemirror'
@@ -54,6 +54,12 @@ const loading = ref(false)
 const activeTab = ref('text')
 // 为每个流量维护独立的选择状态
 const flowSelections = ref<Map<number, { selectedByte: number, selectedRange: { start: number, end: number } | null }>>(new Map())
+
+// 懒加载相关状态
+const loadedTabs = ref<Set<string>>(new Set(['text'])) // 默认只加载文本标签页
+const visibleFlowRange = ref<{ start: number, end: number }>({ start: 0, end: 10 }) // 可见流量范围
+const flowItemHeight = 300 // 每个流量项的预估高度（增加以适应文本内容）
+const containerHeight = 600 // 容器高度
 
 // 缓存配置
 const CACHE_MAX_SIZE = 20
@@ -147,13 +153,42 @@ const decodeBase64 = (b64: string): string => {
   }
 }
 
-// 计算属性：为每个flow项预计算十六进制行数据
-const flowHexData = computed(() => {
-  return flowData.value.map(flow => ({
+// 懒加载的十六进制数据缓存
+const hexDataCache = ref<Map<number, any[]>>(new Map())
+
+// 计算可见的流量数据（所有模式都使用虚拟滚动）
+const visibleFlowData = computed(() => {
+  const start = Math.max(0, visibleFlowRange.value.start)
+  const end = Math.min(flowData.value.length, visibleFlowRange.value.end)
+  
+  return flowData.value.slice(start, end).map((flow, index) => ({
     ...flow,
-    hexRows: getHexRows(decodeBase64(flow.b))
+    originalIndex: start + index,
+    hexRows: (activeTab.value === 'hex' || activeTab.value === 'compare') 
+      ? getHexRowsForFlow(start + index, flow.b) 
+      : []
   }))
 })
+
+// 获取单个flow的十六进制数据（按需计算）
+const getHexRowsForFlow = (flowIndex: number, base64Data: string) => {
+  if (hexDataCache.value.has(flowIndex)) {
+    return hexDataCache.value.get(flowIndex)
+  }
+  
+  const hexRows = getHexRows(decodeBase64(base64Data))
+  hexDataCache.value.set(flowIndex, hexRows)
+  
+  // 限制缓存大小
+  if (hexDataCache.value.size > 50) {
+    const firstKey = hexDataCache.value.keys().next().value
+    if (firstKey !== undefined) {
+      hexDataCache.value.delete(firstKey)
+    }
+  }
+  
+  return hexRows
+}
 
 // 获取流量详情
 const fetchPcapDetail = async () => {
@@ -598,15 +633,8 @@ const getFlowDirectionColor = (from: string) => {
   return from === 'c' ? '#e1f5fe' : '#f3e5f5'
 }
 
-// 缓存十六进制行数据
-const hexRowsCache = ref<Map<string, any[]>>(new Map())
-
-// 将数据转换为十六进制编辑器格式（带缓存）
+// 将数据转换为十六进制编辑器格式（优化版本）
 const getHexRows = (data: string) => {
-  if (hexRowsCache.value.has(data)) {
-    return hexRowsCache.value.get(data)
-  }
-  
   const bytes = new TextEncoder().encode(data)
   const rows = []
   
@@ -635,15 +663,6 @@ const getHexRows = (data: string) => {
     })
   }
   
-  // 缓存结果，但限制缓存大小
-  if (hexRowsCache.value.size > 10) {
-    const firstKey = hexRowsCache.value.keys().next().value
-    if (firstKey) {
-      hexRowsCache.value.delete(firstKey)
-    }
-  }
-  hexRowsCache.value.set(data, rows)
-  
   return rows
 }
 
@@ -659,6 +678,67 @@ const debounce = (func: Function, wait: number) => {
     timeout = setTimeout(later, wait)
   }
 }
+
+// 懒加载标签页内容
+const loadTabContent = (tabName: string) => {
+  if (!loadedTabs.value.has(tabName)) {
+    loadedTabs.value.add(tabName)
+    
+    // 如果切换到十六进制或对比显示，需要预加载十六进制数据
+    if (tabName === 'hex' || tabName === 'compare') {
+      nextTick(() => {
+        // 预加载可见范围内的十六进制数据
+        const start = Math.max(0, visibleFlowRange.value.start)
+        const end = Math.min(flowData.value.length, visibleFlowRange.value.end)
+        for (let i = start; i < end; i++) {
+          if (flowData.value[i]) {
+            getHexRowsForFlow(i, flowData.value[i].b)
+          }
+        }
+      })
+    }
+  }
+}
+
+// 处理标签页切换
+const handleTabChange = (tabName: string) => {
+  activeTab.value = tabName
+  loadTabContent(tabName)
+}
+
+// 虚拟滚动处理（所有模式都生效）
+const handleScroll = debounce((event: Event) => {
+  const target = event.target as HTMLElement
+  const scrollTop = target.scrollTop
+  const scrollHeight = target.scrollHeight
+  const clientHeight = target.clientHeight
+  
+  // 计算可见范围
+  const start = Math.floor(scrollTop / flowItemHeight)
+  const visibleCount = Math.ceil(clientHeight / flowItemHeight)
+  const end = Math.min(flowData.value.length, start + visibleCount + 5) // 多加载5个作为缓冲
+  
+  visibleFlowRange.value = { start, end }
+  
+  // 预加载十六进制数据（如果已加载相关标签页）
+  if (loadedTabs.value.has('hex') || loadedTabs.value.has('compare')) {
+    for (let i = start; i < end; i++) {
+      if (flowData.value[i] && !hexDataCache.value.has(i)) {
+        getHexRowsForFlow(i, flowData.value[i].b)
+      }
+    }
+  }
+}, 100)
+
+// 计算总高度（所有模式都使用虚拟滚动）
+const totalHeight = computed(() => {
+  return flowData.value.length * flowItemHeight
+})
+
+// 计算偏移量（所有模式都使用虚拟滚动）
+const offsetY = computed(() => {
+  return visibleFlowRange.value.start * flowItemHeight
+})
 
 // 获取流量的选择状态
 const getFlowSelection = (flowIndex: number) => {
@@ -837,6 +917,9 @@ onMounted(() => {
 // 监听 pcapId 变化，当切换标签页时重新获取数据
 watch(() => props.pcapId, (newPcapId, oldPcapId) => {
   if (newPcapId !== oldPcapId) {
+    // 清理内存
+    clearMemory()
+    
     // 重置状态
     pcapDetail.value = null
     flowData.value = []
@@ -849,10 +932,29 @@ watch(() => props.pcapId, (newPcapId, oldPcapId) => {
   }
 })
 
-// 组件卸载时清理事件监听
+// 清理内存
+const clearMemory = () => {
+  // 清理十六进制数据缓存
+  hexDataCache.value.clear()
+  
+  // 清理选择状态
+  flowSelections.value.clear()
+  
+  // 重置懒加载状态
+  loadedTabs.value.clear()
+  loadedTabs.value.add('text') // 默认加载文本标签页
+  
+  // 重置可见范围
+  visibleFlowRange.value = { start: 0, end: 10 }
+}
+
+// 组件卸载时清理事件监听和内存
 onUnmounted(() => {
   document.removeEventListener('mouseup', endDragSelection)
   document.removeEventListener('mouseleave', endDragSelection)
+  
+  // 清理内存
+  clearMemory()
 })
 </script>
 
@@ -983,175 +1085,183 @@ onUnmounted(() => {
       </div>
 
       <!-- 流量数据 -->
-      <div class="flow-section" v-if="flowData.length > 0">
+      <div v-if="flowData.length > 0" class="flow-section">
         <div class="section-header">
-          <h3 class="section-title">流量数据</h3>
+          <h3 class="section-title">流量数据 ({{ flowData.length }} 条)</h3>
         </div>
-        <div class="flow-list">
-          <div
-            v-for="(flow, index) in flowHexData"
-            :key="index"
-            class="flow-item"
-            :style="{ backgroundColor: getFlowDirectionColor(flow.f) }"
+        <div 
+          class="flow-list-container"
+        >
+          <div 
+            class="flow-list"
           >
-            <div class="flow-header">
-              <div class="flow-direction">
-                <el-icon v-if="flow.f === 'c'"><ArrowRight /></el-icon>
-                <el-icon v-else><ArrowLeft /></el-icon>
-                <span>{{ getFlowDirection(flow.f) }}</span>
-                <span class="flow-time">{{ formatTimestamp(flow.t) }}</span>
-              </div>
-              <div class="flow-actions">
-                <!-- 只在对比显示标签页中显示选择相关按钮 -->
-                <template v-if="activeTab === 'compare'">
-                  <el-button 
-                    size="small" 
-                    @click="clearSelection(index)"
-                    :disabled="getFlowSelection(index).selectedByte === -1 && !getFlowSelection(index).selectedRange"
-                  >
-                    <el-icon><Close /></el-icon>
-                    清除选择
-                  </el-button>
-                  <el-button 
-                    size="small" 
-                    @click="copySelectedBytes(index)"
-                    :disabled="getFlowSelection(index).selectedByte === -1 && !getFlowSelection(index).selectedRange"
-                  >
-                    <el-icon><CopyDocument /></el-icon>
-                    复制选中
-                  </el-button>
-                </template>
-                <!-- 复制全部按钮在所有标签页都显示 -->
-                <el-button size="small" @click="copyToClipboard(decodeBase64(flow.b))">
-                  <el-icon><CopyDocument /></el-icon>
-                  复制全部
-                </el-button>
-                <!-- 代码生成下拉按钮，只在客户端请求时显示 -->
-                <el-dropdown 
-                  v-if="flow.f === 'c'" 
-                  @command="generateCode"
-                  :disabled="codeGenerationLoading"
-                >
-                  <el-button size="small" :loading="codeGenerationLoading">
-                    <el-icon><CopyDocument /></el-icon>
-                    生成代码
-                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="requests">
-                        <el-icon><CopyDocument /></el-icon>
-                        Requests
-                      </el-dropdown-item>
-                      <el-dropdown-item command="pwntools">
-                        <el-icon><CopyDocument /></el-icon>
-                        Pwntools
-                      </el-dropdown-item>
-                      <el-dropdown-item command="curl">
-                        <el-icon><CopyDocument /></el-icon>
-                        cURL
-                      </el-dropdown-item>
-                    </el-dropdown-menu>
+            <div
+              v-for="(flow, index) in flowData"
+              :key="index"
+              class="flow-item"
+              :style="{ 
+                backgroundColor: getFlowDirectionColor(flow.f)
+              }"
+            >
+              <div class="flow-header">
+                <div class="flow-direction">
+                  <el-icon v-if="flow.f === 'c'"><ArrowRight /></el-icon>
+                  <el-icon v-else><ArrowLeft /></el-icon>
+                  <span>{{ getFlowDirection(flow.f) }}</span>
+                  <span class="flow-time">{{ formatTimestamp(flow.t) }}</span>
+                </div>
+                <div class="flow-actions">
+                  <!-- 只在对比显示标签页中显示选择相关按钮 -->
+                  <template v-if="activeTab === 'compare'">
+                    <el-button 
+                      size="small" 
+                      @click="clearSelection(index)"
+                      :disabled="getFlowSelection(index).selectedByte === -1 && !getFlowSelection(index).selectedRange"
+                    >
+                      <el-icon><Close /></el-icon>
+                      清除选择
+                    </el-button>
+                    <el-button 
+                      size="small" 
+                      @click="copySelectedBytes(index)"
+                      :disabled="getFlowSelection(index).selectedByte === -1 && !getFlowSelection(index).selectedRange"
+                    >
+                      <el-icon><CopyDocument /></el-icon>
+                      复制选中
+                    </el-button>
                   </template>
-                </el-dropdown>
+                  <!-- 复制全部按钮在所有标签页都显示 -->
+                  <el-button size="small" @click="copyToClipboard(decodeBase64(flow.b))">
+                    <el-icon><CopyDocument /></el-icon>
+                    复制全部
+                  </el-button>
+                  <!-- 代码生成下拉按钮，只在客户端请求时显示 -->
+                  <el-dropdown 
+                    v-if="flow.f === 'c'" 
+                    @command="generateCode"
+                    :disabled="codeGenerationLoading"
+                  >
+                    <el-button size="small" :loading="codeGenerationLoading">
+                      <el-icon><CopyDocument /></el-icon>
+                      生成代码
+                      <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="requests">
+                          <el-icon><CopyDocument /></el-icon>
+                          Requests
+                        </el-dropdown-item>
+                        <el-dropdown-item command="pwntools">
+                          <el-icon><CopyDocument /></el-icon>
+                          Pwntools
+                        </el-dropdown-item>
+                        <el-dropdown-item command="curl">
+                          <el-icon><CopyDocument /></el-icon>
+                          cURL
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
               </div>
-            </div>
-            
-            <div class="flow-content">
-              <div class="content-tabs">
-                <div class="tab-buttons">
-                  <button 
-                    :class="['tab-btn', { active: activeTab === 'text' }]"
-                    @click="activeTab = 'text'"
-                  >
-                    文本
-                  </button>
-                  <button 
-                    :class="['tab-btn', { active: activeTab === 'hex' }]"
-                    @click="activeTab = 'hex'"
-                  >
-                    十六进制
-                  </button>
-                  <button 
-                    :class="['tab-btn', { active: activeTab === 'compare' }]"
-                    @click="activeTab = 'compare'"
-                  >
-                    对比显示
-                  </button>
-                </div>
-                
-                <!-- 选择信息显示 -->
-                <div v-if="activeTab === 'compare'" class="selection-info">
-                  <div class="selection-status">
-                    <span v-if="getFlowSelection(index).selectedByte !== -1">
-                      已选择字节: {{ getFlowSelection(index).selectedByte }}
-                    </span>
-                    <span v-else-if="getFlowSelection(index).selectedRange">
-                      已选择范围: {{ getFlowSelection(index).selectedRange?.start }} - {{ getFlowSelection(index).selectedRange?.end }}
-                      ({{ (getFlowSelection(index).selectedRange?.end || 0) - (getFlowSelection(index).selectedRange?.start || 0) + 1 }} 字节)
-                    </span>
-                    <span v-else class="selection-hint">
-                      点击选择字节 | 拖拽选择范围 | Alt+点击选择范围 | Ctrl+点击扩展范围
-                    </span>
-                  </div>
-                </div>
-                
-                <div class="tab-content">
-                  <div v-if="activeTab === 'text'" class="content-display">
-                    <div class="text-content" v-html="highlightHTML(decodeBase64(flow.b))"></div>
+              
+              <div class="flow-content">
+                <div class="content-tabs">
+                  <div class="tab-buttons">
+                    <button 
+                      :class="['tab-btn', { active: activeTab === 'text' }]"
+                      @click="handleTabChange('text')"
+                    >
+                      文本
+                    </button>
+                    <button 
+                      :class="['tab-btn', { active: activeTab === 'hex' }]"
+                      @click="handleTabChange('hex')"
+                    >
+                      十六进制
+                    </button>
+                    <button 
+                      :class="['tab-btn', { active: activeTab === 'compare' }]"
+                      @click="handleTabChange('compare')"
+                    >
+                      对比显示
+                    </button>
                   </div>
                   
-                  <div v-if="activeTab === 'hex'" class="content-display">
-                    <div class="hex-content">{{ textToHex(decodeBase64(flow.b)) }}</div>
+                  <!-- 选择信息显示 -->
+                  <div v-if="activeTab === 'compare'" class="selection-info">
+                    <div class="selection-status">
+                      <span v-if="getFlowSelection(index).selectedByte !== -1">
+                        已选择字节: {{ getFlowSelection(index).selectedByte }}
+                      </span>
+                      <span v-else-if="getFlowSelection(index).selectedRange">
+                        已选择范围: {{ getFlowSelection(index).selectedRange?.start }} - {{ getFlowSelection(index).selectedRange?.end }}
+                        ({{ (getFlowSelection(index).selectedRange?.end || 0) - (getFlowSelection(index).selectedRange?.start || 0) + 1 }} 字节)
+                      </span>
+                      <span v-else class="selection-hint">
+                        点击选择字节 | 拖拽选择范围 | Alt+点击选择范围 | Ctrl+点击扩展范围
+                      </span>
+                    </div>
                   </div>
                   
-                  <div v-if="activeTab === 'compare'" class="hex-editor-display">
-                    <div class="hex-editor">
-                      <div class="hex-header">
-                        <div class="offset-column">Offset</div>
-                        <div class="hex-column">Hexadecimal</div>
-                        <div class="ascii-column">ASCII</div>
-                      </div>
-                      <div class="hex-content" ref="hexContent">
-                        <div 
-                          v-for="(row, rowIndex) in flow.hexRows" 
-                          :key="rowIndex" 
-                          class="hex-row"
-                        >
-                          <div class="offset-cell">{{ row.offset }}</div>
-                          <div class="hex-cells">
-                            <span
-                              v-for="(byte, byteIndex) in row.bytes"
-                              :key="byteIndex"
-                              :class="['hex-byte', { 
-                                highlighted: isByteSelected(index, rowIndex * 16 + byteIndex),
-                                'hex-byte-spacer': byteIndex % 8 === 7 && byteIndex < 15,
-                                'empty-byte': !byte && byteIndex >= row.originalLength
-                              }]"
-                              @mousedown="byte && startDragSelection(index, rowIndex * 16 + byteIndex)"
-                              @mouseenter="byte && dragSelectionUpdate(index, rowIndex * 16 + byteIndex)"
-                              @click="byte && selectByte(index, rowIndex * 16 + byteIndex, $event)"
-                              :data-index="rowIndex * 16 + byteIndex"
-                            >
-                              {{ byte }}
-                            </span>
-                          </div>
-                          <div class="ascii-cells">
-                            <span
-                              v-for="(char, charIndex) in row.ascii"
-                              :key="charIndex"
-                              :class="['ascii-char', { 
-                                highlighted: isByteSelected(index, rowIndex * 16 + charIndex),
-                                'ascii-char-spacer': charIndex % 8 === 7 && charIndex < 15,
-                                'empty-char': !char && charIndex >= row.originalLength
-                              }]"
-                              @mousedown="char && startDragSelection(index, rowIndex * 16 + charIndex)"
-                              @mouseenter="char && dragSelectionUpdate(index, rowIndex * 16 + charIndex)"
-                              @click="char && selectByte(index, rowIndex * 16 + charIndex, $event)"
-                              :data-index="rowIndex * 16 + charIndex"
-                            >
-                              {{ char }}
-                            </span>
+                  <div class="tab-content">
+                    <div v-if="activeTab === 'text' && loadedTabs.has('text')" class="content-display">
+                      <div class="text-content" v-html="highlightHTML(decodeBase64(flow.b))"></div>
+                    </div>
+                    
+                    <div v-if="activeTab === 'hex' && loadedTabs.has('hex')" class="content-display">
+                      <div class="hex-content">{{ textToHex(decodeBase64(flow.b)) }}</div>
+                    </div>
+                    
+                    <div v-if="activeTab === 'compare' && loadedTabs.has('compare')" class="hex-editor-display">
+                      <div class="hex-editor">
+                        <div class="hex-header">
+                          <div class="offset-column">Offset</div>
+                          <div class="hex-column">Hexadecimal</div>
+                          <div class="ascii-column">ASCII</div>
+                        </div>
+                        <div class="hex-content" ref="hexContent">
+                          <div 
+                            v-for="(row, rowIndex) in getHexRowsForFlow(index, flow.b)" 
+                            :key="rowIndex" 
+                            class="hex-row"
+                          >
+                            <div class="offset-cell">{{ row.offset }}</div>
+                            <div class="hex-cells">
+                              <span
+                                v-for="(byte, byteIndex) in row.bytes"
+                                :key="byteIndex"
+                                :class="['hex-byte', { 
+                                  highlighted: isByteSelected(index, rowIndex * 16 + byteIndex),
+                                  'hex-byte-spacer': byteIndex % 8 === 7 && byteIndex < 15,
+                                  'empty-byte': !byte && byteIndex >= row.originalLength
+                                }]"
+                                @mousedown="byte && startDragSelection(index, rowIndex * 16 + byteIndex)"
+                                @mouseenter="byte && dragSelectionUpdate(index, rowIndex * 16 + byteIndex)"
+                                @click="byte && selectByte(index, rowIndex * 16 + byteIndex, $event)"
+                                :data-index="rowIndex * 16 + byteIndex"
+                              >
+                                {{ byte }}
+                              </span>
+                            </div>
+                            <div class="ascii-cells">
+                              <span
+                                v-for="(char, charIndex) in row.ascii"
+                                :key="charIndex"
+                                :class="['ascii-char', { 
+                                  highlighted: isByteSelected(index, rowIndex * 16 + charIndex),
+                                  'ascii-char-spacer': charIndex % 8 === 7 && charIndex < 15,
+                                  'empty-char': !char && charIndex >= row.originalLength
+                                }]"
+                                @mousedown="char && startDragSelection(index, rowIndex * 16 + charIndex)"
+                                @mouseenter="char && dragSelectionUpdate(index, rowIndex * 16 + charIndex)"
+                                @click="char && selectByte(index, rowIndex * 16 + charIndex, $event)"
+                                :data-index="rowIndex * 16 + charIndex"
+                              >
+                                {{ char }}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1393,10 +1503,16 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
+.flow-list-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .flow-list {
   display: flex;
   flex-direction: column;
   gap: 15px;
+  position: relative;
 }
 
 .flow-item {
@@ -1406,6 +1522,7 @@ onUnmounted(() => {
   transition: all 0.3s;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .flow-item:hover {
@@ -1509,10 +1626,7 @@ onUnmounted(() => {
   background: #fafafa;
   border-radius: 4px;
   margin: 10px;
-  overflow-x: auto;
-  min-height: 200px;
-  scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
+  overflow: visible;
 }
 
 .content-display::-webkit-scrollbar {
@@ -1634,9 +1748,6 @@ onUnmounted(() => {
 .hex-content {
   display: flex;
   flex-direction: column;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
 }
 
 .hex-content::-webkit-scrollbar {
