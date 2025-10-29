@@ -116,8 +116,26 @@ func main() {
 		} else {
 			gin.SetMode(gin.ReleaseMode)
 		}
-		r_server := gin.Default()
 
+		// 统一 Gin 日志到标准日志输出，并自定义格式
+		gin.DisableConsoleColor()
+		gin.DefaultWriter = log.Writer()
+		gin.DefaultErrorWriter = log.Writer()
+
+		r_server := gin.New()
+
+		r_server.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+			// 统一格式: 时间 | 状态码 | 耗时 | 客户端IP | 方法 路径 | 错误
+			return fmt.Sprintf("%s | %3d | %13v | %15s | %-7s %s | %s\n",
+				param.TimeStamp.Format("2006/01/02 15:04:05"),
+				param.StatusCode,
+				param.Latency,
+				param.ClientIP,
+				param.Method,
+				param.Path,
+				param.ErrorMessage,
+			)
+		}))
 		r_server.Use(gin.Recovery())
 		r_server.Use(gzip.Gzip(gzip.DefaultCompression))
 
