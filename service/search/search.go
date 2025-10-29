@@ -593,7 +593,7 @@ func (s *SearchService) indexPcapBleve(pcapRecord database.Pcap) error {
 }
 
 // getFlowData 获取流量数据
-// 优先从数据库FlowData字段读取（<128KB），如果为空则从FlowFile文件读取（>=128KB）
+// 优先从数据库FlowData字段读取（<256KB），如果为空则从FlowFile文件读取（>=256KB）
 func (s *SearchService) getFlowData(pcapRecord database.Pcap) ([]FlowItem, error) {
 	var dataToParse []byte
 

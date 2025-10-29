@@ -108,8 +108,8 @@ func getFlowStoragePath(uuid string) string {
 
 // SaveFlowAsPcap 将TCP流数据保存为pcap格式
 // 返回 (文件路径, pcap数据的base64编码)
-// 如果pcap大小小于128KB，不写入文件，返回空路径和base64数据
-// 如果pcap大小大于128KB，写入文件，返回文件路径和空数据
+// 如果pcap大小小于256KB，不写入文件，返回空路径和base64数据
+// 如果pcap大小大于256KB，写入文件，返回文件路径和空数据
 func SaveFlowAsPcap(entry FlowEntry) (string, string) {
 	// 首先生成pcap数据到内存缓冲区
 	buf := new(bytes.Buffer)
@@ -285,10 +285,10 @@ func SaveFlowAsPcap(entry FlowEntry) (string, string) {
 }
 
 // savePcapData 根据pcap数据大小决定存储方式
-// 小于128KB：返回空路径和base64编码的数据
-// 大于等于128KB：保存到文件，返回文件路径和空数据
+// 小于256KB：返回空路径和base64编码的数据
+// 大于等于256KB：保存到文件，返回文件路径和空数据
 func savePcapData(pcapData []byte, entry FlowEntry) (string, string) {
-	const sizeThreshold = 128 * 1024 // 128KB
+	const sizeThreshold = 256 * 1024 // 256KB
 
 	if len(pcapData) < sizeThreshold {
 		// 小文件：不落地，直接返回base64编码的数据
@@ -336,8 +336,8 @@ func savePcapData(pcapData []byte, entry FlowEntry) (string, string) {
 
 // SaveFlowAsJson 将流量数据保存为JSON格式文件
 // SaveFlowAsJson 保存flow数据，返回(文件路径, JSON数据)
-// 如果flow大小小于128KB，不写入文件，返回空路径和JSON数据
-// 如果flow大小大于128KB，写入文件，返回文件路径和空数据
+// 如果flow大小小于256KB，不写入文件，返回空路径和JSON数据
+// 如果flow大小大于256KB，写入文件，返回文件路径和空数据
 func SaveFlowAsJson(entry FlowEntry) (string, string) {
 	// 将FlowEntry转换为JSON
 	jsonData, err := json.Marshal(entry)
@@ -346,8 +346,8 @@ func SaveFlowAsJson(entry FlowEntry) (string, string) {
 		return "", ""
 	}
 
-	// 判断大小，小于128KB直接返回数据，不写文件
-	const sizeThreshold = 128 * 1024 // 128KB
+	// 判断大小，小于256KB直接返回数据，不写文件
+	const sizeThreshold = 256 * 1024 // 256KB
 	if len(jsonData) < sizeThreshold {
 		// 小文件：不落地，直接返回JSON数据
 		return "", string(jsonData)
@@ -461,10 +461,10 @@ func reassemblyCallback(entry FlowEntry) {
 		Tags:          string(Tags),
 		ClientContent: clientContentBuilder.String(),
 		ServerContent: serverContentBuilder.String(),
-		FlowFile:      jsonFile, // JSON文件路径（大文件，>=128KB）
-		FlowData:      jsonData, // JSON数据（小文件，<128KB）
-		PcapFile:      pcapFile, // PCAP文件路径（大文件，>=128KB）
-		PcapData:      pcapData, // PCAP数据（小文件，<128KB，base64编码）
+		FlowFile:      jsonFile, // JSON文件路径（大文件，>=256KB）
+		FlowData:      jsonData, // JSON数据（小文件，<256KB）
+		PcapFile:      pcapFile, // PCAP文件路径（大文件，>=256KB）
+		PcapData:      pcapData, // PCAP数据（小文件，<256KB，base64编码）
 		Size:          entry.Size,
 	}
 	err = config.Db.Create(&pcapRecord).Error
