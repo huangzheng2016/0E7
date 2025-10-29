@@ -111,7 +111,11 @@ func generateCode(pcapId int, templateType CodeTemplateType, flowData []FlowItem
 	} else {
 		dataToPass = requestFlow.B
 	}
-	return generateCodeFromTemplate(templateType, url, host, port, headers, dataToPass, string(decodedData))
+
+	// 原始数据应该只包含HTTP请求的body部分，不包含请求行和headers
+	rawBodyData := strings.TrimSpace(body)
+
+	return generateCodeFromTemplate(templateType, url, host, port, headers, dataToPass, rawBodyData)
 }
 
 // 从数据库模板生成代码

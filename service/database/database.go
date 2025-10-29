@@ -215,7 +215,7 @@ conn.close()`),
 			{
 				ID:   6,
 				Name: "curl_template",
-				Code: CodeToBase64("code/python3",
+				Code: CodeToBase64("code/bash",
 					`#!/bin/bash
 
 # 请求数据
