@@ -33,6 +33,14 @@ interface PcapDetail {
   updated_at: string
 }
 
+interface CachedPcapData {
+  pcapDetail: PcapDetail
+  flowData: FlowItem[]
+  showSizeWarning: boolean
+  showDownloadOption: boolean
+  timestamp: number  // 访问时间戳，用于LRU
+}
+
 const props = defineProps<{
   pcapId: number
   searchKeyword?: string
@@ -46,6 +54,10 @@ const loading = ref(false)
 const activeTab = ref('text')
 // 为每个流量维护独立的选择状态
 const flowSelections = ref<Map<number, { selectedByte: number, selectedRange: { start: number, end: number } | null }>>(new Map())
+
+// 缓存配置
+const CACHE_MAX_SIZE = 20
+const CACHE_STORAGE_KEY = 'pcap-detail-cache'
 
 // 流量大小相关状态
 const flowSize = ref<number>(0)
@@ -61,6 +73,63 @@ const showCodeDialog = ref(false)
 const generatedCode = ref('')
 const codeTitle = ref('')
 const codeMirrorRef = ref()
+
+// 缓存管理函数
+const loadCacheFromStorage = (): Map<number, CachedPcapData> => {
+  try {
+    const stored = localStorage.getItem(CACHE_STORAGE_KEY)
+    if (stored) {
+      const data = JSON.parse(stored)
+      return new Map(Object.entries(data).map(([k, v]) => [Number(k), v as CachedPcapData]))
+    }
+  } catch (error) {
+    console.error('Failed to load cache:', error)
+  }
+  return new Map()
+}
+
+const saveCacheToStorage = (cache: Map<number, CachedPcapData>): void => {
+  try {
+    const obj = Object.fromEntries(cache.entries())
+    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(obj))
+  } catch (error) {
+    console.error('Failed to save cache:', error)
+    if (error instanceof Error && error.name === 'QuotaExceededError') {
+      localStorage.removeItem(CACHE_STORAGE_KEY)
+    }
+  }
+}
+
+const getCachedData = (pcapId: number): CachedPcapData | null => {
+  const cache = loadCacheFromStorage()
+  const cached = cache.get(pcapId)
+  if (cached) {
+    cached.timestamp = Date.now()
+    cache.delete(pcapId)
+    cache.set(pcapId, cached)
+    saveCacheToStorage(cache)
+    return cached
+  }
+  return null
+}
+
+const setCachedData = (pcapId: number, data: Omit<CachedPcapData, 'timestamp'>) => {
+  const cache = loadCacheFromStorage()
+  
+  if (cache.size >= CACHE_MAX_SIZE) {
+    const firstKey = cache.keys().next().value
+    if (firstKey !== undefined) {
+      cache.delete(firstKey)
+    }
+  }
+  
+  const cachedData: CachedPcapData = {
+    ...data,
+    timestamp: Date.now()
+  }
+  cache.set(pcapId, cachedData)
+  saveCacheToStorage(cache)
+}
 
 // 解码base64数据的辅助函数
 const decodeBase64 = (b64: string): string => {
@@ -88,6 +157,15 @@ const flowHexData = computed(() => {
 
 // 获取流量详情
 const fetchPcapDetail = async () => {
+  const cached = getCachedData(props.pcapId)
+  if (cached) {
+    pcapDetail.value = cached.pcapDetail
+    flowData.value = cached.flowData
+    showSizeWarning.value = cached.showSizeWarning
+    showDownloadOption.value = cached.showDownloadOption
+    return
+  }
+  
   loading.value = true
   try {
     const formData = new FormData()
@@ -124,6 +202,16 @@ const fetchPcapDetail = async () => {
         // 无flow数据
         showDownloadOption.value = false
         showSizeWarning.value = false
+      }
+      
+      // 保存到缓存
+      if (pcapDetail.value) {
+        setCachedData(props.pcapId, {
+          pcapDetail: pcapDetail.value,
+          flowData: flowData.value,
+          showSizeWarning: showSizeWarning.value,
+          showDownloadOption: showDownloadOption.value
+        })
       }
     } else {
       ElNotification({
@@ -188,6 +276,16 @@ const forceLoadFlowData = async () => {
   showSizeWarning.value = false
   showDownloadOption.value = false
   await fetchFlowData()
+  
+  // 加载完成后更新缓存
+  if (pcapDetail.value) {
+    setCachedData(props.pcapId, {
+      pcapDetail: pcapDetail.value,
+      flowData: flowData.value,
+      showSizeWarning: showSizeWarning.value,
+      showDownloadOption: showDownloadOption.value
+    })
+  }
 }
 
 
