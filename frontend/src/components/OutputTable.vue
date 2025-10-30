@@ -156,8 +156,14 @@ watch (() => store.state.totalItems, (newVal) => {
             </ElTableColumn>
             <ElTableColumn label="执行客户端" prop="client_name" width="120">
                 <template #default="{ row }">
-                    <span v-if="row.client_name">{{ row.client_name }}</span>
+                    <span v-if="row.client_name">{{ (row.client_name || '').slice(0, 8) }}</span>
                     <span v-else class="text-muted">未知</span>
+                </template>
+            </ElTableColumn>
+            <ElTableColumn label="Team" prop="team" width="120">
+                <template #default="{ row }">
+                    <el-tag v-if="row.team" size="small">{{ row.team }}</el-tag>
+                    <span v-else class="text-muted">未设置</span>
                 </template>
             </ElTableColumn>
             <ElTableColumn label="更新时间" width="160">

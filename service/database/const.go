@@ -71,6 +71,7 @@ type ExploitOutput struct {
 	ID        int       `json:"id" gorm:"column:id;primary_key;auto_increment;"`
 	ExploitId int       `json:"exploit_id" gorm:"column:exploit_id;type:int;not null;default:0;index;"`
 	ClientId  int       `json:"client_id" gorm:"column:client_id;type:int;not null;default:0;index;"`
+	Team      string    `json:"team" gorm:"column:team;type:varchar(255);not null;default:'';index;"`
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
 	Status    string    `json:"status" gorm:"column:status;type:varchar(255);index;"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
