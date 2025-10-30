@@ -354,7 +354,7 @@ const getCodeType = (code: string) => {
   if (!code) return '无代码'
   
   // 匹配格式：data:code/python2;base64,xxx 或 data:code/python3;base64,xxx 或 data:code/golang;base64,xxx
-  const match = code.match(/^data:code\/(python2|python3|golang);base64,/)
+  const match = code.match(/^data:code\/(python2|python3|golang|bash);base64,/)
   if (match) {
     const type = match[1]
     switch (type) {
@@ -364,6 +364,8 @@ const getCodeType = (code: string) => {
         return 'Python 3'
       case 'golang':
         return 'Golang'
+      case 'bash':
+        return 'Bash'
       default:
         return '未知类型'
     }
@@ -376,7 +378,7 @@ const getCodeType = (code: string) => {
 const getCodeTypeTagType = (code: string) => {
   if (!code) return 'info'
   
-  const match = code.match(/^data:code\/(python2|python3|golang);base64,/)
+  const match = code.match(/^data:code\/(python2|python3|golang|bash);base64,/)
   if (match) {
     const type = match[1]
     switch (type) {
@@ -385,6 +387,8 @@ const getCodeTypeTagType = (code: string) => {
       case 'python3':
         return 'success'
       case 'golang':
+        return 'primary'
+      case 'bash':
         return 'primary'
       default:
         return 'info'

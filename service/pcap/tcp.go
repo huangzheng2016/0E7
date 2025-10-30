@@ -36,6 +36,7 @@ type tcpStreamFactory struct {
 	source             string
 	reassemblyCallback func(FlowEntry)
 	wg                 sync.WaitGroup
+	linktype           layers.LinkType
 }
 
 func (factory *tcpStreamFactory) New(net, transport gopacket.Flow, tcp *layers.TCP, ac reassembly.AssemblerContext) reassembly.Stream {
@@ -52,6 +53,7 @@ func (factory *tcpStreamFactory) New(net, transport gopacket.Flow, tcp *layers.T
 		src_port:           tcp.SrcPort,
 		dst_port:           tcp.DstPort,
 		reassemblyCallback: factory.reassemblyCallback,
+		linkType:           factory.linktype,
 	}
 	return stream
 }
@@ -93,7 +95,8 @@ type tcpStream struct {
 	total_size         int
 	num_packets        int
 	// 保存所有原始数据包，用于Wireshark分析
-	originalPackets []string
+	originalPackets [][]byte
+	linkType        layers.LinkType
 }
 
 func (t *tcpStream) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassembly.TCPFlowDirection, nextSeq reassembly.Sequence, start *bool, ac reassembly.AssemblerContext) bool {
@@ -111,8 +114,13 @@ func (t *tcpStream) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassem
 	if context, ok := ac.(*Context); ok && context.OriginalPacket != nil {
 		// 检查TCP载荷是否为空，只有非空载荷才保存原始数据包
 		if len(tcp.Payload) > 0 {
-			originalPacketB64 := base64.StdEncoding.EncodeToString(context.OriginalPacket.Data())
-			t.originalPackets = append(t.originalPackets, originalPacketB64)
+			// 限制数量，避免内存占用过大
+			const maxOriginalPackets = 1000
+			if len(t.originalPackets) < maxOriginalPackets {
+				dataCopy := make([]byte, len(context.OriginalPacket.Data()))
+				copy(dataCopy, context.OriginalPacket.Data())
+				t.originalPackets = append(t.originalPackets, dataCopy)
+			}
 		}
 	}
 
@@ -156,18 +164,22 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 		from = "s"
 	}
 
-	// consolidate subsequent elements from the same origin
+	// consolidate subsequent elements from the same origin（避免跨 HTTP 报文边界合并）
 	l := len(t.FlowItems)
 	if l > 0 {
 		if t.FlowItems[l-1].From == from {
-			// 解码现有的B64数据，添加新数据，然后重新编码
+			// 解码现有的B64数据
 			existingData, err := base64.StdEncoding.DecodeString(t.FlowItems[l-1].B64)
 			if err == nil {
-				combinedData := string(existingData) + string_data
-				t.FlowItems[l-1].B64 = base64.StdEncoding.EncodeToString([]byte(combinedData))
+				// 简单判定是否为新的 HTTP 报文起始或上一个以双 CRLF 结束
+				startsNewHTTP := hasHTTPStart([]byte(string_data))
+				endsWithHeader := endsWithDoubleCRLF(existingData)
+				if !(startsNewHTTP || endsWithHeader) {
+					combinedData := append(existingData, []byte(string_data)...)
+					t.FlowItems[l-1].B64 = base64.StdEncoding.EncodeToString(combinedData)
+					return
+				}
 			}
-			// All done, no need to add a new item
-			return
 		}
 	}
 
@@ -178,6 +190,34 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 		Time: int(timestamp.UnixNano() / 1000000), // UNTODO; maybe use int64?
 	})
 
+}
+
+// 粗略检测是否为 HTTP 报文起始（请求或响应）
+func hasHTTPStart(b []byte) bool {
+	if len(b) < 4 {
+		return false
+	}
+	// 常见方法/响应前缀
+	prefixes := [][]byte{
+		[]byte("GET "), []byte("POST "), []byte("HEAD "), []byte("PUT "), []byte("DELETE "),
+		[]byte("OPTIONS "), []byte("TRACE "), []byte("PATCH "), []byte("CONNECT "),
+		[]byte("HTTP/1."), []byte("HTTP/2"),
+	}
+	for _, p := range prefixes {
+		if len(b) >= len(p) && string(b[:len(p)]) == string(p) {
+			return true
+		}
+	}
+	return false
+}
+
+func endsWithDoubleCRLF(b []byte) bool {
+	if len(b) < 4 {
+		return false
+	}
+	n := len(b)
+	// \r\n\r\n
+	return b[n-4] == '\r' && b[n-3] == '\n' && b[n-2] == '\r' && b[n-1] == '\n'
 }
 
 // ReassemblyComplete is called when assembly decides there is
@@ -242,6 +282,7 @@ func (t *tcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 		Flow:            t.FlowItems,
 		Size:            t.total_size,
 		OriginalPackets: t.originalPackets,
+		LinkType:        t.linkType,
 	}
 
 	t.reassemblyCallback(entry)

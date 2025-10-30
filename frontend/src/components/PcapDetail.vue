@@ -478,11 +478,20 @@ const getTagType = (tag: string) => {
     'SSRF': 'danger',
     'INJECTION': 'danger',
     'BOF': 'danger',
-    'STARRED': 'primary'
+    'STARRED': 'primary',
+    // 新增协议解析高亮
+    'WEBSOCKET': 'primary',
+    'HTTP2': 'info',
+    'GRPC': 'success',
+    'WS-FRAMES': 'info',
+    'GRPC-MSGS': 'success',
+    'QUIC': 'warning',
+    'HTTP3': 'warning'
   }
   // 确保返回有效的Element Plus标签类型
   const validTypes = ['primary', 'success', 'warning', 'danger', 'info']
-  const type = tagColors[tag] || 'info'
+  const key = (tag || '').toUpperCase()
+  const type = tagColors[key] || tagColors[tag] || 'info'
   return validTypes.includes(type) ? type : 'info'
 }
 

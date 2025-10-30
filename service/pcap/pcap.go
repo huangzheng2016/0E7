@@ -87,8 +87,118 @@ type FlowEntry struct {
 	Flow       []FlowItem
 	Tags       []string
 	Size       int
-	// 保存所有原始数据包，用于Wireshark分析
-	OriginalPackets []string `json:"op,omitempty"` // 原始数据包的base64编码列表
+	// 保存所有原始数据包（原始字节），仅用于生成PCAP，不参与JSON/DB
+	OriginalPackets [][]byte `json:"-"`
+	// 捕获的链路类型，用于写入 pcap 头（仅当使用 OriginalPackets 时生效）
+	LinkType layers.LinkType `json:"-"`
+}
+
+// IPv6 分片重组的最小实现
+type ipv6FragmentKey struct {
+	src        string
+	dst        string
+	id         uint32
+	nextHeader layers.IPProtocol
+}
+
+type ipv6FragmentBuffer struct {
+	parts     map[uint32][]byte // offset (in bytes) -> data
+	haveStart bool
+	haveEnd   bool
+	totalLen  int // known when haveEnd
+	created   time.Time
+	updated   time.Time
+}
+
+type ipv6Defragmenter struct {
+	frags map[ipv6FragmentKey]*ipv6FragmentBuffer
+}
+
+func newIPv6Defragmenter() *ipv6Defragmenter {
+	return &ipv6Defragmenter{frags: make(map[ipv6FragmentKey]*ipv6FragmentBuffer)}
+}
+
+// DefragIPv6 接收一个 IPv6 包与其 Fragment 头，返回：
+// - newip6: 完整重组后的 IPv6 层（若尚未完整则返回 nil）
+// - changed: 是否对包体进行了替换
+// - err: 错误
+func (d *ipv6Defragmenter) DefragIPv6(ip6 *layers.IPv6, frag *layers.IPv6Fragment) (*layers.IPv6, bool, error) {
+	key := ipv6FragmentKey{
+		src:        ip6.SrcIP.String(),
+		dst:        ip6.DstIP.String(),
+		id:         frag.Identification,
+		nextHeader: frag.NextHeader,
+	}
+
+	buf, ok := d.frags[key]
+	if !ok {
+		buf = &ipv6FragmentBuffer{
+			parts:   make(map[uint32][]byte),
+			created: time.Now(),
+			updated: time.Now(),
+		}
+		d.frags[key] = buf
+	}
+
+	// 计算字节偏移：FragmentOffset 以 8 字节为单位
+	offsetBytes := uint32(frag.FragmentOffset) * 8
+	// frag.Payload 是该分片的上层负载
+	data := make([]byte, len(frag.Payload))
+	copy(data, frag.Payload)
+	if offsetBytes == 0 {
+		buf.haveStart = true
+	}
+	if !frag.MoreFragments {
+		buf.haveEnd = true
+		buf.totalLen = int(offsetBytes) + len(data)
+	}
+	buf.parts[offsetBytes] = data
+	buf.updated = time.Now()
+
+	if !(buf.haveStart && buf.haveEnd) {
+		return nil, false, nil
+	}
+
+	// 检查是否连续完整
+	assembled := make([]byte, buf.totalLen)
+	filled := 0
+	for off := 0; off < buf.totalLen; {
+		part, exists := buf.parts[uint32(off)]
+		if !exists {
+			// 尚未完整
+			return nil, false, nil
+		}
+		copy(assembled[off:], part)
+		off += len(part)
+		filled += len(part)
+	}
+	if filled != buf.totalLen {
+		return nil, false, nil
+	}
+
+	// 构造新的 IPv6 层：NextHeader 使用分片头中的下一层协议
+	newip6 := *ip6
+	newip6.NextHeader = frag.NextHeader
+	newip6.Payload = assembled
+
+	// 清理状态
+	delete(d.frags, key)
+
+	return &newip6, true, nil
+}
+
+// 清理过期的未完成 IPv6 分片缓存
+func (d *ipv6Defragmenter) CleanupExpired(maxAge time.Duration) {
+	cutoff := time.Now().Add(-maxAge)
+	for k, v := range d.frags {
+		last := v.updated
+		if last.IsZero() {
+			last = v.created
+		}
+		if last.Before(cutoff) {
+			delete(d.frags, k)
+		}
+	}
 }
 
 // getFlowStoragePath 根据UUID生成分层存储路径
@@ -125,8 +235,12 @@ func SaveFlowAsPcap(entry FlowEntry) (string, string) {
 		writer = pcapgo.NewWriter(buf)
 	}
 
-	// 写入pcap文件头
-	err := writer.WriteFileHeader(65536, layers.LinkTypeEthernet)
+	// 写入pcap文件头（优先使用原始 LinkType，如果没有则用以太网）
+	headerLinkType := layers.LinkTypeEthernet
+	if entry.LinkType != 0 && len(entry.OriginalPackets) > 0 {
+		headerLinkType = entry.LinkType
+	}
+	err := writer.WriteFileHeader(65536, headerLinkType)
 	if err != nil {
 		log.Println("Write pcap file header failed:", err)
 		return "", ""
@@ -143,13 +257,7 @@ func SaveFlowAsPcap(entry FlowEntry) (string, string) {
 	// 优先使用原始数据包列表（如果可用）
 	if len(entry.OriginalPackets) > 0 {
 		// 使用原始数据包列表，保留所有原始layers信息
-		for i, originalPacketB64 := range entry.OriginalPackets {
-			packetData, err := base64.StdEncoding.DecodeString(originalPacketB64)
-			if err != nil {
-				log.Printf("Failed to decode original packet %d B64 data: %v", i, err)
-				continue
-			}
-
+		for i, packetData := range entry.OriginalPackets {
 			// 解析原始数据包以获取正确的时间戳
 			packet := gopacket.NewPacket(packetData, layers.LayerTypeEthernet, gopacket.Default)
 			var timestamp time.Time
@@ -849,13 +957,15 @@ func processPcapHandle(handle *pcap.Handle, fname string, check bool) {
 	udpCount := 0
 	otherCount := 0
 	defragger := ip4defrag.NewIPv4Defragmenter()
+	ip6defragger := newIPv6Defragmenter()
 
-	streamFactory := &tcpStreamFactory{source: fname, reassemblyCallback: reassemblyCallback}
+	streamFactory := &tcpStreamFactory{source: fname, reassemblyCallback: reassemblyCallback, linktype: linktype}
 	streamPool := reassembly.NewStreamPool(streamFactory)
 	assembler := reassembly.NewAssembler(streamPool)
 
 	// 创建UDP流工厂
 	udpFactory := newUDPStreamFactory(fname, reassemblyCallback)
+	udpFactory.linktype = linktype
 
 	var nextFlush time.Time
 	var flushDuration time.Duration
@@ -891,6 +1001,8 @@ func processPcapHandle(handle *pcap.Handle, fname string, check bool) {
 		// 定期清理超时的UDP流
 		if count%1000 == 0 { // 每1000个数据包清理一次
 			udpFactory.cleanupExpiredStreams()
+			// IPv6 分片缓存清理（60s 过期）
+			ip6defragger.CleanupExpired(60 * time.Second)
 		}
 
 		// defrag the IPv4 packet if required
@@ -916,15 +1028,30 @@ func processPcapHandle(handle *pcap.Handle, fname string, check bool) {
 			}
 		}
 
-		// 处理IPv6分片（简化版本）
+		// 处理IPv6分片（最小可用重组）
 		ip6Layer := packet.Layer(layers.LayerTypeIPv6)
 		if !nodefrag && ip6Layer != nil {
 			ip6 := ip6Layer.(*layers.IPv6)
-			// 检查是否是分片
-			if ip6.NextHeader == layers.IPProtocolIPv6Fragment {
-				// 对于IPv6分片，我们暂时跳过，因为需要更复杂的重组逻辑
-				log.Printf("IPv6 fragment detected, skipping for now")
-				continue
+			fragLayer := packet.Layer(layers.LayerTypeIPv6Fragment)
+			if fragLayer != nil {
+				frag := fragLayer.(*layers.IPv6Fragment)
+				newip6, changed, err := ip6defragger.DefragIPv6(ip6, frag)
+				if err != nil {
+					log.Printf("Error while de-fragmenting IPv6: %v", err)
+					continue
+				} else if newip6 == nil {
+					// packet fragment, we don't have whole packet yet.
+					continue
+				}
+				if changed {
+					pb, ok := packet.(gopacket.PacketBuilder)
+					if !ok {
+						log.Printf("Packet is not a PacketBuilder, skipping")
+						continue
+					}
+					nextDecoder := newip6.NextLayerType()
+					nextDecoder.Decode(newip6.Payload, pb)
+				}
 			}
 		}
 

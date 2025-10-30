@@ -405,13 +405,8 @@ func (s *SearchService) BatchIndexPcaps(pcapRecords []database.Pcap) error {
 	switch s.engine {
 	case SearchEngineElasticsearch:
 		if s.esService != nil && s.esService.IsAvailable() {
-			// Elasticsearch 批量索引
-			for _, pcapRecord := range pcapRecords {
-				if err := s.esService.IndexPcap(pcapRecord); err != nil {
-					log.Printf("批量索引PCAP失败 (ID: %d): %v", pcapRecord.ID, err)
-				}
-			}
-			return nil
+			// 使用Elasticsearch Bulk API 批量索引
+			return s.esService.BulkIndexPcaps(pcapRecords)
 		}
 		// 如果Elasticsearch不可用，回退到Bleve
 		fallthrough

@@ -69,6 +69,7 @@ const cachedData = ref<{
   items: PcapItem[]
   total: number
   searchKey: string
+  timestamp?: number
 } | null>(loadCachedData())
 
 const generateStateKey = () => {
@@ -136,7 +137,8 @@ const setCachedData = (items: PcapItem[], total: number) => {
   const cacheData = {
     items: [...items],
     total,
-    searchKey: generateStateKey()
+    searchKey: generateStateKey(),
+    timestamp: Date.now()
   }
   cachedData.value = cacheData
   
@@ -146,6 +148,18 @@ const setCachedData = (items: PcapItem[], total: number) => {
     console.error('保存缓存失败:', error)
   }
 }
+
+// 缓存信息（用于分页左侧提示）
+const cacheInfo = computed(() => {
+  const c = cachedData.value
+  const ts = (c && c.timestamp) ? (c.timestamp as number) : Date.now()
+  const dateStr = new Date(ts).toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  })
+  const expired = (Date.now() - ts) > 5 * 60 * 1000
+  return { dateStr, expired }
+})
 
 const uploadDialogVisible = ref(false)
 const uploadLoading = ref(false)
@@ -610,10 +624,19 @@ const getTagType = (tag: string) => {
     'SSRF': 'danger',
     'INJECTION': 'danger',
     'BOF': 'danger',
-    'STARRED': 'primary'
+    'STARRED': 'primary',
+    // 新增协议解析高亮
+    'WEBSOCKET': 'primary',
+    'HTTP2': 'info',
+    'GRPC': 'success',
+    'WS-FRAMES': 'info',
+    'GRPC-MSGS': 'success',
+    'QUIC': 'warning',
+    'HTTP3': 'warning'
   }
   const validTypes = ['primary', 'success', 'warning', 'danger', 'info']
-  const type = tagColors[tag] || 'info'
+  const key = (tag || '').toUpperCase()
+  const type = tagColors[key] || tagColors[tag] || 'info'
   return validTypes.includes(type) ? type : 'info'
 }
 
@@ -966,18 +989,32 @@ onMounted(() => {
 
     <!-- 分页 -->
     <div class="pagination-container">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :small="true"
-        :background="true"
-        layout="total, sizes, prev, pager, next"
-        :total="totalItems"
-        :hide-on-single-page="false"
-        @current-change="handlePageChange"
-        @size-change="handleSizeChange"
-      />
+      <div class="cache-info-inline">
+        <span>缓存时间：{{ cacheInfo.dateStr }}</span>
+        <el-tag v-if="cacheInfo.expired" type="warning" size="small">
+          缓存超过5分钟，请重置或再次搜索
+        </el-tag>
+      </div>
+      <div class="pagination-center">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :small="true"
+          :background="true"
+          layout="total, sizes, prev, pager, next"
+          :total="totalItems"
+          :hide-on-single-page="false"
+          @current-change="handlePageChange"
+          @size-change="handleSizeChange"
+        />
+      </div>
+      <div class="cache-info-ghost">
+        <span>缓存时间：{{ cacheInfo.dateStr }}</span>
+        <el-tag v-if="cacheInfo.expired" type="warning" size="small">
+          缓存超过5分钟，请重置或再次搜索
+        </el-tag>
+      </div>
     </div>
 
     <!-- 批量上传对话框 -->
@@ -1108,12 +1145,30 @@ onMounted(() => {
 }
 
 .pagination-container {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
   margin-top: 20px;
   padding-top: 15px;
   border-top: 1px solid #e6e8eb;
   flex-shrink: 0;
+}
+
+.cache-info-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.pagination-center {
+  display: flex;
+  justify-content: center;
+}
+
+.cache-info-ghost {
+  visibility: hidden;
 }
 
 .text-muted {

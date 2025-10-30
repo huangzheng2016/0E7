@@ -2,9 +2,11 @@ package database
 
 import (
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"gopkg.in/ini.v1"
 	"gorm.io/driver/mysql"
@@ -48,9 +50,41 @@ func Init_database(section *ini.Section) (db *gorm.DB, err error) {
 			Logger:                 logger.Default.LogMode(logger.Silent),
 		})
 		if err == nil {
-			db.Exec("VACUUM;")
+			// 连接池限制
 			sqlDB, _ := db.DB()
 			sqlDB.SetMaxOpenConns(1)
+
+			// 确保元信息表一次性创建
+			db.Exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER)")
+
+			var vacuumFlag = flag.Bool("db_vacuum", false, "run VACUUM on startup (sqlite only)")
+			forceVacuum := *vacuumFlag || os.Getenv("DB_VACUUM") == "1" || os.Getenv("DB_VACUUM") == "true"
+
+			shouldVacuum := false
+			if forceVacuum {
+				shouldVacuum = true
+			} else {
+				// 读取最近一次 VACUUM 时间
+				var lastVacUnix int64
+				row := db.Raw("SELECT value FROM meta WHERE key = 'last_vacuum' LIMIT 1").Row()
+				if scanErr := row.Scan(&lastVacUnix); scanErr == nil {
+					lastVacTime := time.Unix(lastVacUnix, 0)
+					if time.Since(lastVacTime) >= 24*time.Hour {
+						shouldVacuum = true
+					}
+				} else {
+					// 没有该记录/表：初始化 last_vacuum 为当前时间
+					nowUnix := time.Now().Unix()
+					db.Exec("INSERT INTO meta(key, value) VALUES('last_vacuum', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", nowUnix)
+				}
+			}
+
+			if shouldVacuum {
+				db.Exec("VACUUM;")
+				// 记录本次 VACUUM 时间
+				nowUnix := time.Now().Unix()
+				db.Exec("INSERT INTO meta(key, value) VALUES('last_vacuum', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", nowUnix)
+			}
 		}
 	}
 

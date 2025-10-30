@@ -22,7 +22,8 @@ type udpStream struct {
 	timeout            time.Duration
 	reassemblyCallback func(FlowEntry)
 	// 保存所有原始数据包，用于Wireshark分析
-	originalPackets []string
+	originalPackets [][]byte
+	linktype        layers.LinkType
 	sync.Mutex
 }
 
@@ -33,6 +34,7 @@ type udpStreamFactory struct {
 	streams            map[string]*udpStream
 	timeout            time.Duration
 	sync.Mutex
+	linktype layers.LinkType
 }
 
 // 创建新的UDP流工厂
@@ -65,6 +67,7 @@ func (factory *udpStreamFactory) getOrCreateStream(net, transport gopacket.Flow,
 			reassemblyCallback: factory.reassemblyCallback,
 			timeout:            factory.timeout,
 			last_seen:          time.Now(),
+			linktype:           factory.linktype,
 		}
 		factory.streams[streamKey] = stream
 	}
@@ -103,16 +106,17 @@ func (s *udpStream) addPacket(packet gopacket.Packet, udp *layers.UDP) {
 	// 获取数据包时间戳
 	timestamp := packet.Metadata().CaptureInfo.Timestamp
 
-	// 确定数据方向
+	// 确定数据方向：基于当前数据包与流初始方向对比
 	var from string
-	net := s.net
-	src, _ := net.Endpoints()
-
-	// 比较源IP和流中的源IP来确定方向
-	if src.String() == s.net.Src().String() {
-		from = "c" // 客户端到服务器
+	if nl := packet.NetworkLayer(); nl != nil {
+		curNet := nl.NetworkFlow()
+		if curNet.Src().String() == s.net.Src().String() {
+			from = "c" // 客户端到服务器
+		} else {
+			from = "s" // 服务器到客户端
+		}
 	} else {
-		from = "s" // 服务器到客户端
+		from = "c"
 	}
 
 	// 获取UDP载荷数据
@@ -121,9 +125,13 @@ func (s *udpStream) addPacket(packet gopacket.Packet, udp *layers.UDP) {
 		return
 	}
 
-	// 保存原始数据包到流中
-	originalPacketB64 := base64.StdEncoding.EncodeToString(packet.Data())
-	s.originalPackets = append(s.originalPackets, originalPacketB64)
+	// 保存原始数据包到流中（设置上限以避免内存过大）
+	const maxOriginalPackets = 1000
+	if len(s.originalPackets) < maxOriginalPackets {
+		dataCopy := make([]byte, len(packet.Data()))
+		copy(dataCopy, packet.Data())
+		s.originalPackets = append(s.originalPackets, dataCopy)
+	}
 
 	// 创建FlowItem
 	flowItem := FlowItem{
@@ -206,11 +214,15 @@ func (s *udpStream) finalize() {
 		Flow:            s.FlowItems,
 		Size:            s.total_size,
 		OriginalPackets: s.originalPackets,
+		LinkType:        s.linktype,
 	}
 
 	// 调用重组回调函数
 	s.reassemblyCallback(entry)
 }
+
+// 读取工厂的链路类型（简化访问）
+// 删除占位方法（不再需要）
 
 // 强制完成所有UDP流
 func (factory *udpStreamFactory) FlushAll() {

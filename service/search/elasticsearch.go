@@ -121,12 +121,12 @@ func (s *ElasticsearchService) createIndexMapping() error {
 				"dst_ip": {
 					"type": "keyword"
 				},
-				"src_port": {
-					"type": "keyword"
-				},
-				"dst_port": {
-					"type": "keyword"
-				},
+                "src_port": {
+                    "type": "integer"
+                },
+                "dst_port": {
+                    "type": "integer"
+                },
 				"tags": {
 					"type": "keyword"
 				},
@@ -186,7 +186,7 @@ func (s *ElasticsearchService) IndexPcap(pcapRecord database.Pcap) error {
 	defer s.mutex.Unlock()
 
 	if s.client == nil {
-		return fmt.Errorf("Elasticsearch客户端未初始化")
+		return fmt.Errorf("elasticsearch客户端未初始化")
 	}
 
 	// 获取并拼接流量数据
@@ -208,20 +208,30 @@ func (s *ElasticsearchService) IndexPcap(pcapRecord database.Pcap) error {
 
 		decodedStr := string(decoded)
 
-		// 添加到总内容
+		// 添加到总内容（与Bleve一致，使用空格拼接）
 		allContentBuilder.WriteString(decodedStr)
-		allContentBuilder.WriteString("\n")
+		allContentBuilder.WriteString(" ")
 
 		// 根据方向分别添加到客户端或服务器端内容
 		if item.From == "c" {
 			// 客户端到服务器
 			clientContentBuilder.WriteString(decodedStr)
-			clientContentBuilder.WriteString("\n")
+			clientContentBuilder.WriteString(" ")
 		} else if item.From == "s" {
 			// 服务器到客户端
 			serverContentBuilder.WriteString(decodedStr)
-			serverContentBuilder.WriteString("\n")
+			serverContentBuilder.WriteString(" ")
 		}
+	}
+
+	// 端口转为整数，便于数值检索
+	toPortInt := func(s string) int {
+		if s == "" {
+			return 0
+		}
+		var n int
+		fmt.Sscanf(s, "%d", &n)
+		return n
 	}
 
 	doc := map[string]interface{}{
@@ -231,10 +241,15 @@ func (s *ElasticsearchService) IndexPcap(pcapRecord database.Pcap) error {
 		"server_content": serverContentBuilder.String(),
 		"src_ip":         pcapRecord.SrcIP,
 		"dst_ip":         pcapRecord.DstIP,
-		"src_port":       pcapRecord.SrcPort,
-		"dst_port":       pcapRecord.DstPort,
+		"src_port":       toPortInt(pcapRecord.SrcPort),
+		"dst_port":       toPortInt(pcapRecord.DstPort),
 		"tags":           pcapRecord.Tags,
 		"timestamp":      pcapRecord.Time,
+		"duration":       pcapRecord.Duration,
+		"num_packets":    pcapRecord.NumPackets,
+		"size":           pcapRecord.Size,
+		"filename":       pcapRecord.Filename,
+		"blocked":        pcapRecord.Blocked,
 		"created_at":     pcapRecord.CreatedAt,
 	}
 
@@ -245,9 +260,9 @@ func (s *ElasticsearchService) IndexPcap(pcapRecord database.Pcap) error {
 
 	req := esapi.IndexRequest{
 		Index:      s.index,
-		DocumentID: fmt.Sprintf("pcap-%d", pcapRecord.ID),
+		DocumentID: fmt.Sprintf("pcap_%d", pcapRecord.ID),
 		Body:       bytes.NewReader(docJSON),
-		Refresh:    "true",
+		// 为性能考虑，不强制刷新，由上层批量控制
 	}
 
 	res, err := req.Do(context.Background(), s.client)
@@ -262,6 +277,103 @@ func (s *ElasticsearchService) IndexPcap(pcapRecord database.Pcap) error {
 	}
 
 	log.Printf("成功索引PCAP数据到Elasticsearch (ID: %d)", pcapRecord.ID)
+	return nil
+}
+
+// BulkIndexPcaps 批量索引PCAP数据（性能优化）
+func (s *ElasticsearchService) BulkIndexPcaps(pcapRecords []database.Pcap) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.client == nil {
+		return fmt.Errorf("elasticsearch客户端未初始化")
+	}
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+
+	for _, pcapRecord := range pcapRecords {
+		// 获取并拼接流量数据
+		flowItems, err := s.getFlowData(pcapRecord)
+		if err != nil {
+			log.Printf("获取流量数据失败 (PcapID: %d): %v", pcapRecord.ID, err)
+			// 继续处理其他记录
+		}
+
+		// 分别处理客户端和服务器端内容（与Bleve一致，使用空格）
+		var allContentBuilder, clientContentBuilder, serverContentBuilder strings.Builder
+		for _, item := range flowItems {
+			decoded, err := base64.StdEncoding.DecodeString(item.B64)
+			if err != nil {
+				log.Printf("Base64解码失败 (PcapID: %d, FlowItemTime: %d): %v", pcapRecord.ID, item.Time, err)
+				continue
+			}
+			decodedStr := string(decoded)
+			allContentBuilder.WriteString(decodedStr)
+			allContentBuilder.WriteString(" ")
+			if item.From == "c" {
+				clientContentBuilder.WriteString(decodedStr)
+				clientContentBuilder.WriteString(" ")
+			} else if item.From == "s" {
+				serverContentBuilder.WriteString(decodedStr)
+				serverContentBuilder.WriteString(" ")
+			}
+		}
+
+		toPortInt := func(s string) int {
+			if s == "" {
+				return 0
+			}
+			var n int
+			fmt.Sscanf(s, "%d", &n)
+			return n
+		}
+
+		doc := map[string]interface{}{
+			"pcap_id":        pcapRecord.ID,
+			"content":        allContentBuilder.String(),
+			"client_content": clientContentBuilder.String(),
+			"server_content": serverContentBuilder.String(),
+			"src_ip":         pcapRecord.SrcIP,
+			"dst_ip":         pcapRecord.DstIP,
+			"src_port":       toPortInt(pcapRecord.SrcPort),
+			"dst_port":       toPortInt(pcapRecord.DstPort),
+			"tags":           pcapRecord.Tags,
+			"timestamp":      pcapRecord.Time,
+			"duration":       pcapRecord.Duration,
+			"num_packets":    pcapRecord.NumPackets,
+			"size":           pcapRecord.Size,
+			"filename":       pcapRecord.Filename,
+			"blocked":        pcapRecord.Blocked,
+			"created_at":     pcapRecord.CreatedAt,
+		}
+
+		// Bulk action/metadata line
+		meta := map[string]map[string]string{
+			"index": {
+				"_index": s.index,
+				"_id":    fmt.Sprintf("pcap_%d", pcapRecord.ID),
+			},
+		}
+		if err := enc.Encode(meta); err != nil {
+			return fmt.Errorf("写入bulk meta失败: %v", err)
+		}
+		if err := enc.Encode(doc); err != nil {
+			return fmt.Errorf("写入bulk doc失败: %v", err)
+		}
+	}
+
+	res, err := s.client.Bulk(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		return fmt.Errorf("bulk索引失败: %v", err)
+	}
+	defer res.Body.Close()
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		return fmt.Errorf("bulk索引错误: %s", string(body))
+	}
+
+	log.Printf("成功批量索引 %d 条PCAP数据到Elasticsearch", len(pcapRecords))
 	return nil
 }
 
@@ -316,7 +428,7 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int, searc
 	defer s.mutex.RUnlock()
 
 	if s.client == nil {
-		return nil, 0, fmt.Errorf("Elasticsearch客户端未初始化")
+		return nil, 0, fmt.Errorf("elasticsearch客户端未初始化")
 	}
 
 	// 构建搜索查询
@@ -415,14 +527,6 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int, searc
 			pcapID = p
 		}
 
-		// 获取原始Pcap记录以获取其他字段
-		var pcapRecord database.Pcap
-		err := config.Db.Where("id = ?", int(pcapID)).First(&pcapRecord).Error
-		if err != nil {
-			log.Printf("搜索结果中找不到对应的PCAP记录 (ID: %d): %v", int(pcapID), err)
-			continue
-		}
-
 		// 处理高亮结果
 		highlights := make(map[string][]string)
 		if highlight, ok := hitMap["highlight"].(map[string]interface{}); ok {
@@ -439,20 +543,41 @@ func (s *ElasticsearchService) Search(queryStr string, page, pageSize int, searc
 			}
 		}
 
+		// 直接从_source读取，避免额外DB查询（与Bleve的字段返回风格在分页搜索时对齐）
+		getString := func(field string) string {
+			if val, ok := source[field]; ok && val != nil {
+				if str, ok := val.(string); ok {
+					return str
+				}
+			}
+			return ""
+		}
+		getInt := func(field string) int {
+			if val, ok := source[field]; ok && val != nil {
+				if f, ok := val.(float64); ok {
+					return int(f)
+				}
+				if i, ok := val.(int); ok {
+					return i
+				}
+			}
+			return 0
+		}
+
 		result := SearchResult{
-			ID:         fmt.Sprintf("pcap-%d", int(pcapID)),
+			ID:         fmt.Sprintf("pcap_%d", int(pcapID)),
 			PcapID:     int(pcapID),
-			SrcIP:      pcapRecord.SrcIP,
-			DstIP:      pcapRecord.DstIP,
-			SrcPort:    pcapRecord.SrcPort,
-			DstPort:    pcapRecord.DstPort,
-			Tags:       pcapRecord.Tags,
-			Timestamp:  pcapRecord.Time,
-			Duration:   pcapRecord.Duration,
-			NumPackets: pcapRecord.NumPackets,
-			Size:       pcapRecord.Size,
-			Filename:   pcapRecord.Filename,
-			Blocked:    pcapRecord.Blocked,
+			SrcIP:      getString("src_ip"),
+			DstIP:      getString("dst_ip"),
+			SrcPort:    getString("src_port"),
+			DstPort:    getString("dst_port"),
+			Tags:       getString("tags"),
+			Timestamp:  getInt("timestamp"),
+			Duration:   getInt("duration"),
+			NumPackets: getInt("num_packets"),
+			Size:       getInt("size"),
+			Filename:   getString("filename"),
+			Blocked:    getString("blocked"),
 			Score:      score,
 			Highlights: highlights,
 		}
@@ -468,14 +593,16 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 	defer s.mutex.RUnlock()
 
 	if s.client == nil {
-		return nil, 0, fmt.Errorf("Elasticsearch客户端未初始化")
+		return nil, 0, fmt.Errorf("elasticsearch客户端未初始化")
 	}
 
 	// 构建搜索查询
 	searchQuery := s.buildSearchQuery(queryStr, searchType)
 
-	// 如果指定了端口，添加端口过滤条件
+	// 如果指定了端口，添加端口过滤条件（数值精确匹配）
 	if port != "" {
+		var portNum int
+		fmt.Sscanf(port, "%d", &portNum)
 		// 添加端口过滤到bool查询的filter部分
 		if boolQuery, ok := searchQuery["bool"].(map[string]interface{}); ok {
 			if boolQuery["filter"] == nil {
@@ -494,12 +621,12 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 					"should": []interface{}{
 						map[string]interface{}{
 							"term": map[string]interface{}{
-								"src_port": port,
+								"src_port": portNum,
 							},
 						},
 						map[string]interface{}{
 							"term": map[string]interface{}{
-								"dst_port": port,
+								"dst_port": portNum,
 							},
 						},
 					},
@@ -544,9 +671,8 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 	}
 
 	res, err := s.client.Search(
-		s.client.Search.WithIndex("pcap_index"),
-		s.client.Search.WithBody(strings.NewReader(string(searchBody))),
-		s.client.Search.WithPretty(),
+		s.client.Search.WithIndex(s.index),
+		s.client.Search.WithBody(bytes.NewReader(searchBody)),
 	)
 	if err != nil {
 		return nil, 0, err
@@ -603,14 +729,6 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 			pcapID = p
 		}
 
-		// 获取原始Pcap记录以获取其他字段
-		var pcapRecord database.Pcap
-		err := config.Db.Where("id = ?", int(pcapID)).First(&pcapRecord).Error
-		if err != nil {
-			log.Printf("搜索结果中找不到对应的PCAP记录 (ID: %d): %v", int(pcapID), err)
-			continue
-		}
-
 		// 获取高亮信息
 		var highlights []string
 		if highlight, ok := hitMap["highlight"].(map[string]interface{}); ok {
@@ -623,21 +741,39 @@ func (s *ElasticsearchService) SearchWithPort(queryStr, port string, page, pageS
 			}
 		}
 
+		// 从_source 直接获取字段（与Bleve的 searchBleveWithPort 风格一致）
+		getString := func(field string) string {
+			if val, ok := source[field]; ok && val != nil {
+				if str, ok := val.(string); ok {
+					return str
+				}
+			}
+			return ""
+		}
+		getInt := func(field string) int {
+			if val, ok := source[field]; ok && val != nil {
+				if f, ok := val.(float64); ok {
+					return int(f)
+				}
+			}
+			return 0
+		}
+
 		result := SearchResult{
 			ID:         fmt.Sprintf("pcap_%d", int(pcapID)),
 			PcapID:     int(pcapID),
-			Content:    pcapRecord.ClientContent + " " + pcapRecord.ServerContent,
-			SrcIP:      pcapRecord.SrcIP,
-			DstIP:      pcapRecord.DstIP,
-			SrcPort:    pcapRecord.SrcPort,
-			DstPort:    pcapRecord.DstPort,
-			Tags:       pcapRecord.Tags,
-			Timestamp:  pcapRecord.Time,
-			Duration:   pcapRecord.Duration,
-			NumPackets: pcapRecord.NumPackets,
-			Size:       pcapRecord.Size,
-			Filename:   pcapRecord.Filename,
-			Blocked:    pcapRecord.Blocked,
+			Content:    getString("content"),
+			SrcIP:      getString("src_ip"),
+			DstIP:      getString("dst_ip"),
+			SrcPort:    getString("src_port"),
+			DstPort:    getString("dst_port"),
+			Tags:       getString("tags"),
+			Timestamp:  getInt("timestamp"),
+			Duration:   getInt("duration"),
+			NumPackets: getInt("num_packets"),
+			Size:       getInt("size"),
+			Filename:   getString("filename"),
+			Blocked:    getString("blocked"),
 			Score:      score,
 			Highlight:  strings.Join(highlights, " | "),
 		}
@@ -709,7 +845,7 @@ func (s *ElasticsearchService) DeletePcap(pcapID int) error {
 
 	req := esapi.DeleteRequest{
 		Index:      s.index,
-		DocumentID: fmt.Sprintf("pcap-%d", pcapID),
+		DocumentID: fmt.Sprintf("pcap_%d", pcapID),
 	}
 
 	res, err := req.Do(context.Background(), s.client)
@@ -840,7 +976,7 @@ func (s *ElasticsearchService) SearchByPcapIDs(queryStr string, pcapIDs []int, s
 		s.client.Search.WithBody(strings.NewReader(toJSON(searchRequest))),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Elasticsearch搜索失败: %v", err)
+		return nil, fmt.Errorf("elasticsearch搜索失败: %v", err)
 	}
 	defer res.Body.Close()
 
