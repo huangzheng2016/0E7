@@ -19,3 +19,5 @@ config.ini
 /upload
 .DS_Store
 /test_*
+cpu.prof
+mem.prof

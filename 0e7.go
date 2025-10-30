@@ -22,16 +22,59 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/pprof"
+	"sync"
 	"syscall"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 )
 
-var err error
+var (
+	err error
+
+	cleanupOnce sync.Once
+	cleanupMu   sync.Mutex
+	cleanupFns  []func()
+)
 
 //go:embed dist
 var f embed.FS
+
+// registerCleanup 注册一个在程序退出时执行的清理函数
+func registerCleanup(fn func()) {
+	if fn == nil {
+		return
+	}
+	cleanupMu.Lock()
+	cleanupFns = append(cleanupFns, fn)
+	cleanupMu.Unlock()
+}
+
+// runCleanup 按注册顺序逆序执行所有清理函数，仅执行一次
+func runCleanup() {
+	cleanupOnce.Do(func() {
+		cleanupMu.Lock()
+		funcs := make([]func(), len(cleanupFns))
+		copy(funcs, cleanupFns)
+		cleanupFns = nil
+		cleanupMu.Unlock()
+
+		for i := len(funcs) - 1; i >= 0; i-- {
+			if funcs[i] == nil {
+				continue
+			}
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("执行清理函数时发生异常: %v", r)
+					}
+				}()
+				funcs[i]()
+			}()
+		}
+	})
+}
 
 func main() {
 
@@ -44,12 +87,16 @@ func main() {
 
 	log.Println("0E7 For Security")
 
+	defer runCleanup()
+
 	// 定义命令行参数
 	var (
 		configFile   = flag.String("config", "config.ini", "指定配置文件路径")
 		serverMode   = flag.Bool("server", false, "以服务器模式启动")
 		help         = flag.Bool("help", false, "显示帮助信息")
 		installGuide = flag.Bool("install-guide", false, "显示Windows依赖安装指南")
+		cpuProfile   = flag.String("cpu-profile", "", "启用CPU性能分析并将结果写入指定文件")
+		memProfile   = flag.String("mem-profile", "", "启用内存性能分析并将结果写入指定文件")
 	)
 
 	// 支持短参数
@@ -59,10 +106,66 @@ func main() {
 	// 解析命令行参数
 	flag.Parse()
 
+	// 初始化性能分析
+	if *cpuProfile != "" {
+		cpuFile, err := os.Create(*cpuProfile)
+		if err != nil {
+			log.Printf("无法创建CPU性能分析文件 %s: %v", *cpuProfile, err)
+			runCleanup()
+			os.Exit(1)
+		}
+		if err := pprof.StartCPUProfile(cpuFile); err != nil {
+			log.Printf("启动CPU性能分析失败: %v", err)
+			_ = cpuFile.Close()
+			runCleanup()
+			os.Exit(1)
+		}
+		registerCleanup(func() {
+			pprof.StopCPUProfile()
+			if err := cpuFile.Close(); err != nil {
+				log.Printf("关闭CPU性能分析文件失败: %v", err)
+			}
+		})
+		log.Printf("CPU性能分析已启用，输出文件: %s", *cpuProfile)
+	}
+
+	if *memProfile != "" {
+		memPath := *memProfile
+		memFile, err := os.Create(memPath)
+		if err != nil {
+			log.Printf("无法创建内存性能分析文件 %s: %v", memPath, err)
+			runCleanup()
+			os.Exit(1)
+		}
+		if err := memFile.Close(); err != nil {
+			log.Printf("关闭内存性能分析文件失败 %s: %v", memPath, err)
+			runCleanup()
+			os.Exit(1)
+		}
+
+		registerCleanup(func() {
+			f, err := os.Create(memPath)
+			if err != nil {
+				log.Printf("无法写入内存性能分析文件 %s: %v", memPath, err)
+				return
+			}
+			defer func() {
+				if err := f.Close(); err != nil {
+					log.Printf("关闭内存性能分析文件失败 %s: %v", memPath, err)
+				}
+			}()
+			runtime.GC()
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				log.Printf("写入内存性能分析文件失败 %s: %v", memPath, err)
+			}
+		})
+		log.Printf("内存性能分析将在退出时写入: %s", memPath)
+	}
+
 	// 处理帮助信息
 	if *help {
 		showHelp()
-		os.Exit(0)
+		return
 	}
 
 	// 处理Windows安装指南
@@ -72,7 +175,7 @@ func main() {
 		} else {
 			fmt.Println("此功能仅在Windows上可用")
 		}
-		os.Exit(0)
+		return
 	}
 
 	// 处理服务器模式
@@ -80,6 +183,7 @@ func main() {
 		// 服务器模式：检查并生成配置文件
 		if err := ensureServerConfig(*configFile); err != nil {
 			log.Printf("配置文件处理失败: %v", err)
+			runCleanup()
 			os.Exit(1)
 		}
 	}
@@ -96,7 +200,9 @@ func main() {
 
 	file, err := os.OpenFile("0e7.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("日志文件初始化失败: %v", err)
+		runCleanup()
+		os.Exit(1)
 	}
 	defer file.Close()
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
@@ -159,14 +265,18 @@ func main() {
 			log.Printf("Starting TLS server on port: %s", config.Server_port)
 			go func() {
 				if err := r_server.RunTLS(":"+config.Server_port, "cert/certificate.crt", "cert/private.key"); err != nil {
-					log.Fatalf("Failed to start TLS server on port %s: %v", config.Server_port, err)
+					log.Printf("Failed to start TLS server on port %s: %v", config.Server_port, err)
+					runCleanup()
+					os.Exit(1)
 				}
 			}()
 		} else {
 			log.Printf("Starting HTTP server on port: %s", config.Server_port)
 			go func() {
 				if err := r_server.Run(":" + config.Server_port); err != nil {
-					log.Fatalf("Failed to start HTTP server on port %s: %v", config.Server_port, err)
+					log.Printf("Failed to start HTTP server on port %s: %v", config.Server_port, err)
+					runCleanup()
+					os.Exit(1)
 				}
 			}()
 		}
@@ -202,6 +312,8 @@ func showHelp() {
 	fmt.Println("  0e7 -config <file>            # 指定配置文件路径")
 	fmt.Println("  0e7 --server, -s              # 服务器模式启动")
 	fmt.Println("  0e7 --server -config <file>   # 服务器模式启动并指定配置文件")
+	fmt.Println("  0e7 --cpu-profile cpu.prof    # 启用CPU性能分析输出文件")
+	fmt.Println("  0e7 --mem-profile mem.prof    # 启用内存性能分析输出文件")
 	fmt.Println("  0e7 --help, -h                # 显示帮助信息")
 	fmt.Println("  0e7 --install-guide           # 显示Windows依赖安装指南")
 	fmt.Println("")
@@ -210,6 +322,8 @@ func showHelp() {
 	fmt.Println("  --server, -s                  以服务器模式启动")
 	fmt.Println("  --help, -h                    显示帮助信息")
 	fmt.Println("  --install-guide               显示Windows依赖安装指南")
+	fmt.Println("  --cpu-profile <file>          启用CPU性能分析并写入指定文件")
+	fmt.Println("  --mem-profile <file>          启用内存性能分析并在退出时写入指定文件")
 	fmt.Println("")
 }
 
@@ -291,6 +405,7 @@ func setupGracefulShutdown() {
 			}
 		}
 
+		runCleanup()
 		log.Println("程序已优雅退出")
 		os.Exit(0)
 	}()

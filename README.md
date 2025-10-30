@@ -93,6 +93,12 @@ chmod +x build.sh
 
 # 显示帮助信息
 ./0e7_<platform>_<arch> --help
+
+# 启用CPU性能分析并输出至文件
+./0e7_<platform>_<arch> --cpu-profile cpu.prof
+
+# 同时启用CPU与内存性能分析
+./0e7_<platform>_<arch> --cpu-profile cpu.prof --mem-profile mem.prof
 ```
 
 ## 许可证
