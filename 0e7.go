@@ -5,6 +5,7 @@ import (
 	"0E7/service/config"
 	flagService "0E7/service/flag"
 	"0E7/service/pcap"
+	"0E7/service/proxy"
 	"0E7/service/route"
 	"0E7/service/search"
 	"0E7/service/server"
@@ -257,7 +258,17 @@ func main() {
 		log.Println("Flag检测器已启动")
 
 		fp, _ := fs.Sub(f, "dist")
-		r_server.StaticFS("/", http.FS(fp))
+		// 静态资源改为 /static 前缀，避免与 /proxy 冲突
+		r_server.StaticFS("/static", http.FS(fp))
+		// 根路径返回 index.html
+		r_server.GET("/", func(c *gin.Context) {
+			b, err := fs.ReadFile(fp, "index.html")
+			if err != nil {
+				c.String(http.StatusNotFound, "index not found")
+				return
+			}
+			c.Data(http.StatusOK, "text/html; charset=utf-8", b)
+		})
 
 		if config.Server_tls {
 			r_server.RedirectTrailingSlash = true
@@ -288,6 +299,24 @@ func main() {
 		pcap.InitPcapQueue()
 
 		go pcap.WatchDir("pcap")
+	}
+
+	// 客户端独立代理（当未启用服务端时才生效）
+	if !config.Server_mode && config.Client_mode && config.Client_proxy_enable {
+		if config.Global_debug {
+			gin.SetMode(gin.DebugMode)
+		} else {
+			gin.SetMode(gin.ReleaseMode)
+		}
+		rClientProxy := gin.New()
+		rClientProxy.Use(gin.Recovery())
+		proxy.RegisterRoutes(rClientProxy)
+		log.Printf("Client proxy listening on port: %s", config.Client_proxy_port)
+		go func() {
+			if err := rClientProxy.Run(":" + config.Client_proxy_port); err != nil {
+				log.Printf("client proxy server stopped: %v", err)
+			}
+		}()
 	}
 
 	if config.Client_mode {

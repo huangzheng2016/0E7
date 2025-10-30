@@ -51,6 +51,12 @@ var (
 	Db_username                   string
 	Db_password                   string
 	Db_tables                     string
+
+	// Proxy/Cache related
+	Proxy_cache_2xx_only  bool
+	Proxy_retain_duration time.Duration
+	Client_proxy_enable   bool
+	Client_proxy_port     string
 )
 
 func Init_conf(configFile string) error {
@@ -118,6 +124,20 @@ func Init_conf(configFile string) error {
 		Server_pcap_workers, err = section.Key("pcap_workers").Int()
 		if err != nil || Server_pcap_workers <= 0 {
 			Server_pcap_workers = 0 // 0 表示使用 CPU 核心数
+		}
+
+		// Proxy/cache settings (server side)
+		Proxy_cache_2xx_only, err = section.Key("proxy_cache_2xx_only").Bool()
+		if err != nil {
+			Proxy_cache_2xx_only = true
+		}
+		retainStr := section.Key("proxy_retain_duration").String()
+		if retainStr == "" {
+			retainStr = "15m"
+		}
+		Proxy_retain_duration, err = time.ParseDuration(retainStr)
+		if err != nil || Proxy_retain_duration < 0 {
+			Proxy_retain_duration = 15 * time.Minute
 		}
 
 		// 读取数据库配置
@@ -201,6 +221,16 @@ func Init_conf(configFile string) error {
 		Client_only_monitor, err = section.Key("only_monitor").Bool()
 		if err != nil {
 			Client_only_monitor = false
+		}
+
+		// Client-side proxy (only when server_mode=false)
+		Client_proxy_enable, err = section.Key("proxy_enable").Bool()
+		if err != nil {
+			Client_proxy_enable = false
+		}
+		Client_proxy_port = section.Key("proxy_port").String()
+		if Client_proxy_port == "" {
+			Client_proxy_port = "6102"
 		}
 	}
 

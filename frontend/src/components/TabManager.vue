@@ -8,11 +8,12 @@ import ExploitEdit from './ExploitEdit.vue'
 import PcapDetail from './PcapDetail.vue'
 import FlagList from './FlagList.vue'
 import TerminalManagement from './TerminalManagement.vue'
+import ProxyCache from './ProxyCache.vue'
 
 interface Tab {
   id: string
   title: string
-  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
+  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management' | 'proxy-cache' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
   // 只保存ID，不保存完整数据
   itemId?: number | string  // action的id、exploit的id或pcap的id
   closable: boolean
@@ -63,6 +64,12 @@ const tabs = ref<Tab[]>([
     id: 'terminal-management',
     title: '终端管理',
     type: 'terminal-management',
+    closable: false
+  },
+  {
+    id: 'proxy-cache',
+    title: '代理缓存',
+    type: 'proxy-cache',
     closable: false
   }
 ])
@@ -131,6 +138,12 @@ const loadState = () => {
             id: 'terminal-management',
             title: '终端管理',
             type: 'terminal-management',
+            closable: false
+          },
+          {
+            id: 'proxy-cache',
+            title: '代理缓存',
+            type: 'proxy-cache',
             closable: false
           }
         ]
@@ -733,6 +746,10 @@ onUnmounted(() => {
       
       <div v-else-if="activeTab?.type === 'terminal-management'">
         <TerminalManagement />
+      </div>
+      
+      <div v-else-if="activeTab?.type === 'proxy-cache'">
+        <ProxyCache />
       </div>
       
       <div v-else-if="activeTab?.type === 'action-edit'">

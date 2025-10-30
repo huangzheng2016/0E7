@@ -23,8 +23,25 @@ const currentPage = ref(1);
 const pageSize = ref(20);
 const totalItems = ref(0);
 
-// 自动刷新开关
+// 内置自动刷新开关与逻辑（默认关闭）
 const autoRefresh = ref(false);
+const refreshIntervalSec = ref(5);
+let refreshTimer: number | undefined;
+
+const startAutoRefresh = () => {
+    stopAutoRefresh();
+    if (refreshIntervalSec.value <= 0) return;
+    refreshTimer = window.setInterval(() => {
+        refreshAllData();
+    }, refreshIntervalSec.value * 1000);
+}
+
+const stopAutoRefresh = () => {
+    if (refreshTimer !== undefined) {
+        clearInterval(refreshTimer);
+        refreshTimer = undefined;
+    }
+}
 
 // 全量刷新函数
 const refreshAllData = () => {
@@ -68,35 +85,7 @@ const handleSizeChange = (size: number) => {
     refreshAllData();
 }
 
-// 设置定时器，每3秒全量刷新一次
-const refreshInterval = ref<number | ReturnType<typeof setInterval>>();
-
-// 启动自动刷新
-const startAutoRefresh = () => {
-    if (refreshInterval.value) {
-        clearInterval(refreshInterval.value);
-    }
-    refreshInterval.value = setInterval(() => {
-        refreshAllData();
-    }, 3000);
-}
-
-// 停止自动刷新
-const stopAutoRefresh = () => {
-    if (refreshInterval.value) {
-        clearInterval(refreshInterval.value);
-        refreshInterval.value = undefined;
-    }
-}
-
-// 监听自动刷新开关变化
-watch(autoRefresh, (newValue) => {
-    if (newValue) {
-        startAutoRefresh();
-    } else {
-        stopAutoRefresh();
-    }
-});
+// 取消内部自动刷新开关，改由父组件控制刷新节奏
 
 // 监听名称变化，重新获取数据
 watch(() => props.exploitName, () => {
@@ -119,12 +108,17 @@ onMounted(() => {
     
     // 监听自定义刷新事件
     window.addEventListener('refresh-output', refreshAllData);
+
+    // 根据开关状态启动自动刷新
+    if (autoRefresh.value) {
+        startAutoRefresh();
+    }
 });
 
 // 组件卸载时清理定时器和事件监听器
 onUnmounted(() => {
-    stopAutoRefresh();
     window.removeEventListener('refresh-output', refreshAllData);
+    stopAutoRefresh();
 });
 
 watch(() => store.state.workerQueue, (newVal) => {
@@ -137,6 +131,22 @@ watch(() => store.state.workerQueue, (newVal) => {
 
 watch (() => store.state.totalItems, (newVal) => {
     totalItems.value = newVal;
+});
+
+// 监听自动刷新开关
+watch(autoRefresh, (enabled) => {
+    if (enabled) {
+        startAutoRefresh();
+    } else {
+        stopAutoRefresh();
+    }
+});
+
+// 监听刷新间隔调整，若已开启自动刷新则重启计时器
+watch(refreshIntervalSec, () => {
+    if (autoRefresh.value) {
+        startAutoRefresh();
+    }
 });
 </script>
 
@@ -180,18 +190,17 @@ watch (() => store.state.totalItems, (newVal) => {
         
         <!-- 底部控件和分页 -->
         <div class="bottom-controls">
-            <!-- 自动刷新控件（左侧） -->
+            <!-- 刷新控件（左侧） -->
             <div class="refresh-control">
-                <el-checkbox v-model="autoRefresh">自动刷新</el-checkbox>
                 <el-button 
                     type="primary" 
-                    size="small" 
                     @click="refreshAllData"
-                    style="margin-left: 10px"
                 >
                     <el-icon><Refresh /></el-icon>
-                    手动刷新
+                    刷新
                 </el-button>
+                <el-switch v-model="autoRefresh" active-text="自动刷新" />
+                <el-input-number v-model="refreshIntervalSec" :min="1" :max="300" />
             </div>
             
             <!-- 分页控件（右侧） -->
@@ -233,6 +242,7 @@ watch (() => store.state.totalItems, (newVal) => {
 .refresh-control {
     display: flex;
     align-items: center;
+    gap: 12px;
 }
 
 .pagination-control {

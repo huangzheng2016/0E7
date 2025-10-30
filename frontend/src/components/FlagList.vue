@@ -41,10 +41,10 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 
-// 自动刷新相关
-const autoRefresh = ref(false)
-const refreshInterval = ref(5000) // 5秒刷新一次
-let refreshTimer: ReturnType<typeof setInterval> | null = null
+// 自动刷新（与 ProxyCache 保持一致：开关 + 秒数）
+const auto = ref(false)
+const intervalSec = ref(5)
+let timer: any = null
 
 // 搜索条件
 const searchForm = reactive({
@@ -157,8 +157,8 @@ const handleSearch = () => {
   currentPage.value = 1
   fetchFlags()
   // 搜索后重新开始自动刷新
-  if (autoRefresh.value) {
-    startAutoRefresh()
+  if (auto.value) {
+    startTimer()
   }
 }
 
@@ -171,8 +171,8 @@ const handleReset = () => {
   currentPage.value = 1
   fetchFlags()
   // 重置后重新开始自动刷新
-  if (autoRefresh.value) {
-    startAutoRefresh()
+  if (auto.value) {
+    startTimer()
   }
 }
 
@@ -181,23 +181,25 @@ const handleRefresh = () => {
   fetchFlags()
 }
 
-// 开始自动刷新
-const startAutoRefresh = () => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-  }
-  if (autoRefresh.value) {
-    refreshTimer = setInterval(() => {
-      fetchFlags()
-    }, refreshInterval.value)
+// 自动刷新控制（保持与 ProxyCache 相同命名与行为）
+function toggleAuto() {
+  if (auto.value) {
+    startTimer()
+  } else {
+    stopTimer()
   }
 }
 
-// 停止自动刷新
-const stopAutoRefresh = () => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
+function startTimer() {
+  stopTimer()
+  if (intervalSec.value <= 0) return
+  timer = setInterval(fetchFlags, intervalSec.value * 1000)
+}
+
+function stopTimer() {
+  if (timer) {
+    clearInterval(timer)
+    timer = null
   }
 }
 
@@ -206,23 +208,15 @@ const handleExploitNameClick = (exploitId: number) => {
   emit('openExploitEdit', exploitId)
 }
 
-// 切换自动刷新状态
-const toggleAutoRefresh = () => {
-  autoRefresh.value = !autoRefresh.value
-  if (autoRefresh.value) {
-    startAutoRefresh()
-  } else {
-    stopAutoRefresh()
-  }
-}
+// 不再单独的“自动刷新按钮”，改为开关 + 数字输入
 
 // 分页变化
 const handlePageChange = (page: number) => {
   currentPage.value = page
   fetchFlags()
-  // 分页后重新开始自动刷新
-  if (autoRefresh.value) {
-    startAutoRefresh()
+  // 分页后若开启自动刷新，重置计时器
+  if (auto.value) {
+    startTimer()
   }
 }
 
@@ -230,9 +224,8 @@ const handlePageSizeChange = (size: number) => {
   pageSize.value = size
   currentPage.value = 1
   fetchFlags()
-  // 分页大小变化后重新开始自动刷新
-  if (autoRefresh.value) {
-    startAutoRefresh()
+  if (auto.value) {
+    startTimer()
   }
 }
 
@@ -355,7 +348,7 @@ watch([() => searchForm.flag, () => searchForm.team, () => searchForm.status, ()
 
 onMounted(() => {
   fetchFlags()
-  startAutoRefresh()
+  if (auto.value) startTimer()
 })
 
 // 打开flag配置弹窗
@@ -420,11 +413,11 @@ const handleUpdateConfig = async () => {
 
 onMounted(() => {
   fetchFlags()
-  startAutoRefresh()
+  if (auto.value) startTimer()
 })
 
 onUnmounted(() => {
-  stopAutoRefresh()
+  stopTimer()
 })
 </script>
 
@@ -504,18 +497,11 @@ onUnmounted(() => {
             <el-button :icon="Refresh" @click="handleRefresh">
               刷新
             </el-button>
-            <el-button 
-              :type="autoRefresh ? 'success' : 'default'" 
-              @click="toggleAutoRefresh"
-            >
-              {{ autoRefresh ? '停止自动刷新' : '开启自动刷新' }}
-            </el-button>
+            <el-switch v-model="auto" @change="toggleAuto" active-text="自动刷新" />
+            <el-input-number v-model="intervalSec" :min="1" :max="300" @change="startTimer" />
           </div>
           <div class="action-right">
             <span class="total-info">共 {{ total }} 条记录</span>
-            <span v-if="autoRefresh" class="auto-refresh-info">
-              ({{ refreshInterval / 1000 }}秒自动刷新)
-            </span>
           </div>
         </div>
       </el-card>

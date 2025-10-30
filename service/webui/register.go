@@ -41,4 +41,7 @@ func Register(router *gin.Engine) {
 
 	// 代码生成相关路由
 	router.POST("/webui/pcap_generate_code", pcap_generate_code)
+
+	// Proxy 缓存监控
+	router.POST("/webui/proxy_cache_list", proxy_cache_list)
 }
