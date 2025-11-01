@@ -484,7 +484,7 @@ func etagMiddleware() gin.HandlerFunc {
 
 				// 设置 ETag 响应头
 				c.Header("ETag", etag)
-				
+
 				// 根据请求方法设置不同的缓存策略
 				if c.Request.Method == "GET" || c.Request.Method == "HEAD" {
 					// GET/HEAD 请求：可以缓存但需要重新验证
@@ -501,7 +501,7 @@ func etagMiddleware() gin.HandlerFunc {
 	}
 }
 
-// serveStaticFile 提供静态文件服务，支持 ETag 和缓存头
+// serveStaticFile 提供静态文件服务，带简单缓存
 func serveStaticFile(c *gin.Context, fileSystem fs.FS, path string, isStaticResource bool) {
 	// 读取文件
 	data, err := fs.ReadFile(fileSystem, path)
@@ -510,31 +510,13 @@ func serveStaticFile(c *gin.Context, fileSystem fs.FS, path string, isStaticReso
 		return
 	}
 
-	// 生成 ETag（基于文件内容的 SHA256 hash）
-	hash := sha256.Sum256(data)
-	hashStr := hex.EncodeToString(hash[:])
-	etag := fmt.Sprintf(`"%s"`, hashStr)
-
-	// 检查 If-None-Match 请求头（条件请求）
-	if match := c.GetHeader("If-None-Match"); match != "" {
-		// 移除引号进行比较（If-None-Match 可能包含多个值，用逗号分隔）
-		matchCleaned := strings.ReplaceAll(strings.ReplaceAll(match, `"`, ""), " ", "")
-		if strings.Contains(matchCleaned, hashStr) {
-			c.Status(http.StatusNotModified)
-			return
-		}
-	}
-
-	// 设置 ETag 响应头
-	c.Header("ETag", etag)
-
 	// 设置缓存策略
 	if isStaticResource {
-		// 静态资源（JS/CSS等，文件名包含 hash）：长期缓存，immutable
-		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		// 静态资源（JS/CSS等）：1年缓存
+		c.Header("Cache-Control", "public, max-age=31536000")
 	} else {
-		// index.html：需要验证，但可以缓存
-		c.Header("Cache-Control", "no-cache, must-revalidate")
+		// index.html：不缓存
+		c.Header("Cache-Control", "no-cache")
 	}
 
 	// 设置 Content-Type
