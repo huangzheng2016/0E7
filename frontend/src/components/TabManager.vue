@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { Menu, Close } from '@element-plus/icons-vue'
 import ActionList from './ActionList.vue'
 import ExploitList from './ExploitList.vue'
 import PcapList from './PcapList.vue'
@@ -10,6 +11,31 @@ import FlagList from './FlagList.vue'
 import TerminalManagement from './TerminalManagement.vue'
 import ProxyCache from './ProxyCache.vue'
 import GitRepoList from './GitRepoList.vue'
+import { 
+  Clock, 
+  Document, 
+  Monitor, 
+  Flag, 
+  Connection, 
+  Files, 
+  Folder, 
+  Edit, 
+  View 
+} from '@element-plus/icons-vue'
+
+// 定义tab类型对应的图标映射
+const tabIcons: Record<string, any> = {
+  'action-list': Clock,
+  'exploit-list': Document,
+  'pcap-list': Monitor,
+  'flag-list': Flag,
+  'terminal-management': Connection,
+  'proxy-cache': Files,
+  'git-repo-list': Folder,
+  'action-edit': Edit,
+  'exploit-edit': Edit,
+  'pcap-detail': View
+}
 
 interface Tab {
   id: string
@@ -682,13 +708,12 @@ onUnmounted(() => {
     <div class="tab-sidebar" :class="{ collapsed: isCollapsed }">
       <div class="sidebar-header">
         <el-button
-          v-if="isMobile"
           @click="toggleCollapse"
           size="small"
           type="text"
           class="collapse-btn"
         >
-          <el-icon><Menu /></el-icon>
+          <el-icon :size="18"><Menu /></el-icon>
         </el-button>
         <div v-if="!isCollapsed" class="header-content">
           <h1 class="sidebar-title">0E7工具箱</h1>
@@ -704,6 +729,24 @@ onUnmounted(() => {
         </div>
       </div>
       
+      <!-- 折叠状态下的图标列表 -->
+      <div v-if="isCollapsed" class="tab-icon-list">
+        <div
+          v-for="tab in tabs"
+          :key="tab.id"
+          :class="['tab-icon-item', { 
+            active: activeTabId === tab.id
+          }]"
+          :data-title="tab.title"
+          @click="switchTab(tab.id)"
+        >
+          <el-icon class="tab-icon" :size="20">
+            <component :is="tabIcons[tab.type] || Document" />
+          </el-icon>
+        </div>
+      </div>
+      
+      <!-- 展开状态下的tab列表 -->
       <div v-if="!isCollapsed" class="tab-list">
         <div
           v-for="tab in tabs"
@@ -715,6 +758,9 @@ onUnmounted(() => {
           :data-title="tab.title"
           @click="switchTab(tab.id)"
         >
+          <el-icon class="tab-type-icon">
+            <component :is="tabIcons[tab.type] || Document" />
+          </el-icon>
           <span class="tab-title">{{ tab.title }}</span>
           <el-icon
             v-if="tab.closable"
@@ -842,6 +888,12 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   background: #f5f7fa;
+  min-height: 48px;
+}
+
+.tab-sidebar.collapsed .sidebar-header {
+  padding: 8px;
+  justify-content: center;
 }
 
 .header-content {
@@ -869,6 +921,51 @@ onUnmounted(() => {
 
 .collapse-btn {
   padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-icon-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 8px 0;
+  gap: 4px;
+}
+
+.tab-icon-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 4px;
+  margin: 2px 8px;
+  position: relative;
+}
+
+.tab-icon-item:hover {
+  background: #ecf5ff;
+}
+
+.tab-icon-item.active {
+  background: #409eff;
+  color: #fff;
+}
+
+.tab-icon-item.active:hover {
+  background: #66b1ff;
+}
+
+.tab-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-list {
@@ -890,6 +987,17 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   box-sizing: border-box;
+  gap: 8px;
+}
+
+.tab-type-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-item:not(.closable) {
@@ -983,20 +1091,24 @@ onUnmounted(() => {
 
 
 /* 滚动条样式 */
-.tab-list::-webkit-scrollbar {
+.tab-list::-webkit-scrollbar,
+.tab-icon-list::-webkit-scrollbar {
   width: 4px;
 }
 
-.tab-list::-webkit-scrollbar-track {
+.tab-list::-webkit-scrollbar-track,
+.tab-icon-list::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
-.tab-list::-webkit-scrollbar-thumb {
+.tab-list::-webkit-scrollbar-thumb,
+.tab-icon-list::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 2px;
 }
 
-.tab-list::-webkit-scrollbar-thumb:hover {
+.tab-list::-webkit-scrollbar-thumb:hover,
+.tab-icon-list::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
 
@@ -1034,5 +1146,23 @@ onUnmounted(() => {
   .tab-sidebar.collapsed {
     width: 50px !important;
   }
+}
+
+/* 折叠状态下图标列表的提示框 */
+.tab-icon-item:hover::after {
+  content: attr(data-title);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
 }
 </style>
