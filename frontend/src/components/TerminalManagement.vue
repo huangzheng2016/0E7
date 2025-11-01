@@ -16,7 +16,7 @@
 
     <!-- 客户端列表 -->
     <div class="clients-container">
-      <el-card v-for="client in clients" :key="client.id" class="client-card" shadow="hover">
+      <el-card v-for="client in sortedClients" :key="client.id" class="client-card" shadow="hover">
         <template #header>
           <div class="client-header">
             <div class="client-info">
@@ -107,7 +107,7 @@
         <el-form-item label="选择客户端" prop="clientId">
           <el-select v-model="trafficForm.clientId" placeholder="请选择客户端" style="width: 100%">
             <el-option
-              v-for="client in clients"
+              v-for="client in sortedClients"
               :key="client.id"
               :label="`${client.hostname || client.name} (ID: ${client.id})`"
               :value="client.id"
@@ -118,7 +118,7 @@
         <el-form-item label="选择网卡" prop="interfaceName">
           <el-select v-model="trafficForm.interfaceName" placeholder="请选择网卡" style="width: 100%">
             <el-option label="全部网卡" value="" />
-            <template v-for="client in clients" :key="client.id">
+            <template v-for="client in sortedClients" :key="client.id">
               <el-option
                 v-if="client.id === trafficForm.clientId"
                 v-for="iface in client.interfaces"
@@ -238,6 +238,11 @@ const trafficRules = {
 }
 
 const trafficFormRef = ref()
+
+// 按ID排序的客户端列表
+const sortedClients = computed(() => {
+  return [...clients.value].sort((a, b) => a.id - b.id)
+})
 
 // 获取平台类型标签
 const getPlatformType = (platform: string) => {
