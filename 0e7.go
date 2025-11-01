@@ -14,7 +14,10 @@ import (
 	"0E7/service/update"
 	"0E7/service/webui"
 	"0E7/service/windows"
+	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -25,6 +28,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -245,6 +249,7 @@ func main() {
 			)
 		}))
 		r_server.Use(gin.Recovery())
+		r_server.Use(etagMiddleware()) // ETag 中间件（在 gzip 之前）
 		r_server.Use(gzip.Gzip(gzip.DefaultCompression))
 
 		log.Printf("Server listening on port: %s", config.Server_port)
@@ -264,15 +269,16 @@ func main() {
 
 		fp, _ := fs.Sub(f, "dist")
 		fpStatic, _ := fs.Sub(f, "dist/static")
-		r_server.StaticFS("/static", http.FS(fpStatic))
-		// 根路径返回 index.html
+
+		// 静态资源处理器，带缓存头
+		r_server.GET("/static/*filepath", func(c *gin.Context) {
+			path := strings.TrimPrefix(c.Param("filepath"), "/")
+			serveStaticFile(c, fpStatic, path, true)
+		})
+
+		// 根路径返回 index.html，带缓存头
 		r_server.GET("/", func(c *gin.Context) {
-			b, err := fs.ReadFile(fp, "index.html")
-			if err != nil {
-				c.String(http.StatusNotFound, "index not found")
-				return
-			}
-			c.Data(http.StatusOK, "text/html; charset=utf-8", b)
+			serveStaticFile(c, fp, "index.html", false)
 		})
 
 		if config.Server_tls {
@@ -419,6 +425,133 @@ search_elasticsearch_password =
 	}
 
 	return nil
+}
+
+// responseWriter 包装 gin.ResponseWriter 以捕获响应体
+type responseWriter struct {
+	gin.ResponseWriter
+	body *bytes.Buffer
+}
+
+func (w *responseWriter) Write(b []byte) (int, error) {
+	w.body.Write(b)
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *responseWriter) WriteString(s string) (int, error) {
+	w.body.WriteString(s)
+	return w.ResponseWriter.WriteString(s)
+}
+
+// etagMiddleware 为 API 响应添加 ETag 支持
+func etagMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 跳过静态文件和 index.html（它们已有专门的处理器）
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/static/") || path == "/" {
+			c.Next()
+			return
+		}
+
+		// 包装响应写入器以捕获响应体
+		writer := &responseWriter{
+			ResponseWriter: c.Writer,
+			body:           &bytes.Buffer{},
+		}
+		c.Writer = writer
+
+		// 继续处理请求
+		c.Next()
+
+		// 只对成功的响应添加 ETag（2xx 状态码）
+		if c.Writer.Status() >= 200 && c.Writer.Status() < 300 {
+			// 生成 ETag（基于响应体）
+			if writer.body.Len() > 0 {
+				hash := sha256.Sum256(writer.body.Bytes())
+				hashStr := hex.EncodeToString(hash[:])
+				etag := fmt.Sprintf(`"%s"`, hashStr)
+
+				// 检查 If-None-Match 请求头（条件请求）
+				if match := c.GetHeader("If-None-Match"); match != "" {
+					matchCleaned := strings.ReplaceAll(strings.ReplaceAll(match, `"`, ""), " ", "")
+					if strings.Contains(matchCleaned, hashStr) {
+						c.Writer.WriteHeader(http.StatusNotModified)
+						writer.body.Reset() // 清空响应体
+						c.Writer = writer.ResponseWriter
+						return
+					}
+				}
+
+				// 设置 ETag 响应头
+				c.Header("ETag", etag)
+				
+				// 根据请求方法设置不同的缓存策略
+				if c.Request.Method == "GET" || c.Request.Method == "HEAD" {
+					// GET/HEAD 请求：可以缓存但需要重新验证
+					c.Header("Cache-Control", "no-cache, must-revalidate")
+				} else {
+					// POST 等其他请求：不缓存（因为可能有副作用）
+					c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+				}
+			}
+		}
+
+		// 恢复原始写入器
+		c.Writer = writer.ResponseWriter
+	}
+}
+
+// serveStaticFile 提供静态文件服务，支持 ETag 和缓存头
+func serveStaticFile(c *gin.Context, fileSystem fs.FS, path string, isStaticResource bool) {
+	// 读取文件
+	data, err := fs.ReadFile(fileSystem, path)
+	if err != nil {
+		c.String(http.StatusNotFound, "file not found")
+		return
+	}
+
+	// 生成 ETag（基于文件内容的 SHA256 hash）
+	hash := sha256.Sum256(data)
+	hashStr := hex.EncodeToString(hash[:])
+	etag := fmt.Sprintf(`"%s"`, hashStr)
+
+	// 检查 If-None-Match 请求头（条件请求）
+	if match := c.GetHeader("If-None-Match"); match != "" {
+		// 移除引号进行比较（If-None-Match 可能包含多个值，用逗号分隔）
+		matchCleaned := strings.ReplaceAll(strings.ReplaceAll(match, `"`, ""), " ", "")
+		if strings.Contains(matchCleaned, hashStr) {
+			c.Status(http.StatusNotModified)
+			return
+		}
+	}
+
+	// 设置 ETag 响应头
+	c.Header("ETag", etag)
+
+	// 设置缓存策略
+	if isStaticResource {
+		// 静态资源（JS/CSS等，文件名包含 hash）：长期缓存，immutable
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		// index.html：需要验证，但可以缓存
+		c.Header("Cache-Control", "no-cache, must-revalidate")
+	}
+
+	// 设置 Content-Type
+	contentType := http.DetectContentType(data)
+	if path == "index.html" || strings.HasSuffix(path, ".html") {
+		contentType = "text/html; charset=utf-8"
+	} else if strings.HasSuffix(path, ".js") {
+		contentType = "application/javascript; charset=utf-8"
+	} else if strings.HasSuffix(path, ".css") {
+		contentType = "text/css; charset=utf-8"
+	} else if strings.HasSuffix(path, ".json") {
+		contentType = "application/json; charset=utf-8"
+	} else if strings.HasSuffix(path, ".ico") {
+		contentType = "image/x-icon"
+	}
+
+	c.Data(http.StatusOK, contentType, data)
 }
 
 // setupGracefulShutdown 设置优雅关闭处理
