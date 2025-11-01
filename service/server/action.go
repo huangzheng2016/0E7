@@ -67,7 +67,7 @@ func StartActionScheduler() {
 func checkAndQueueActions() {
 	var actions []database.Action
 	year2000 := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	err := config.Db.Where("is_deleted = ? AND ((interval >= 0 AND next_run <= ?) OR (interval < 0 AND next_run < ?))", false, time.Now(), year2000).Find(&actions).Error
+	err := config.Db.Where("is_deleted = ? AND ((interval >= 0 AND next_run <= ?) OR (interval < 0 AND next_run <= ?))", false, time.Now(), year2000).Find(&actions).Error
 	if err != nil {
 		log.Println("查询Action失败:", err)
 		return
@@ -145,7 +145,7 @@ func executeTask(actionRecord *database.Action) {
 			if actionRecord.Interval >= 0 {
 				actionRecord.NextRun = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
 			} else {
-				actionRecord.NextRun = time.Date(2037, 1, 1, 0, 0, 0, 0, time.UTC)
+				actionRecord.NextRun = time.Date(2035, 1, 1, 0, 0, 0, 0, time.UTC)
 			}
 		}
 	case <-taskCtx.Done():
