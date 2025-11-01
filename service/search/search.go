@@ -109,6 +109,11 @@ var (
 
 // GetSearchService 获取搜索服务单例
 func GetSearchService() *SearchService {
+	// 如果是客户端模式，不加载搜索服务
+	if !config.Server_mode && config.Client_mode {
+		return nil
+	}
+
 	once.Do(func() {
 		// 根据配置文件选择搜索引擎
 		var engine SearchEngine
@@ -131,6 +136,11 @@ func GetSearchService() *SearchService {
 
 // GetSearchServiceWithEngine 获取指定搜索引擎的服务
 func GetSearchServiceWithEngine(engine SearchEngine) *SearchService {
+	// 如果是客户端模式，不加载搜索服务
+	if !config.Server_mode && config.Client_mode {
+		return nil
+	}
+
 	once.Do(func() {
 		searchService = &SearchService{
 			engine: engine,
