@@ -1381,6 +1381,19 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+/* 响应式样式：小屏幕时按钮只显示图标 */
+@media (max-width: 768px) {
+  .download-buttons .el-button,
+  .flow-actions .el-button {
+    min-width: auto !important;
+    padding: 8px !important;
+  }
+  .download-buttons .el-button > .el-icon ~ *,
+  .flow-actions .el-button > .el-icon ~ * {
+    display: none !important;
+  }
+}
+
 .info-section {
   margin-bottom: 20px;
   flex-shrink: 0;

@@ -383,6 +383,21 @@ const copyCurlCommand = () => {
   line-height: 1.5;
 }
 
+/* 响应式样式：小屏幕时按钮只显示图标 */
+@media (max-width: 768px) {
+  .toolbar .el-button,
+  .toolbar-left .el-button,
+  .toolbar-right .el-button {
+    min-width: auto !important;
+    padding: 8px !important;
+  }
+  .toolbar .el-button > .el-icon ~ *,
+  .toolbar-left .el-button > .el-icon ~ *,
+  .toolbar-right .el-button > .el-icon ~ * {
+    display: none !important;
+  }
+}
+
 .dialog-footer {
   display: flex;
   justify-content: flex-end;

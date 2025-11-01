@@ -518,6 +518,19 @@ git push -u origin main` }}</code></pre>
   flex-wrap: wrap;
 }
 
+/* 响应式样式：小屏幕时按钮只显示图标 */
+@media (max-width: 768px) {
+  .action-buttons .el-button,
+  .header-actions .el-button {
+    min-width: auto !important;
+    padding: 8px !important;
+  }
+  .action-buttons .el-button > .el-icon ~ *,
+  .header-actions .el-button > .el-icon ~ * {
+    display: none !important;
+  }
+}
+
 .empty-state {
   text-align: center;
   padding: 60px 20px;

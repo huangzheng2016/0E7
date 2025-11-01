@@ -554,6 +554,26 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 1200px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-section {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .action-section {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 .action-section {
@@ -590,6 +610,19 @@ onMounted(() => {
 .action-buttons .el-button {
   flex: 0 0 auto;
   min-width: 70px;
+}
+
+/* 响应式样式：小屏幕时按钮只显示图标 */
+@media (max-width: 768px) {
+  .action-buttons .el-button,
+  .action-section .el-button {
+    min-width: auto !important;
+    padding: 8px !important;
+  }
+  .action-buttons .el-button > .el-icon ~ *,
+  .action-section .el-button > .el-icon ~ * {
+    display: none !important;
+  }
 }
 
 :deep(.el-table) {

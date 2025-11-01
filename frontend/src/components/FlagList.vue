@@ -436,10 +436,10 @@ onUnmounted(() => {
                 @keyup.enter="handleSearch"
               />
             </el-form-item>
-            <el-form-item label="Team">
+            <el-form-item label="队伍">
               <el-input
                 v-model="searchForm.team"
-                placeholder="请输入team"
+                placeholder="请输入队伍"
                 clearable
                 style="width: 200px"
                 @keyup.enter="handleSearch"
@@ -460,10 +460,10 @@ onUnmounted(() => {
                 />
               </el-select>
             </el-form-item>
-            <el-form-item label="Exploit ID">
+            <el-form-item label="脚本ID">
               <el-input
                 v-model="searchForm.exploit_id"
-                placeholder="请输入exploit ID"
+                placeholder="请输入脚本ID"
                 clearable
                 style="width: 150px"
                 @keyup.enter="handleSearch"
@@ -523,7 +523,7 @@ onUnmounted(() => {
               <el-text class="flag-text" type="primary">{{ row.flag }}</el-text>
             </template>
           </el-table-column>
-          <el-table-column prop="team" label="Team" width="120" />
+          <el-table-column prop="team" label="队伍" width="120" />
           <el-table-column prop="status" label="状态" width="100">
             <template #default="{ row }">
               <el-tag :type="getStatusTagType(row.status)">
@@ -537,7 +537,7 @@ onUnmounted(() => {
               <el-text v-else type="info">-</el-text>
             </template>
           </el-table-column>
-          <el-table-column prop="exploit_id" label="Exploit ID" width="100" />
+          <el-table-column prop="exploit_id" label="脚本ID" width="100" />
           <el-table-column prop="exploit_name" label="Exploit名称" width="150">
             <template #default="{ row }">
               <el-link 
@@ -615,10 +615,10 @@ onUnmounted(() => {
             </el-text>
           </div>
         </el-form-item>
-        <el-form-item label="Team">
+        <el-form-item label="队伍">
           <el-input
             v-model="submitDialog.team"
-            placeholder="请输入team（可选）"
+            placeholder="请输入队伍（可选）"
           />
         </el-form-item>
         <el-form-item label="Flag正则">
@@ -791,6 +791,19 @@ onUnmounted(() => {
   
   .action-right {
     justify-content: center;
+  }
+}
+
+/* 响应式样式：小屏幕时按钮只显示图标 */
+@media (max-width: 768px) {
+  .toolbar .el-button,
+  .action-buttons .el-button {
+    min-width: auto !important;
+    padding: 8px !important;
+  }
+  .toolbar .el-button > .el-icon ~ *,
+  .action-buttons .el-button > .el-icon ~ * {
+    display: none !important;
   }
 }
 </style>
