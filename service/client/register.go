@@ -22,14 +22,15 @@ type Tmonitor struct {
 var monitor_list sync.Map
 
 func Register() {
-	// 初始化 worker 信号量，限制并发 worker 数量
 	workerSemaphore = semaphore.NewWeighted(int64(config.Client_worker))
 
 	go heartbeat()
-
-	// 如果不仅仅是监控模式，启动 exploit 循环
 	if !config.Client_only_monitor {
 		go exploitLoop()
+	}
+
+	if config.Client_monitor {
+		go monitorLoop()
 	}
 }
 
@@ -64,5 +65,22 @@ func exploitLoop() {
 			defer workerSemaphore.Release(1)
 			exploit()
 		}()
+	}
+}
+
+func monitorLoop() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("Monitor Loop Error:", err)
+			go monitorLoop()
+		}
+	}()
+
+	interval := 5 * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		monitor()
 	}
 }

@@ -93,6 +93,12 @@ func monitor() {
 }
 
 func monitor_run(id int) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("Monitor run error (ID: %d): %v", id, err)
+		}
+	}()
+
 	value, exists := monitor_list.Load(id)
 	if !exists {
 		return

@@ -115,6 +115,9 @@ func git_repo_update_description(c *gin.Context) {
 		return
 	}
 
+	// 如果以 .git 结尾，去除后缀
+	repoName = strings.TrimSuffix(repoName, ".git")
+
 	// 验证仓库名称（使用统一的验证函数）
 	if !git.ValidateRepoName(repoName) {
 		c.JSON(400, gin.H{
@@ -163,6 +166,9 @@ func git_repo_delete(c *gin.Context) {
 		})
 		return
 	}
+
+	// 如果以 .git 结尾，去除后缀
+	repoName = strings.TrimSuffix(repoName, ".git")
 
 	// 验证仓库名称（使用统一的验证函数）
 	if !git.ValidateRepoName(repoName) {

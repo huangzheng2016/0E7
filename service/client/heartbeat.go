@@ -24,7 +24,12 @@ func heartbeat() {
 			go heartbeat()
 		}
 	}()
-	for {
+
+	interval := 5 * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for range ticker.C {
 		cpuInfo, err := cpu.Info()
 		if err != nil {
 			log.Println("Failed to get cpuInfo:", err)
@@ -68,6 +73,7 @@ func heartbeat() {
 		request, err := http.NewRequest("POST", config.Server_url+"/api/heartbeat", requestBody)
 		if err != nil {
 			log.Println(err)
+			continue
 		}
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		response, err := client.Do(request)
@@ -111,8 +117,6 @@ func heartbeat() {
 				log.Println("Try to update")
 				go update.Replace()
 			}
-			go monitor()
 		}
-		time.Sleep(time.Second * 5)
 	}
 }

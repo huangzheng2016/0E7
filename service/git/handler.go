@@ -166,9 +166,17 @@ func validateHash(hash string, expectedLen int) bool {
 	return true
 }
 
+// normalizeRepoName 规范化仓库名称，如果以 .git 结尾则去除
+func normalizeRepoName(repoName string) string {
+	if strings.HasSuffix(repoName, ".git") {
+		return strings.TrimSuffix(repoName, ".git")
+	}
+	return repoName
+}
+
 // handleInfoRefs 处理 info/refs 请求
 func handleInfoRefs(c *gin.Context) {
-	repoName := c.Param("repo")
+	repoName := normalizeRepoName(c.Param("repo"))
 	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
@@ -236,7 +244,7 @@ func handleInfoRefs(c *gin.Context) {
 
 // handleUploadPack 处理 git-upload-pack 请求（用于 clone/fetch）
 func handleUploadPack(c *gin.Context) {
-	repoName := c.Param("repo")
+	repoName := normalizeRepoName(c.Param("repo"))
 	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
@@ -310,7 +318,7 @@ func handleUploadPack(c *gin.Context) {
 
 // handleReceivePack 处理 git-receive-pack 请求（用于 push）
 func handleReceivePack(c *gin.Context) {
-	repoName := c.Param("repo")
+	repoName := normalizeRepoName(c.Param("repo"))
 	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
@@ -394,7 +402,7 @@ func handleReceivePack(c *gin.Context) {
 
 // handleInfoRefsOld 处理旧版协议（可选）
 func handleInfoRefsOld(c *gin.Context) {
-	repoName := c.Param("repo")
+	repoName := normalizeRepoName(c.Param("repo"))
 	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
@@ -436,7 +444,7 @@ func handleInfoRefsOld(c *gin.Context) {
 
 // handleHead 处理 HEAD 请求（返回默认分支）
 func handleHead(c *gin.Context) {
-	repoName := c.Param("repo")
+	repoName := normalizeRepoName(c.Param("repo"))
 	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
@@ -456,7 +464,7 @@ func handleHead(c *gin.Context) {
 
 // handleObjects 处理 objects 请求（用于旧版协议）
 func handleObjects(c *gin.Context) {
-	repoName := c.Param("repo")
+	repoName := normalizeRepoName(c.Param("repo"))
 	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
