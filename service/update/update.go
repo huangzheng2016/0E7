@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"syscall"
 	"time"
 )
 
@@ -173,10 +172,7 @@ func CheckStatus() {
 			// Unix-like: 直接执行程序并设置后台运行
 			cmd = exec.Command(absTargetPath)
 			// 设置进程组，使新进程独立于当前进程组
-			cmd.SysProcAttr = &syscall.SysProcAttr{
-				Setpgid: true,
-				Pgid:    0,
-			}
+			setUnixProcAttr(cmd)
 		}
 
 		cmd.Dir = wdPath
