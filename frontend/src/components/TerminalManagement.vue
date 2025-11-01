@@ -1,7 +1,6 @@
 <template>
   <div class="terminal-management">
     <div class="header">
-      <h2>终端管理</h2>
       <div class="header-actions">
         <el-button type="primary" @click="refreshClients" :loading="loading">
           <el-icon><Refresh /></el-icon>
@@ -435,24 +434,23 @@ onMounted(() => {
 
 <style scoped>
 .terminal-management {
-  padding: 16px;
+  padding: 20px;
   height: 100%;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e6e8eb;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   margin-bottom: 16px;
   flex-shrink: 0;
-}
-
-.header h2 {
-  margin: 0;
-  color: #303133;
 }
 
 .header-actions {
@@ -671,7 +669,7 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .terminal-management {
-    padding: 12px;
+    padding: 16px;
   }
   
   .clients-container {

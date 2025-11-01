@@ -559,6 +559,14 @@ onMounted(() => {
   min-width: 0;
 }
 
+.search-section .el-input {
+  margin: 0;
+}
+
+.search-section .el-button {
+  margin: 0;
+}
+
 @media (max-width: 1200px) {
   .toolbar {
     flex-direction: column;

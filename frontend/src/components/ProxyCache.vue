@@ -320,6 +320,11 @@ const copyCurlCommand = () => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  padding: 20px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e6e8eb;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 .toolbar {
   display: flex;

@@ -230,15 +230,7 @@ onMounted(() => {
 <template>
   <div class="git-repo-list">
     <div class="header">
-      <h2>Git 仓库管理</h2>
       <div class="header-actions">
-        <el-button 
-          type="success"
-          @click="showNewRepoDialog = true"
-        >
-          <el-icon><Plus /></el-icon>
-          新建仓库
-        </el-button>
         <el-button 
           type="primary" 
           @click="loadRepos"
@@ -247,11 +239,18 @@ onMounted(() => {
           <el-icon v-if="!loading"><Refresh /></el-icon>
           {{ loading ? '加载中...' : '刷新' }}
         </el-button>
+        <el-button 
+          type="success"
+          @click="showNewRepoDialog = true"
+        >
+          <el-icon><Plus /></el-icon>
+          新建仓库
+        </el-button>
       </div>
     </div>
 
     <div class="repo-table-container" v-loading="loading">
-      <el-table :data="sortedRepos" stripe style="width: 100%">
+      <el-table :data="sortedRepos" stripe style="width: 100%" height="calc(100vh - 300px)">
         <el-table-column prop="name" label="仓库名称" width="200">
           <template #default="{ row }">
             <strong>{{ row.name }}</strong>
@@ -413,11 +412,15 @@ git push -u origin main` }}</code></pre>
   background: #fff;
   border-radius: 4px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   margin-bottom: 20px;
 }
@@ -428,14 +431,12 @@ git push -u origin main` }}</code></pre>
   align-items: center;
 }
 
-.header h2 {
-  margin: 0;
-  font-size: 20px;
-  color: #303133;
-}
-
 .repo-table-container {
-  min-height: 200px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .url-cell {
