@@ -62,6 +62,7 @@ const store = createStore({
                 exploit_id: item.exploit_id,
                 client_id: item.client_id,
                 client_name: item.client_name,
+                team: item.team,
                 status: item.status,
                 output: item.output,
                 update_time: item.update_time
