@@ -4,7 +4,6 @@ import (
 	"0E7/service/config"
 	"0E7/service/update"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -23,15 +22,6 @@ func heartbeat() {
 		if err := recover(); err != nil {
 			log.Println("Heartbeat Error:", err)
 			go heartbeat()
-		}
-	}()
-	go func() {
-		for range jobsChan {
-			go func() {
-				workerSemaphore.Acquire(context.Background(), 1)
-				defer workerSemaphore.Release(1)
-				exploit()
-			}()
 		}
 	}()
 	for {
@@ -120,13 +110,6 @@ func heartbeat() {
 			if !found && config.Client_update {
 				log.Println("Try to update")
 				go update.Replace()
-			} else if !config.Client_only_monitor {
-				// 获取 worker 资源并启动 exploit
-				go func() {
-					workerSemaphore.Acquire(context.Background(), 1)
-					defer workerSemaphore.Release(1)
-					exploit()
-				}()
 			}
 			go monitor()
 		}

@@ -41,6 +41,7 @@ var (
 	Client_worker                 int
 	Client_monitor                bool
 	Client_only_monitor           bool
+	Client_exploit_interval       int
 	Search_engine                 string
 	Search_elasticsearch_url      string
 	Search_elasticsearch_username string
@@ -221,6 +222,11 @@ func Init_conf(configFile string) error {
 		Client_only_monitor, err = section.Key("only_monitor").Bool()
 		if err != nil {
 			Client_only_monitor = false
+		}
+
+		Client_exploit_interval, err = section.Key("exploit_interval").Int()
+		if err != nil || Client_exploit_interval <= 0 {
+			Client_exploit_interval = 1 // 默认 1 秒
 		}
 
 		// Client-side proxy (only when server_mode=false)

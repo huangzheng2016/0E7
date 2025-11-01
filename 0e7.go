@@ -389,7 +389,7 @@ server_url = http://remotehost:6102
 pypi       = https://pypi.tuna.tsinghua.edu.cn/simple
 update     = false
 worker     = 20
-monitor    = false
+monitor    = true
 only_monitor = false
 pcap_workers = 0
 

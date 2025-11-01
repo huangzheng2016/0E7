@@ -55,7 +55,7 @@ func StartActionScheduler() {
 	go taskExecutor()
 
 	// 启动定时器，每5秒查询一次数据库
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
