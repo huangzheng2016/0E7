@@ -434,14 +434,19 @@ onMounted(() => {
 
 <style scoped>
 .terminal-management {
-  padding: 20px;
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .header h2 {
@@ -456,12 +461,18 @@ onMounted(() => {
 
 .clients-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 16px;
+  flex: 1;
+  align-content: start;
+  overflow-y: auto;
 }
 
 .client-card {
   margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  height: fit-content;
 }
 
 .client-header {
@@ -507,11 +518,24 @@ onMounted(() => {
 
 .client-content {
   margin-top: 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .interfaces-section,
 .monitors-section {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.interfaces-section:last-child,
+.monitors-section:last-child {
+  margin-bottom: 0;
 }
 
 .interfaces-section h4,
@@ -524,8 +548,9 @@ onMounted(() => {
 
 .interfaces-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  flex: 1;
 }
 
 .interface-item {
@@ -627,9 +652,30 @@ onMounted(() => {
 }
 
 /* 响应式设计 */
+@media (max-width: 1400px) {
+  .clients-container {
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .clients-container {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+  
+  .interfaces-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
+  .terminal-management {
+    padding: 12px;
+  }
+  
   .clients-container {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
   
   .client-header {
