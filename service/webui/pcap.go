@@ -218,7 +218,7 @@ func savefile(file *multipart.FileHeader, c *gin.Context) error {
 
 	// 文件上传完成且MD5检查通过后，加入全局处理队列（跳过MD5检查，因为已经检查过了）
 	log.Printf("文件上传完成，MD5: %s，将加入处理队列: %s", fileMD5, filePath)
-	pcap.QueuePcapFileSkipCheck(filePath)
+	pcap.QueuePcapFile(filePath, false)
 
 	return nil
 }

@@ -588,10 +588,6 @@ func reassemblyCallback(entry FlowEntry) {
 		// 不退出程序，继续处理其他记录
 		return
 	}
-
-	// 不立即建立搜索索引，等待 PENDING 状态处理完成后再索引
-	// 搜索索引将在 flag 检测器处理 PENDING 状态时异步建立
-
 }
 
 func Setbpf(str string) {
@@ -654,44 +650,12 @@ func InitPcapQueue() {
 	log.Printf("文件处理队列已启动，%d 个 worker", pcapWorkers)
 }
 
-// QueuePcapFile 将 pcap 文件加入处理队列（会进行MD5检查）
-func QueuePcapFile(filePath string) {
-	queueMutex.RLock()
-	defer queueMutex.RUnlock()
-
-	if !queueStarted {
-		// 如果队列未启动，直接处理文件
-		go handlePcapUri(filePath, bpf, true)
-		return
-	}
-
-	// 使用阻塞式发送，确保文件不会被丢弃
-	// 如果队列满了，这里会阻塞等待直到有空间
+// QueuePcapFile 将 pcap 文件加入处理队列
+func QueuePcapFile(filePath string, check bool) {
 	pcapFileChan <- pcapFileTask{filePath: filePath, checkMD5: true}
 	log.Printf("已排队处理文件: %s", filePath)
 }
 
-// QueuePcapFileSkipCheck 将 pcap 文件加入处理队列（跳过MD5检查）
-// 用于文件已经通过MD5检查并保存到数据库后的情况
-func QueuePcapFileSkipCheck(filePath string) {
-	queueMutex.RLock()
-	defer queueMutex.RUnlock()
-
-	if !queueStarted {
-		// 如果队列未启动，直接处理文件
-		go handlePcapUri(filePath, bpf, false)
-		return
-	}
-
-	// 使用阻塞式发送，确保文件不会被丢弃
-	pcapFileChan <- pcapFileTask{filePath: filePath, checkMD5: false}
-	log.Printf("已排队处理文件（跳过MD5检查）: %s", filePath)
-}
-
-func ParsePcapfile(fname string, check bool) {
-	// 使用队列处理文件
-	QueuePcapFile(fname)
-}
 func WatchDir(watch_dir string) {
 	// 确保flow目录存在
 	flowDir := "flow/"
@@ -730,9 +694,6 @@ func WatchDir(watch_dir string) {
 
 	log.Println("Monitoring dir: ", watch_dir)
 
-	// 确保队列已初始化
-	InitPcapQueue()
-
 	// 处理现有文件
 	files, err := ioutil.ReadDir(watch_dir)
 	if err != nil {
@@ -743,7 +704,7 @@ func WatchDir(watch_dir string) {
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".pcap") || strings.HasSuffix(file.Name(), ".pcapng") {
 			filePath := filepath.Join(watch_dir, file.Name())
-			QueuePcapFile(filePath)
+			QueuePcapFile(filePath, true)
 		}
 	}
 
@@ -771,7 +732,7 @@ func WatchDir(watch_dir string) {
 						time.Sleep(1 * time.Second)
 
 						// 将新文件发送到全局处理队列
-						QueuePcapFile(event.Name)
+						QueuePcapFile(event.Name, true)
 					}
 				}
 			case err, ok := <-watcher.Errors:
@@ -941,11 +902,8 @@ func handlePcapUri(fname string, bpf string, check bool) {
 
 		// 在Windows下，如果pcap库不可用，尝试使用备用方法
 		if runtime.GOOS == "windows" {
-			log.Println("尝试使用备用pcap解析方法...")
 			if err := handlePcapFileFallback(fname, bpf, check); err != nil {
-				log.Printf("备用pcap解析也失败: %v", err)
-			} else {
-				log.Println("成功 使用备用方法成功解析pcap文件")
+				log.Printf("备用pcap解析失败: %v", err)
 			}
 		}
 		return
@@ -1138,6 +1096,10 @@ func processPcapHandle(handle *pcap.Handle, fname string, check bool) {
 
 // handlePcapFileFallback 备用pcap文件处理方法（当pcap库不可用时使用）
 func handlePcapFileFallback(fname string, bpf string, check bool) error {
+	if check && !checkfile(fname, false) {
+		return nil
+	}
+
 	log.Printf("使用备用方法处理pcap文件: %s", fname)
 
 	// 检查文件是否存在
@@ -1162,7 +1124,7 @@ func handlePcapFileFallback(fname string, bpf string, check bool) error {
 		Filename:   fname,
 		Time:       int(time.Now().Unix()),
 		NumPackets: 0,
-		Tags:       "fallback_parsed",
+		Tags:       "fallback",
 	}
 
 	packetCount := 0
