@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { ElNotification, ElMessageBox, ElInput, ElAlert } from 'element-plus'
-import { Refresh, DocumentCopy, Plus } from '@element-plus/icons-vue'
+import { Refresh, DocumentCopy, Plus, Edit, Delete } from '@element-plus/icons-vue'
 
 interface GitRepo {
   name: string
@@ -292,6 +292,7 @@ onMounted(() => {
                 size="small"
                 @click="startEditDescription(row)"
               >
+                <el-icon><Edit /></el-icon>
                 修改描述
               </el-button>
               <el-button
@@ -299,6 +300,7 @@ onMounted(() => {
                 size="small"
                 @click="deleteRepo(row)"
               >
+                <el-icon><Delete /></el-icon>
                 删除
               </el-button>
             </div>
