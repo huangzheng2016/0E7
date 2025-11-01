@@ -257,7 +257,7 @@ const getPlatformType = (platform: string) => {
 const refreshClients = async () => {
   loading.value = true
   try {
-    const response = await fetch('/api/clients', {
+    const response = await fetch('/webui/clients', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -289,7 +289,7 @@ const loadClientMonitors = async (clientId: number) => {
     const formData = new FormData()
     formData.append('client_id', clientId.toString())
     
-    const response = await fetch('/api/client_monitors', {
+    const response = await fetch('/webui/client_monitors', {
       method: 'POST',
       body: formData
     })
@@ -350,7 +350,7 @@ const deleteMonitor = async (monitorId: number) => {
     const formData = new FormData()
     formData.append('monitor_id', monitorId.toString())
 
-    const response = await fetch('/api/delete_monitor', {
+    const response = await fetch('/webui/delete_monitor', {
       method: 'POST',
       body: formData
     })
@@ -387,7 +387,7 @@ const submitTrafficCollection = async () => {
     formData.append('interval', trafficForm.interval.toString())
     formData.append('description', trafficForm.description)
 
-    const response = await fetch('/api/traffic_collection', {
+    const response = await fetch('/webui/traffic_collection', {
       method: 'POST',
       body: formData
     })

@@ -262,6 +262,7 @@ func main() {
 		update.Register(r_server)
 		server.Register(r_server)
 		git.Register(r_server)
+		proxy.RegisterRoutes(r_server)
 
 		// 启动flag检测器
 		_ = flagService.GetFlagDetector()

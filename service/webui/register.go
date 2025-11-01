@@ -49,4 +49,10 @@ func Register(router *gin.Engine) {
 	router.POST("/webui/git_repo_list", git_repo_list)
 	router.POST("/webui/git_repo_update_description", git_repo_update_description)
 	router.POST("/webui/git_repo_delete", git_repo_delete)
+
+	// 终端管理相关API
+	router.POST("/webui/clients", getClients)
+	router.POST("/webui/traffic_collection", createTrafficCollection)
+	router.POST("/webui/client_monitors", getClientMonitors)
+	router.POST("/webui/delete_monitor", deleteMonitor)
 }
