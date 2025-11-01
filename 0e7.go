@@ -249,7 +249,7 @@ func main() {
 			)
 		}))
 		r_server.Use(gin.Recovery())
-		r_server.Use(etagMiddleware()) // ETag 中间件（在 gzip 之前）
+		r_server.Use(etagMiddleware())
 		r_server.Use(gzip.Gzip(gzip.DefaultCompression))
 
 		log.Printf("Server listening on port: %s", config.Server_port)
@@ -431,17 +431,29 @@ search_elasticsearch_password =
 // responseWriter 包装 gin.ResponseWriter 以捕获响应体
 type responseWriter struct {
 	gin.ResponseWriter
-	body *bytes.Buffer
+	body    *bytes.Buffer
+	written bool
 }
 
 func (w *responseWriter) Write(b []byte) (int, error) {
-	w.body.Write(b)
+	if !w.written {
+		w.body.Write(b)
+		return len(b), nil // 先不写入，等待计算 ETag
+	}
 	return w.ResponseWriter.Write(b)
 }
 
 func (w *responseWriter) WriteString(s string) (int, error) {
-	w.body.WriteString(s)
+	if !w.written {
+		w.body.WriteString(s)
+		return len(s), nil // 先不写入，等待计算 ETag
+	}
 	return w.ResponseWriter.WriteString(s)
+}
+
+func (w *responseWriter) WriteHeader(code int) {
+	// 保存状态码，但不立即写入
+	w.ResponseWriter.WriteHeader(code)
 }
 
 // etagMiddleware 为 API 响应添加 ETag 支持
@@ -464,37 +476,49 @@ func etagMiddleware() gin.HandlerFunc {
 		// 继续处理请求
 		c.Next()
 
+		// 获取状态码
+		statusCode := writer.ResponseWriter.Status()
+		if statusCode == 0 {
+			// 如果没有设置状态码，默认使用 200
+			statusCode = 200
+		}
+
 		// 只对成功的响应添加 ETag（2xx 状态码）
-		if c.Writer.Status() >= 200 && c.Writer.Status() < 300 {
-			// 生成 ETag（基于响应体）
-			if writer.body.Len() > 0 {
-				hash := sha256.Sum256(writer.body.Bytes())
-				hashStr := hex.EncodeToString(hash[:])
-				etag := fmt.Sprintf(`"%s"`, hashStr)
+		if statusCode >= 200 && statusCode < 300 {
+			// 生成 ETag（基于响应体，即使是空响应也生成）
+			bodyBytes := writer.body.Bytes()
+			hash := sha256.Sum256(bodyBytes)
+			hashStr := hex.EncodeToString(hash[:16])
+			etag := fmt.Sprintf(`"%s"`, hashStr)
 
-				// 检查 If-None-Match 请求头（条件请求）
-				if match := c.GetHeader("If-None-Match"); match != "" {
-					matchCleaned := strings.ReplaceAll(strings.ReplaceAll(match, `"`, ""), " ", "")
-					if strings.Contains(matchCleaned, hashStr) {
-						c.Writer.WriteHeader(http.StatusNotModified)
-						writer.body.Reset() // 清空响应体
-						c.Writer = writer.ResponseWriter
-						return
-					}
-				}
-
-				// 设置 ETag 响应头
-				c.Header("ETag", etag)
-
-				// 根据请求方法设置不同的缓存策略
-				if c.Request.Method == "GET" || c.Request.Method == "HEAD" {
-					// GET/HEAD 请求：可以缓存但需要重新验证
-					c.Header("Cache-Control", "no-cache, must-revalidate")
-				} else {
-					// POST 等其他请求：不缓存（因为可能有副作用）
-					c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+			// 检查 If-None-Match 请求头（条件请求）
+			if match := c.GetHeader("If-None-Match"); match != "" {
+				matchCleaned := strings.ReplaceAll(strings.ReplaceAll(match, `"`, ""), " ", "")
+				if strings.Contains(matchCleaned, hashStr) {
+					// 匹配，返回 304 Not Modified
+					writer.ResponseWriter.Header().Set("ETag", etag)
+					writer.ResponseWriter.Header().Del("Content-Length") // 删除可能存在的 Content-Length
+					writer.ResponseWriter.WriteHeader(http.StatusNotModified)
+					return
 				}
 			}
+
+			// 设置 ETag 和缓存控制头
+			writer.ResponseWriter.Header().Set("ETag", etag)
+			// 删除可能已经设置的 Content-Length，让后续的 gzip 中间件根据压缩后的数据设置
+			writer.ResponseWriter.Header().Del("Content-Length")
+			if c.Request.Method == "GET" || c.Request.Method == "HEAD" {
+				writer.ResponseWriter.Header().Set("Cache-Control", "no-cache, must-revalidate")
+			} else {
+				writer.ResponseWriter.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+			}
+		}
+
+		// 写入响应体（原始未压缩内容）
+		// Content-Length 会在后续的 gzip 中间件中根据压缩后的数据自动设置
+		if writer.body.Len() > 0 {
+			writer.written = true
+			writer.ResponseWriter.Write(writer.body.Bytes())
 		}
 
 		// 恢复原始写入器
