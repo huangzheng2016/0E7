@@ -4,6 +4,7 @@ import (
 	"0E7/service/client"
 	"0E7/service/config"
 	flagService "0E7/service/flag"
+	"0E7/service/git"
 	"0E7/service/pcap"
 	"0E7/service/proxy"
 	"0E7/service/route"
@@ -248,10 +249,14 @@ func main() {
 
 		log.Printf("Server listening on port: %s", config.Server_port)
 
+		// 检查 Git 命令（Git 服务需要）
+		git.CheckAndWarnGit()
+
 		route.Register(r_server)
 		webui.Register(r_server)
 		update.Register(r_server)
 		server.Register(r_server)
+		git.Register(r_server)
 
 		// 启动flag检测器
 		_ = flagService.GetFlagDetector()

@@ -167,7 +167,8 @@ for i in range(1,10):
         "value": f"192.168.1.{i}"
     })
 print(json.dumps(team))`),
-				Interval: 60,
+				Interval: -1,
+				NextRun:  time.Date(1999, 1, 1, 0, 0, 0, 0, time.UTC),
 			},
 			{
 				ID:       3,
