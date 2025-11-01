@@ -532,14 +532,12 @@ git push -u origin main` }}</code></pre>
 
 /* 删除确认对话框样式 */
 :deep(.delete-repo-dialog) {
-  .el-message-box__message {
-    p {
-      margin: 0;
-    }
-    code {
-      font-family: 'Courier New', monospace;
-      font-size: 13px;
-    }
+  .el-message-box__message p {
+    margin: 0;
+  }
+  .el-message-box__message code {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
   }
   .el-message-box__input {
     .el-input__inner {
