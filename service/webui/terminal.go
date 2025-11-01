@@ -14,9 +14,9 @@ import (
 func getClients(c *gin.Context) {
 	var clients []database.Client
 
-	// 获取最近5分钟内有心跳的客户端
-	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
-	err := config.Db.Where("updated_at > ?", fiveMinutesAgo).Find(&clients).Error
+	// 获取最近1分钟内有心跳的客户端
+	oneMinuteAgo := time.Now().Add(-1 * time.Minute)
+	err := config.Db.Where("updated_at > ?", oneMinuteAgo).Find(&clients).Error
 	if err != nil {
 		c.JSON(500, gin.H{
 			"message": "fail",
