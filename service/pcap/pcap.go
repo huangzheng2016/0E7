@@ -48,12 +48,18 @@ var (
 	flushAfter   = ""
 
 	// 文件处理队列
-	pcapFileChan chan string
+	pcapFileChan chan pcapFileTask
 	pcapWg       sync.WaitGroup
 	pcapWorkers  int
 	queueMutex   sync.RWMutex
 	queueStarted bool
 )
+
+// pcapFileTask 文件处理任务
+type pcapFileTask struct {
+	filePath string
+	checkMD5 bool // 是否需要进行MD5检查
+}
 
 // calculateFileMD5 计算文件的MD5值
 func calculateFileMD5(filePath string) (string, error) {
@@ -617,7 +623,7 @@ func InitPcapQueue() {
 	}
 
 	// 创建文件处理通道
-	pcapFileChan = make(chan string, 8192) // 缓冲区大小为8192
+	pcapFileChan = make(chan pcapFileTask, 8192) // 缓冲区大小为8192
 
 	// 启动并行处理worker
 	for i := 0; i < pcapWorkers; i++ {
@@ -626,14 +632,18 @@ func InitPcapQueue() {
 			defer pcapWg.Done()
 			//log.Printf("Pcap处理Worker %d 已启动", workerID)
 
-			for filePath := range pcapFileChan {
-				log.Printf("开始处理文件: %s", filePath)
+			for task := range pcapFileChan {
+				if task.checkMD5 {
+					log.Printf("开始处理文件: %s", task.filePath)
+				} else {
+					log.Printf("开始处理文件（跳过MD5检查）: %s", task.filePath)
+				}
 				startTime := time.Now()
 
-				handlePcapUri(filePath, bpf, true)
+				handlePcapUri(task.filePath, bpf, task.checkMD5)
 
 				duration := time.Since(startTime)
-				log.Printf("完成处理文件: %s (耗时: %v)", filePath, duration)
+				log.Printf("完成处理文件: %s (耗时: %v)", task.filePath, duration)
 			}
 
 			//log.Printf("Pcap处理Worker %d 已停止", workerID)
@@ -644,7 +654,7 @@ func InitPcapQueue() {
 	log.Printf("文件处理队列已启动，%d 个 worker", pcapWorkers)
 }
 
-// QueuePcapFile 将 pcap 文件加入处理队列
+// QueuePcapFile 将 pcap 文件加入处理队列（会进行MD5检查）
 func QueuePcapFile(filePath string) {
 	queueMutex.RLock()
 	defer queueMutex.RUnlock()
@@ -657,8 +667,25 @@ func QueuePcapFile(filePath string) {
 
 	// 使用阻塞式发送，确保文件不会被丢弃
 	// 如果队列满了，这里会阻塞等待直到有空间
-	pcapFileChan <- filePath
+	pcapFileChan <- pcapFileTask{filePath: filePath, checkMD5: true}
 	log.Printf("已排队处理文件: %s", filePath)
+}
+
+// QueuePcapFileSkipCheck 将 pcap 文件加入处理队列（跳过MD5检查）
+// 用于文件已经通过MD5检查并保存到数据库后的情况
+func QueuePcapFileSkipCheck(filePath string) {
+	queueMutex.RLock()
+	defer queueMutex.RUnlock()
+
+	if !queueStarted {
+		// 如果队列未启动，直接处理文件
+		go handlePcapUri(filePath, bpf, false)
+		return
+	}
+
+	// 使用阻塞式发送，确保文件不会被丢弃
+	pcapFileChan <- pcapFileTask{filePath: filePath, checkMD5: false}
+	log.Printf("已排队处理文件（跳过MD5检查）: %s", filePath)
 }
 
 func ParsePcapfile(fname string, check bool) {

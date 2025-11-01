@@ -142,9 +142,9 @@
         <el-form-item label="采集间隔" prop="interval">
           <el-input-number
             v-model="trafficForm.interval"
-            :min="10"
+            :min="1"
             :max="3600"
-            :step="10"
+            :step="1"
             style="width: 200px"
           />
           <span style="margin-left: 10px">秒</span>
