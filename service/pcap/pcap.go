@@ -627,13 +627,13 @@ func InitPcapQueue() {
 			//log.Printf("Pcap处理Worker %d 已启动", workerID)
 
 			for filePath := range pcapFileChan {
-				log.Printf("开始处理文件: %s", workerID, filePath)
+				log.Printf("开始处理文件: %s", filePath)
 				startTime := time.Now()
 
 				handlePcapUri(filePath, bpf, true)
 
 				duration := time.Since(startTime)
-				log.Printf("完成处理文件: %s (耗时: %v)", workerID, filePath, duration)
+				log.Printf("完成处理文件: %s (耗时: %v)", filePath, duration)
 			}
 
 			//log.Printf("Pcap处理Worker %d 已停止", workerID)
