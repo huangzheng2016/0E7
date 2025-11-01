@@ -544,7 +544,7 @@ onUnmounted(() => {
               <el-link 
                 v-if="row.exploit_name && row.exploit_id" 
                 type="primary" 
-                :underline="false"
+                underline="never"
                 @click="handleExploitNameClick(row.exploit_id)"
                 class="exploit-link"
               >

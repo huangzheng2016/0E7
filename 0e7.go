@@ -263,8 +263,8 @@ func main() {
 		log.Println("Flag检测器已启动")
 
 		fp, _ := fs.Sub(f, "dist")
-		// 静态资源改为 /static 前缀，避免与 /proxy 冲突
-		r_server.StaticFS("/static", http.FS(fp))
+		fpStatic, _ := fs.Sub(f, "dist/static")
+		r_server.StaticFS("/static", http.FS(fpStatic))
 		// 根路径返回 index.html
 		r_server.GET("/", func(c *gin.Context) {
 			b, err := fs.ReadFile(fp, "index.html")
