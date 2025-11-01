@@ -716,16 +716,19 @@ onUnmounted(() => {
           <el-icon :size="18"><Menu /></el-icon>
         </el-button>
         <div v-if="!isCollapsed" class="header-content">
-          <h1 class="sidebar-title">0E7工具箱</h1>
-          <el-button 
-            type="danger" 
-            size="small" 
-            @click="closeAllTabs"
-            class="close-all-btn"
-          >
-            <el-icon><Close /></el-icon>
-            关闭所有
-          </el-button>
+          <div class="title-row">
+            <h1 class="sidebar-title">0E7工具箱</h1>
+            <el-tooltip content="关闭所有tab" placement="top">
+              <el-button 
+                type="text" 
+                size="small" 
+                @click="closeAllTabs"
+                class="close-all-btn"
+              >
+                <el-icon :size="18"><Delete /></el-icon>
+              </el-button>
+            </el-tooltip>
+          </div>
         </div>
       </div>
       
@@ -903,20 +906,34 @@ onUnmounted(() => {
   width: 100%;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
 .sidebar-title {
   font-weight: 600;
   color: #303133;
   font-size: 16px;
   margin: 0;
-  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: calc(100% - 40px);
 }
 
 .close-all-btn {
+  padding: 4px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  width: 100%;
+  flex-shrink: 0;
 }
 
 .collapse-btn {
