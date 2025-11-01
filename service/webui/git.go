@@ -2,6 +2,7 @@ package webui
 
 import (
 	"0E7/service/config"
+	"0E7/service/git"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -114,11 +115,11 @@ func git_repo_update_description(c *gin.Context) {
 		return
 	}
 
-	// 验证仓库名称（防止路径遍历）
-	if strings.Contains(repoName, "/") || strings.Contains(repoName, "..") {
+	// 验证仓库名称（使用统一的验证函数）
+	if !git.ValidateRepoName(repoName) {
 		c.JSON(400, gin.H{
 			"status": "error",
-			"msg":    "无效的仓库名称",
+			"msg":    "无效的仓库名称，只能包含字母、数字、连字符(-)和下划线(_)，且不能以连字符或下划线开头或结尾",
 		})
 		return
 	}
@@ -163,11 +164,11 @@ func git_repo_delete(c *gin.Context) {
 		return
 	}
 
-	// 验证仓库名称（防止路径遍历）
-	if strings.Contains(repoName, "/") || strings.Contains(repoName, "..") {
+	// 验证仓库名称（使用统一的验证函数）
+	if !git.ValidateRepoName(repoName) {
 		c.JSON(400, gin.H{
 			"status": "error",
-			"msg":    "无效的仓库名称",
+			"msg":    "无效的仓库名称，只能包含字母、数字、连字符(-)和下划线(_)，且不能以连字符或下划线开头或结尾",
 		})
 		return
 	}

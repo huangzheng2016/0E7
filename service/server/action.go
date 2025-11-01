@@ -206,6 +206,10 @@ func executeActionCode(actionRecord *database.Action, ctx context.Context) error
 		if err != nil {
 			return fmt.Errorf("获取flags失败: %v", err)
 		}
+		if len(flags) == 0 {
+			log.Printf("没有待提交的flags")
+			return nil
+		}
 	}
 
 	switch fileType {

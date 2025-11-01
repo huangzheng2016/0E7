@@ -126,21 +126,26 @@ func updateHEADIfNeeded(repoPath string) error {
 	return nil
 }
 
-// validateRepoName 验证仓库名称是否合法
-func validateRepoName(repoName string) bool {
+// ValidateRepoName 验证仓库名称是否合法
+// 只允许字母、数字、连字符(-)和下划线(_)
+// 导出为公共函数，供其他包使用
+func ValidateRepoName(repoName string) bool {
 	if repoName == "" || len(repoName) > 255 {
 		return false
 	}
-	// 禁止包含路径分隔符和特殊字符
-	if strings.Contains(repoName, "/") || strings.Contains(repoName, "..") {
+	// 只允许字母、数字、连字符和下划线
+	for _, r := range repoName {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_') {
+			return false
+		}
+	}
+	// 禁止以连字符或下划线开头
+	if len(repoName) > 0 && (repoName[0] == '-' || repoName[0] == '_') {
 		return false
 	}
-	// 禁止以 . 开头或结尾
-	if strings.HasPrefix(repoName, ".") || strings.HasSuffix(repoName, ".") {
-		return false
-	}
-	// 禁止包含空格和控制字符
-	if strings.ContainsAny(repoName, " \t\n\r") {
+	// 禁止以连字符或下划线结尾
+	if len(repoName) > 0 && (repoName[len(repoName)-1] == '-' || repoName[len(repoName)-1] == '_') {
 		return false
 	}
 	return true
@@ -164,7 +169,7 @@ func validateHash(hash string, expectedLen int) bool {
 // handleInfoRefs 处理 info/refs 请求
 func handleInfoRefs(c *gin.Context) {
 	repoName := c.Param("repo")
-	if !validateRepoName(repoName) {
+	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
 	}
@@ -232,7 +237,7 @@ func handleInfoRefs(c *gin.Context) {
 // handleUploadPack 处理 git-upload-pack 请求（用于 clone/fetch）
 func handleUploadPack(c *gin.Context) {
 	repoName := c.Param("repo")
-	if !validateRepoName(repoName) {
+	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
 	}
@@ -306,7 +311,7 @@ func handleUploadPack(c *gin.Context) {
 // handleReceivePack 处理 git-receive-pack 请求（用于 push）
 func handleReceivePack(c *gin.Context) {
 	repoName := c.Param("repo")
-	if !validateRepoName(repoName) {
+	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
 	}
@@ -390,7 +395,7 @@ func handleReceivePack(c *gin.Context) {
 // handleInfoRefsOld 处理旧版协议（可选）
 func handleInfoRefsOld(c *gin.Context) {
 	repoName := c.Param("repo")
-	if !validateRepoName(repoName) {
+	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
 	}
@@ -432,7 +437,7 @@ func handleInfoRefsOld(c *gin.Context) {
 // handleHead 处理 HEAD 请求（返回默认分支）
 func handleHead(c *gin.Context) {
 	repoName := c.Param("repo")
-	if !validateRepoName(repoName) {
+	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
 	}
@@ -452,7 +457,7 @@ func handleHead(c *gin.Context) {
 // handleObjects 处理 objects 请求（用于旧版协议）
 func handleObjects(c *gin.Context) {
 	repoName := c.Param("repo")
-	if !validateRepoName(repoName) {
+	if !ValidateRepoName(repoName) {
 		c.String(400, "无效的仓库名称")
 		return
 	}

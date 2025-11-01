@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage, ElNotification } from 'element-plus'
-import { DocumentCopy } from '@element-plus/icons-vue'
+import { DocumentCopy, Plus } from '@element-plus/icons-vue'
 
 interface CacheEntryMeta {
   key: string
@@ -23,7 +23,43 @@ const auto = ref(false)
 const intervalSec = ref(5)
 let timer: any = null
 const origin = typeof window !== 'undefined' ? window.location.origin : ''
-const proxyPattern = ref(`curl ${origin}/proxy/{0s,5s,5m,1h}/{url/https://0e7.cn}`)
+
+// 构造代理 URL 对话框相关
+const showProxyBuilderDialog = ref(false)
+const builderTTL = ref('5s')
+const builderTargetURL = ref('0e7.cn')
+const ttlOptions = [
+  { label: '不缓存 (0s)', value: '0s' },
+  { label: '5秒', value: '5s' },
+  { label: '30秒', value: '30s' },
+  { label: '1分钟', value: '1m' },
+  { label: '5分钟', value: '5m' },
+  { label: '10分钟', value: '10m' },
+  { label: '30分钟', value: '30m' },
+  { label: '1小时', value: '1h' },
+  { label: '2小时', value: '2h' },
+  { label: '6小时', value: '6h' },
+  { label: '12小时', value: '12h' },
+  { label: '24小时', value: '24h' }
+]
+
+// 实时生成的代理 URL
+const generatedProxyURL = computed(() => {
+  if (!builderTargetURL.value.trim()) {
+    return ''
+  }
+  // 直接使用用户输入的目标 URL，不自动添加协议
+  const targetURL = builderTargetURL.value.trim()
+  return `${origin}/proxy/${builderTTL.value}/${encodeURIComponent(targetURL)}`
+})
+
+// 生成的完整 curl 命令
+const generatedCurlCommand = computed(() => {
+  if (!generatedProxyURL.value) {
+    return ''
+  }
+  return `curl ${generatedProxyURL.value}`
+})
 
 async function fetchList() {
   try {
@@ -140,6 +176,27 @@ const copyURL = (url: string) => {
     })
   })
 }
+
+// 打开代理 URL 构造对话框
+const openProxyBuilder = () => {
+  builderTTL.value = '5s'
+  builderTargetURL.value = '0e7.cn'
+  showProxyBuilderDialog.value = true
+}
+
+// 复制代理 URL
+const copyProxyURL = () => {
+  if (generatedProxyURL.value) {
+    copyURL(generatedProxyURL.value)
+  }
+}
+
+// 复制 curl 命令
+const copyCurlCommand = () => {
+  if (generatedCurlCommand.value) {
+    copyURL(generatedCurlCommand.value)
+  }
+}
 </script>
 
 <template>
@@ -150,8 +207,14 @@ const copyURL = (url: string) => {
         <el-switch v-model="auto" @change="toggleAuto" active-text="自动刷新" />
         <el-input-number v-model="intervalSec" :min="1" :max="300" @change="startTimer" />
       </div>
-      <div class="toolbar-tip">
-        代理示例：<strong>{{ proxyPattern }}</strong>
+      <div class="toolbar-right">
+        <el-button 
+          type="success"
+          @click="openProxyBuilder"
+        >
+          <el-icon><Plus /></el-icon>
+          构造
+        </el-button>
       </div>
     </div>
 
@@ -181,6 +244,74 @@ const copyURL = (url: string) => {
         </template>
       </el-table-column>
     </el-table>
+
+    <!-- 代理 URL 构造对话框 -->
+    <el-dialog
+      v-model="showProxyBuilderDialog"
+      title="构造代理 URL"
+      width="600px"
+    >
+      <el-form label-width="100px">
+        <el-form-item label="TTL 时间">
+          <el-select v-model="builderTTL" style="width: 100%">
+            <el-option
+              v-for="option in ttlOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="目标 URL">
+          <el-input
+            v-model="builderTargetURL"
+            placeholder="请输入目标 URL，例如: https://example.com"
+          />
+          <div style="margin-top: 4px; font-size: 12px; color: #909399;">
+            请输入完整的目标 URL（包括 http:// 或 https://）
+          </div>
+        </el-form-item>
+
+        <el-form-item label="代理 URL">
+          <div class="generated-url-container">
+            <code class="generated-url">{{ generatedProxyURL || '请输入目标 URL' }}</code>
+            <el-button
+              v-if="generatedProxyURL"
+              type="text"
+              size="small"
+              @click="copyProxyURL"
+              class="copy-btn"
+            >
+              <el-icon><DocumentCopy /></el-icon>
+              复制 URL
+            </el-button>
+          </div>
+        </el-form-item>
+
+        <el-form-item label="curl 命令">
+          <div class="generated-url-container">
+            <code class="generated-url">{{ generatedCurlCommand || '请输入目标 URL' }}</code>
+            <el-button
+              v-if="generatedCurlCommand"
+              type="text"
+              size="small"
+              @click="copyCurlCommand"
+              class="copy-btn"
+            >
+              <el-icon><DocumentCopy /></el-icon>
+              复制命令
+            </el-button>
+          </div>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showProxyBuilderDialog = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -201,11 +332,10 @@ const copyURL = (url: string) => {
   align-items: center;
   gap: 12px;
 }
-.toolbar-tip {
-  color: #606266;
-  font-size: 12px;
-  line-height: 1.4;
-  text-align: right;
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .url-cell {
@@ -230,5 +360,32 @@ const copyURL = (url: string) => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.generated-url-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.generated-url {
+  flex: 1;
+  background: #f5f7fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #303133;
+  word-break: break-all;
+  display: block;
+  min-height: 20px;
+  line-height: 1.5;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style>

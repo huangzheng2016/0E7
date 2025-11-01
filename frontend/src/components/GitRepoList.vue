@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { ElNotification, ElMessageBox, ElInput } from 'element-plus'
-import { Refresh, DocumentCopy } from '@element-plus/icons-vue'
+import { ElNotification, ElMessageBox, ElInput, ElAlert } from 'element-plus'
+import { Refresh, DocumentCopy, Plus } from '@element-plus/icons-vue'
 
 interface GitRepo {
   name: string
@@ -14,6 +14,21 @@ const loading = ref(false)
 const showEditDialog = ref(false)
 const editingRepo = ref<GitRepo | null>(null)
 const editDescription = ref('')
+const showNewRepoDialog = ref(false)
+
+// 获取服务器地址（从第一个仓库的 URL 或当前窗口地址）
+const serverBaseURL = computed(() => {
+  if (repos.value.length > 0 && repos.value[0].url) {
+    // 从仓库 URL 中提取服务器地址
+    const url = repos.value[0].url
+    const match = url.match(/^(https?:\/\/[^\/]+)/)
+    if (match) {
+      return match[1]
+    }
+  }
+  // 如果没有仓库，使用当前窗口的 origin
+  return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:6102'
+})
 
 // 按名称排序的仓库列表
 const sortedRepos = computed(() => {
@@ -218,14 +233,23 @@ onMounted(() => {
   <div class="git-repo-list">
     <div class="header">
       <h2>Git 仓库管理</h2>
-      <el-button 
-        type="primary" 
-        @click="loadRepos"
-        :loading="loading"
-      >
-        <el-icon v-if="!loading"><Refresh /></el-icon>
-        {{ loading ? '加载中...' : '刷新' }}
-      </el-button>
+      <div class="header-actions">
+        <el-button 
+          type="success"
+          @click="showNewRepoDialog = true"
+        >
+          <el-icon><Plus /></el-icon>
+          新建仓库
+        </el-button>
+        <el-button 
+          type="primary" 
+          @click="loadRepos"
+          :loading="loading"
+        >
+          <el-icon v-if="!loading"><Refresh /></el-icon>
+          {{ loading ? '加载中...' : '刷新' }}
+        </el-button>
+      </div>
     </div>
 
     <div class="repo-table-container" v-loading="loading">
@@ -322,6 +346,64 @@ onMounted(() => {
         </div>
       </template>
     </el-dialog>
+
+    <!-- 新建仓库提示对话框 -->
+    <el-dialog
+      v-model="showNewRepoDialog"
+      title="如何新建 Git 仓库"
+      width="700px"
+    >
+      <div class="new-repo-guide">
+        <p style="margin-bottom: 16px; color: #606266;">
+          仓库会在首次 push 时自动创建。请按照以下步骤操作：
+        </p>
+        
+        <div class="code-section">
+          <h4 style="margin-bottom: 8px; color: #303133;">1. 初始化本地仓库</h4>
+          <pre class="code-block"><code>mkdir my-repo
+cd my-repo
+git init</code></pre>
+        </div>
+
+        <div class="code-section">
+          <h4 style="margin-bottom: 8px; color: #303133;">2. 添加远程仓库并推送</h4>
+          <pre class="code-block"><code>{{ `git remote add origin ${serverBaseURL}/git/my-repo.git
+git add .
+git commit -m "Initial commit"
+git push -u origin main` }}</code></pre>
+        </div>
+
+        <div class="code-section">
+          <h4 style="margin-bottom: 8px; color: #303133;">3. 如果已有仓库，直接添加远程</h4>
+          <pre class="code-block"><code>{{ `git remote add origin ${serverBaseURL}/git/my-repo.git
+git push -u origin main` }}</code></pre>
+        </div>
+
+        <el-alert
+          title="提示"
+          type="info"
+          :closable="false"
+          style="margin-top: 16px;"
+        >
+          <template #default>
+            <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
+              <li>仓库 URL 格式：<code style="background: #f5f7fa; padding: 2px 6px; border-radius: 3px;">{{ serverBaseURL }}/git/&#123;仓库名&#125;.git</code></li>
+              <li>仓库名只能包含字母、数字、连字符和下划线</li>
+              <li>首次 push 时，如果仓库不存在会自动创建</li>
+              <li>如果使用 <code style="background: #f5f7fa; padding: 2px 6px; border-radius: 3px;">main</code> 分支，请确保本地分支名为 <code style="background: #f5f7fa; padding: 2px 6px; border-radius: 3px;">main</code></li>
+            </ul>
+          </template>
+        </el-alert>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="primary" @click="showNewRepoDialog = false">
+            我知道了
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -338,6 +420,12 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 .header h2 {
@@ -387,6 +475,41 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.new-repo-guide {
+  padding: 8px 0;
+}
+
+.code-section {
+  margin-bottom: 20px;
+}
+
+.code-block {
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 8px 0;
+  overflow-x: auto;
+  font-family: 'Courier New', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #303133;
+}
+
+.code-block code {
+  background: transparent;
+  padding: 0;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.code-block::before {
+  content: '';
+  display: block;
 }
 
 .action-buttons {
