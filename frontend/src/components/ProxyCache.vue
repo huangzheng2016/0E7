@@ -64,7 +64,7 @@ const generatedCurlCommand = computed(() => {
 async function fetchList() {
   try {
     loading.value = true
-    const resp = await fetch('/webui/proxy_cache_list', { method: 'POST' })
+    const resp = await fetch('/webui/proxy_cache_list', { method: 'GET' })
     const data = await resp.json()
     if (!data || data.success !== true) {
       throw new Error('请求失败')

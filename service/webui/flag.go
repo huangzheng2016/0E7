@@ -16,8 +16,8 @@ import (
 // GetFlagList 获取flag列表
 func GetFlagList(c *gin.Context) {
 	// 获取分页参数
-	pageStr := c.PostForm("page")
-	pageSizeStr := c.PostForm("page_size")
+	pageStr := c.Query("page")
+	pageSizeStr := c.Query("page_size")
 
 	page := 1
 	pageSize := 20
@@ -35,10 +35,10 @@ func GetFlagList(c *gin.Context) {
 	}
 
 	// 获取搜索条件
-	flag := c.PostForm("flag")
-	team := c.PostForm("team")
-	status := c.PostForm("status")
-	exploitIdStr := c.PostForm("exploit_id")
+	flag := c.Query("flag")
+	team := c.Query("team")
+	status := c.Query("status")
+	exploitIdStr := c.Query("exploit_id")
 
 	// 构建查询条件
 	query := config.Db.Model(&database.Flag{})

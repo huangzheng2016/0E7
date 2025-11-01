@@ -43,16 +43,13 @@ const store = createStore({
         });
       }
       
-      let requestBody = `exploit_id=${finalExploitId}`;
-      // 添加分页参数
-      requestBody += `&page=${page}&page_size=${pageSize}`;
+      const params = new URLSearchParams()
+      params.append('exploit_id', finalExploitId.toString())
+      params.append('page', page.toString())
+      params.append('page_size', pageSize.toString())
       
-      return fetch("/webui/exploit_show_output", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: requestBody
+      return fetch(`/webui/exploit_show_output?${params.toString()}`, {
+        method: "GET"
       })
         .then((res) => res.json())
         .then((res) => {

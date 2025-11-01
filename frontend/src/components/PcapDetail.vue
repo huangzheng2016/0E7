@@ -203,12 +203,8 @@ const fetchPcapDetail = async () => {
   
   loading.value = true
   try {
-    const formData = new FormData()
-    formData.append('id', props.pcapId.toString())
-
-    const response = await fetch('/webui/pcap_get_by_id', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_get_by_id?id=${props.pcapId.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()
@@ -272,13 +268,12 @@ const fetchPcapDetail = async () => {
 // 获取flow数据
 const fetchFlowData = async () => {
   try {
-    const formData = new FormData()
-    formData.append('pcap_id', props.pcapId.toString())
-    formData.append('type', 'parsed')
+    const params = new URLSearchParams()
+    params.append('pcap_id', props.pcapId.toString())
+    params.append('type', 'parsed')
 
-    const response = await fetch('/webui/pcap_download', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_download?${params.toString()}`, {
+      method: 'GET'
     })
     
     if (response.ok) {
@@ -345,14 +340,13 @@ const downloadFile = async (type: 'raw' | 'original' | 'parsed') => {
   
   try {
     // 先查询文件大小
-    const infoFormData = new FormData()
-    infoFormData.append('pcap_id', props.pcapId.toString())
-    infoFormData.append('type', type)
-    infoFormData.append('i', 'true')
+    const infoParams = new URLSearchParams()
+    infoParams.append('pcap_id', props.pcapId.toString())
+    infoParams.append('type', type)
+    infoParams.append('i', 'true')
 
-    const infoResponse = await fetch('/webui/pcap_download', {
-      method: 'POST',
-      body: infoFormData
+    const infoResponse = await fetch(`/webui/pcap_download?${infoParams.toString()}`, {
+      method: 'GET'
     })
     
     let fileSize = '未知大小'
@@ -379,14 +373,13 @@ const downloadFile = async (type: 'raw' | 'original' | 'parsed') => {
     }
     
     // 下载文件
-    const formData = new FormData()
-    formData.append('pcap_id', props.pcapId.toString())
-    formData.append('type', type)
-    formData.append('d', 'true')
+    const params = new URLSearchParams()
+    params.append('pcap_id', props.pcapId.toString())
+    params.append('type', type)
+    params.append('d', 'true')
 
-    const response = await fetch('/webui/pcap_download', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_download?${params.toString()}`, {
+      method: 'GET'
     })
     
     if (response.ok) {
@@ -553,14 +546,13 @@ const generateCode = async (templateType: 'requests' | 'pwntools' | 'curl') => {
 
   codeGenerationLoading.value = true
   try {
-    const formData = new FormData()
-    formData.append('pcap_id', props.pcapId.toString())
-    formData.append('template', templateType)
-    formData.append('flow_data', JSON.stringify(flowData.value))
+    const params = new URLSearchParams()
+    params.append('pcap_id', props.pcapId.toString())
+    params.append('template', templateType)
+    params.append('flow_data', JSON.stringify(flowData.value))
 
-    const response = await fetch('/webui/pcap_generate_code', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_generate_code?${params.toString()}`, {
+      method: 'GET'
     })
     
     if (!response.ok) {

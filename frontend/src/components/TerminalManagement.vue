@@ -258,11 +258,7 @@ const refreshClients = async () => {
   loading.value = true
   try {
     const response = await fetch('/webui/clients', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: ''
+      method: 'GET'
     })
     const result = await response.json()
     

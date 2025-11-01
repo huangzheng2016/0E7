@@ -313,20 +313,19 @@ const fetchPcapItems = async () => {
       return
     }
 
-    const formData = new FormData()
-    formData.append('page', currentPage.value.toString())
-    formData.append('page_size', pageSize.value.toString())
+    const params = new URLSearchParams()
+    params.append('page', currentPage.value.toString())
+    params.append('page_size', pageSize.value.toString())
     
     if (searchFilters.value.ip) {
-      formData.append('ip', searchFilters.value.ip)
+      params.append('ip', searchFilters.value.ip)
     }
     if (searchFilters.value.tags) {
-      formData.append('tags', searchFilters.value.tags)
+      params.append('tags', searchFilters.value.tags)
     }
 
-    const response = await fetch('/webui/pcap_show', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_show?${params.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()
@@ -382,7 +381,7 @@ const fetchSearchResults = async () => {
   }
 
   try {
-    const formData = new FormData()
+    const params = new URLSearchParams()
     
     let query = searchFilters.value.fulltext.trim() || '*'
     
@@ -400,18 +399,17 @@ const fetchSearchResults = async () => {
       }
     }
     
-    formData.append('query', query)
-    formData.append('page', currentPage.value.toString())
-    formData.append('page_size', pageSize.value.toString())
-    formData.append('search_type', '0')
-    formData.append('search_mode', searchMode.value)
+    params.append('query', query)
+    params.append('page', currentPage.value.toString())
+    params.append('page_size', pageSize.value.toString())
+    params.append('search_type', '0')
+    params.append('search_mode', searchMode.value)
     if (searchFilters.value.port) {
-      formData.append('port', searchFilters.value.port)
+      params.append('port', searchFilters.value.port)
     }
 
-    const response = await fetch('/webui/search_pcap', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/search_pcap?${params.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()

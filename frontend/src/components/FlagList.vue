@@ -115,26 +115,25 @@ const getStatusText = (status: string) => {
 const fetchFlags = async () => {
   loading.value = true
   try {
-    const formData = new FormData()
-    formData.append('page', currentPage.value.toString())
-    formData.append('page_size', pageSize.value.toString())
+    const params = new URLSearchParams()
+    params.append('page', currentPage.value.toString())
+    params.append('page_size', pageSize.value.toString())
     
     if (searchForm.flag) {
-      formData.append('flag', searchForm.flag)
+      params.append('flag', searchForm.flag)
     }
     if (searchForm.team) {
-      formData.append('team', searchForm.team)
+      params.append('team', searchForm.team)
     }
     if (searchForm.status) {
-      formData.append('status', searchForm.status)
+      params.append('status', searchForm.status)
     }
     if (searchForm.exploit_id) {
-      formData.append('exploit_id', searchForm.exploit_id)
+      params.append('exploit_id', searchForm.exploit_id)
     }
 
-    const response = await fetch('/webui/flag_show', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/flag_show?${params.toString()}`, {
+      method: 'GET'
     })
     const data = await response.json()
     
@@ -355,7 +354,7 @@ onMounted(() => {
 const openConfigDialog = async () => {
   try {
     const response = await fetch('/webui/flag_config', {
-      method: 'POST'
+      method: 'GET'
     })
     const data = await response.json()
     

@@ -70,12 +70,11 @@ const decodeBase64UTF8 = (base64: string): string => {
 // 获取exploit列表
 const fetchExploitList = async () => {
   try {
-    const formData = new FormData()
-    formData.append('page_size', '1000') // 获取所有exploit
+    const params = new URLSearchParams()
+    params.append('page_size', '1000') // 获取所有exploit
     
-    const response = await fetch('/webui/exploit_show', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/exploit_show?${params.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()
@@ -98,12 +97,8 @@ const fetchExploitList = async () => {
 // 根据actionId获取数据
 const fetchActionById = async (id: number | string) => {
   try {
-    const formData = new FormData()
-    formData.append('id', id.toString())
-    
-    const response = await fetch('/webui/action_get_by_id', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/action_get_by_id?id=${id.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()

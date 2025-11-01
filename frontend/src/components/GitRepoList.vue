@@ -39,10 +39,8 @@ const sortedRepos = computed(() => {
 const loadRepos = async () => {
   loading.value = true
   try {
-    const formData = new FormData()
     const response = await fetch('/webui/git_repo_list', {
-      method: 'POST',
-      body: formData
+      method: 'GET'
     })
     
     const result = await response.json()

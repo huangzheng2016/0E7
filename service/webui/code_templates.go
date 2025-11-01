@@ -204,9 +204,9 @@ func decodeActionCode(code string) (string, error) {
 
 // 代码生成API接口
 func pcap_generate_code(c *gin.Context) {
-	pcapIdStr := c.PostForm("pcap_id")
-	templateType := c.PostForm("template")
-	flowDataStr := c.PostForm("flow_data")
+	pcapIdStr := c.Query("pcap_id")
+	templateType := c.Query("template")
+	flowDataStr := c.Query("flow_data")
 
 	if pcapIdStr == "" || templateType == "" || flowDataStr == "" {
 		c.JSON(400, gin.H{
