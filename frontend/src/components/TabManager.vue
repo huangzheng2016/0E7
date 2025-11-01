@@ -9,11 +9,12 @@ import PcapDetail from './PcapDetail.vue'
 import FlagList from './FlagList.vue'
 import TerminalManagement from './TerminalManagement.vue'
 import ProxyCache from './ProxyCache.vue'
+import GitRepoList from './GitRepoList.vue'
 
 interface Tab {
   id: string
   title: string
-  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management' | 'proxy-cache' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
+  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management' | 'proxy-cache' | 'git-repo-list' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
   // 只保存ID，不保存完整数据
   itemId?: number | string  // action的id、exploit的id或pcap的id
   closable: boolean
@@ -70,6 +71,12 @@ const tabs = ref<Tab[]>([
     id: 'proxy-cache',
     title: '代理缓存',
     type: 'proxy-cache',
+    closable: false
+  },
+  {
+    id: 'git-repo-list',
+    title: 'Git 仓库',
+    type: 'git-repo-list',
     closable: false
   }
 ])
@@ -144,6 +151,12 @@ const loadState = () => {
             id: 'proxy-cache',
             title: '代理缓存',
             type: 'proxy-cache',
+            closable: false
+          },
+          {
+            id: 'git-repo-list',
+            title: 'Git 仓库',
+            type: 'git-repo-list',
             closable: false
           }
         ]
@@ -750,6 +763,10 @@ onUnmounted(() => {
       
       <div v-else-if="activeTab?.type === 'proxy-cache'">
         <ProxyCache />
+      </div>
+      
+      <div v-else-if="activeTab?.type === 'git-repo-list'">
+        <GitRepoList />
       </div>
       
       <div v-else-if="activeTab?.type === 'action-edit'">

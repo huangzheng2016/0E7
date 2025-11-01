@@ -52,13 +52,14 @@
                 :key="index"
                 class="interface-item"
                 @click="selectInterface(client, iface)"
+                @dblclick="openTrafficDialogForInterface(client, iface)"
                 :class="{ selected: selectedInterface && selectedInterface.clientId === client.id && selectedInterface.interfaceName === iface.name }"
               >
                 <div class="interface-main">
                   <span class="interface-name">{{ iface.name }}</span>
                   <span class="interface-ip" v-if="iface.ip">{{ iface.ip }}</span>
                 </div>
-                <div class="interface-desc">{{ iface.description || '无描述' }}</div>
+                <div class="interface-desc" v-if="iface.description">{{ iface.description }}</div>
               </div>
             </div>
             <div v-else class="no-interfaces">
@@ -122,7 +123,7 @@
                 v-if="client.id === trafficForm.clientId"
                 v-for="iface in client.interfaces"
                 :key="`${client.id}-${iface.name}`"
-                :label="`${iface.name} - ${iface.description || '无描述'}`"
+                :label="iface.description ? `${iface.name} - ${iface.description}` : iface.name"
                 :value="iface.name"
               />
             </template>
@@ -152,6 +153,8 @@
         <el-form-item label="任务描述" prop="description">
           <el-input
             v-model="trafficForm.description"
+            type="textarea"
+            :rows="3"
             placeholder="可选，用于描述此采集任务"
           />
         </el-form-item>
@@ -309,6 +312,30 @@ const selectInterface = (client: Client, iface: NetworkInterface) => {
     clientId: client.id,
     interfaceName: iface.name
   }
+}
+
+// 为指定网卡打开流量采集对话框
+const openTrafficDialogForInterface = (client: Client, iface: NetworkInterface) => {
+  // 预填充表单
+  trafficForm.clientId = client.id
+  trafficForm.interfaceName = iface.name
+  // 将网卡描述预填充到任务描述中
+  if (iface.description) {
+    trafficForm.description = `监控网卡: ${iface.name} (${iface.description})`
+  } else {
+    trafficForm.description = `监控网卡: ${iface.name}`
+  }
+  // 重置其他字段为默认值（保持BPF和间隔为默认）
+  trafficForm.bpf = ''
+  trafficForm.interval = 60
+  
+  // 打开对话框
+  showTrafficCollectionDialog.value = true
+  
+  // 等待对话框打开后，验证表单（确保选择的下拉框正确显示）
+  setTimeout(() => {
+    trafficFormRef.value?.clearValidate()
+  }, 100)
 }
 
 // 删除监控任务

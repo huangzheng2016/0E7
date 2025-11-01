@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElNotification } from 'element-plus'
+import { DocumentCopy } from '@element-plus/icons-vue'
 
 interface CacheEntryMeta {
   key: string
@@ -121,6 +122,24 @@ onMounted(() => {
 onUnmounted(() => {
   stopTimer()
 })
+
+// 复制 URL
+const copyURL = (url: string) => {
+  navigator.clipboard.writeText(url).then(() => {
+    ElNotification({
+      title: '成功',
+      message: 'URL 已复制到剪贴板',
+      type: 'success'
+    })
+  }).catch(err => {
+    console.error('复制失败:', err)
+    ElNotification({
+      title: '错误',
+      message: '复制失败',
+      type: 'error'
+    })
+  })
+}
 </script>
 
 <template>
@@ -145,7 +164,22 @@ onUnmounted(() => {
       <el-table-column prop="expiresAt" label="过期时间" width="180" />
       <el-table-column prop="staleUntil" label="保留至" width="180" />
       <el-table-column prop="hits" label="命中" width="90" />
-      <el-table-column prop="url" label="URL" />
+      <el-table-column prop="url" label="URL">
+        <template #default="{ row }">
+          <div class="url-cell">
+            <code class="url-text">{{ row.url }}</code>
+            <el-button 
+              type="text" 
+              size="small"
+              @click="copyURL(row.url)"
+              class="copy-btn"
+            >
+              <el-icon><DocumentCopy /></el-icon>
+              复制
+            </el-button>
+          </div>
+        </template>
+      </el-table-column>
     </el-table>
   </div>
 </template>
@@ -172,5 +206,29 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.4;
   text-align: right;
+}
+
+.url-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.url-text {
+  flex: 1;
+  background: #f5f7fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #409eff;
+  word-break: break-all;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>

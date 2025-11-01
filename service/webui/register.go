@@ -44,4 +44,9 @@ func Register(router *gin.Engine) {
 
 	// Proxy 缓存监控
 	router.POST("/webui/proxy_cache_list", proxy_cache_list)
+
+	// Git 仓库管理
+	router.POST("/webui/git_repo_list", git_repo_list)
+	router.POST("/webui/git_repo_update_description", git_repo_update_description)
+	router.POST("/webui/git_repo_delete", git_repo_delete)
 }
