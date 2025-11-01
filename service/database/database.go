@@ -176,6 +176,7 @@ print(json.dumps(team))`),
 				Code:     "",
 				Config:   "{\"type\":\"exec_script\",\"num\":1,\"script_id\":1}",
 				Interval: -1, // 默认不启用
+				NextRun:  time.Date(2037, 1, 1, 0, 0, 0, 0, time.UTC),
 			},
 		}
 		for _, action := range actions {
@@ -214,7 +215,7 @@ print(f"Status: {response.status_code}")
 print(f"Response: {response.text}")`),
 				Config:   "{\"type\": \"template\"}",
 				Interval: -1, // 默认不启用
-				Timeout:  30,
+				NextRun:  time.Date(2037, 1, 1, 0, 0, 0, 0, time.UTC),
 			},
 			{
 				ID:   5,
@@ -245,7 +246,7 @@ print(response.decode('utf-8', errors='ignore'))
 conn.close()`),
 				Config:   "{\"type\": \"template\"}",
 				Interval: -1, // 默认不启用
-				Timeout:  30,
+				NextRun:  time.Date(2037, 1, 1, 0, 0, 0, 0, time.UTC),
 			},
 			{
 				ID:   6,
@@ -271,7 +272,7 @@ curl -X POST \\
   "$URL"`),
 				Config:   "{\"type\": \"template\"}",
 				Interval: -1, // 默认不启用
-				Timeout:  30,
+				NextRun:  time.Date(2037, 1, 1, 0, 0, 0, 0, time.UTC),
 			},
 		}
 		for _, template := range codeTemplates {

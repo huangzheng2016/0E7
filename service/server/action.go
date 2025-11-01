@@ -141,8 +141,12 @@ func executeTask(actionRecord *database.Action) {
 		} else {
 			log.Printf("任务 %s (ID: %d) 执行成功", actionRecord.Name, actionRecord.ID)
 			actionRecord.Status = "SUCCESS"
-			actionRecord.Error = "" // 清空错误信息
-			actionRecord.NextRun = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
+			actionRecord.Error = ""
+			if actionRecord.Interval >= 0 {
+				actionRecord.NextRun = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
+			} else {
+				actionRecord.NextRun = time.Date(2037, 1, 1, 0, 0, 0, 0, time.UTC)
+			}
 		}
 	case <-taskCtx.Done():
 		log.Printf("任务 %s (ID: %d) 执行超时", actionRecord.Name, actionRecord.ID)
