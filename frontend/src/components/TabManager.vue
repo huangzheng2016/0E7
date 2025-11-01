@@ -210,14 +210,19 @@ const addTab = (tab: Omit<Tab, 'id'>) => {
 // 关闭选项卡
 const closeTab = (tabId: string) => {
   const index = tabs.value.findIndex(tab => tab.id === tabId)
-  if (index > -1 && tabs.value[index].closable) {
+  if (index > -1 && tabs.value[index]?.closable) {
     const closedTab = tabs.value[index]
+    if (!closedTab) return
+    
     tabs.value.splice(index, 1)
     
     // 如果关闭的是当前活动选项卡，切换到其他选项卡
     if (activeTabId.value === tabId) {
       if (tabs.value.length > 0) {
-        activeTabId.value = tabs.value[Math.max(0, index - 1)].id
+        const nextTab = tabs.value[Math.max(0, index - 1)]
+        if (nextTab) {
+          activeTabId.value = nextTab.id
+        }
       }
       
       // 清理URL参数
@@ -241,7 +246,7 @@ const closeAllTabs = () => {
   tabs.value = tabs.value.filter(tab => !tab.closable)
   
   // 切换到第一个标签页
-  if (tabs.value.length > 0) {
+  if (tabs.value.length > 0 && tabs.value[0]) {
     activeTabId.value = tabs.value[0].id
   }
   
@@ -729,7 +734,7 @@ onUnmounted(() => {
         <ActionList
           @edit="handleActionEdit"
           @add="handleActionAdd"
-          @state-change="(state) => handleStateChange('action-list', state)"
+          @state-change="(state: any) => handleStateChange('action-list', state)"
         />
       </div>
       
@@ -737,7 +742,7 @@ onUnmounted(() => {
         <ExploitList
           @edit="handleExploitEdit"
           @add="handleExploitAdd"
-          @state-change="(state) => handleStateChange('exploit-list', state)"
+          @state-change="(state: any) => handleStateChange('exploit-list', state)"
         />
       </div>
       
@@ -746,7 +751,7 @@ onUnmounted(() => {
           :search-state="activeTab.searchState"
           :pagination-state="activeTab.paginationState"
           @view="handlePcapView"
-          @state-change="(state) => handleStateChange('pcap-list', state)"
+          @state-change="(state: any) => handleStateChange('pcap-list', state)"
         />
       </div>
       

@@ -1,4 +1,4 @@
-# 0E7 For Security
+# 0E7 Security
 
 > **警告**：本项目的部分代码由本人生成，并仅由AI维护。作者本人并不会写代码，也不懂安全，长期直接vibe代替思考。如果存在AI相关PR，pls show me the talk。
 

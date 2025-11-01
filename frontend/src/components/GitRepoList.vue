@@ -18,11 +18,11 @@ const showNewRepoDialog = ref(false)
 
 // 获取服务器地址（从第一个仓库的 URL 或当前窗口地址）
 const serverBaseURL = computed(() => {
-  if (repos.value.length > 0 && repos.value[0].url) {
+  if (repos.value.length > 0 && repos.value[0]?.url) {
     // 从仓库 URL 中提取服务器地址
     const url = repos.value[0].url
     const match = url.match(/^(https?:\/\/[^\/]+)/)
-    if (match) {
+    if (match && match[1]) {
       return match[1]
     }
   }

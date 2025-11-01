@@ -66,9 +66,8 @@ func StartActionScheduler() {
 // 检查并排队待执行的任务
 func checkAndQueueActions() {
 	var actions []database.Action
-	// 查询条件：间隔>=0 且 有代码 且 (next_run <= 当前时间 或 next_run < 2000年)
 	year2000 := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	err := config.Db.Where("interval >= 0 AND is_deleted = ? AND (next_run <= ? OR next_run < ?)", false, time.Now(), year2000).Find(&actions).Error
+	err := config.Db.Where("is_deleted = ? AND ((interval >= 0 AND next_run <= ?) OR (interval < 0 AND next_run < ?))", false, time.Now(), year2000).Find(&actions).Error
 	if err != nil {
 		log.Println("查询Action失败:", err)
 		return
@@ -180,6 +179,12 @@ func executeActionCode(actionRecord *database.Action, ctx context.Context) error
 			actionRecord.Error = ""
 			config.Db.Save(actionRecord)
 		}
+		return nil
+	}
+
+	// 如果是template类型，不运行，显示提示信息
+	if actionConfig.Type == "template" {
+		log.Printf("模版 %s 无需运行", actionRecord.Name)
 		return nil
 	}
 

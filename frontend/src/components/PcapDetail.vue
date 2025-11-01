@@ -700,8 +700,9 @@ const loadTabContent = (tabName: string) => {
         const start = Math.max(0, visibleFlowRange.value.start)
         const end = Math.min(flowData.value.length, visibleFlowRange.value.end)
         for (let i = start; i < end; i++) {
-          if (flowData.value[i]) {
-            getHexRowsForFlow(i, flowData.value[i].b)
+          const flow = flowData.value[i]
+          if (flow && flow.b) {
+            getHexRowsForFlow(i, flow.b)
           }
         }
       })
@@ -732,8 +733,9 @@ const handleScroll = debounce((event: Event) => {
   // 预加载十六进制数据（如果已加载相关标签页）
   if (loadedTabs.value.has('hex') || loadedTabs.value.has('compare')) {
     for (let i = start; i < end; i++) {
-      if (flowData.value[i] && !hexDataCache.value.has(i)) {
-        getHexRowsForFlow(i, flowData.value[i].b)
+      const flow = flowData.value[i]
+      if (flow && flow.b && !hexDataCache.value.has(i)) {
+        getHexRowsForFlow(i, flow.b)
       }
     }
   }
@@ -834,6 +836,11 @@ const isByteSelected = (flowIndex: number, byteIndex: number) => {
 // 复制选中的字节数据
 const copySelectedBytes = async (flowIndex: number) => {
   const flow = flowData.value[flowIndex]
+  if (!flow || !flow.b) {
+    ElMessage.error('数据流不存在')
+    return
+  }
+  
   const selection = getFlowSelection(flowIndex)
   
   if (selection.selectedByte === -1 && !selection.selectedRange) {
@@ -851,10 +858,19 @@ const copySelectedBytes = async (flowIndex: number) => {
       const end = selection.selectedRange.end
       selectedData = decodeBase64(flow.b).slice(start, end + 1)
       selectedHex = textToHex(selectedData)
-    } else {
+    } else if (selection.selectedByte !== undefined && selection.selectedByte !== -1) {
       // 复制单个字节
-      selectedData = decodeBase64(flow.b)[selection.selectedByte]
-      selectedHex = textToHex(selectedData)
+      const decodedData = decodeBase64(flow.b)
+      const byte = decodedData[selection.selectedByte]
+      if (byte !== undefined) {
+        selectedData = byte
+        selectedHex = textToHex(selectedData)
+      }
+    }
+    
+    if (!selectedData) {
+      ElMessage.warning('没有选择的数据')
+      return
     }
     
     const copyText = `原始数据: ${selectedData}\n十六进制: ${selectedHex}`

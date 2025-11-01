@@ -111,7 +111,7 @@ function toSeconds(v: any): number {
   }
   if (typeof v === 'string') {
     const m = v.trim().match(/^(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)?$/i)
-    if (!m) return Number(v) || 0
+    if (!m || !m[1]) return Number(v) || 0
     const num = parseFloat(m[1])
     const unit = (m[2] || 's').toLowerCase()
     const factor: Record<string, number> = {
