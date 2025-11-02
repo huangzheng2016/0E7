@@ -305,12 +305,14 @@ onMounted(() => {
             </div>
           </template>
         </el-table-column>
+        
+        <template #empty>
+          <div class="empty-state">
+            <p class="empty-title">暂无仓库</p>
+            <p class="empty-hint">仓库会在首次 push 时自动创建</p>
+          </div>
+        </template>
       </el-table>
-
-      <div v-if="sortedRepos.length === 0 && !loading" class="empty-state">
-        <p>暂无仓库</p>
-        <p class="hint">仓库会在首次 push 时自动创建</p>
-      </div>
     </div>
 
     <!-- 编辑描述对话框 -->
@@ -535,13 +537,17 @@ git push -u origin main` }}</code></pre>
 .empty-state {
   text-align: center;
   padding: 60px 20px;
+}
+
+.empty-state .empty-title {
+  font-size: 16px;
+  font-weight: 500;
   color: #909399;
 }
 
-.empty-state .hint {
+.empty-state .empty-hint {
   font-size: 12px;
   color: #c0c4cc;
-  margin-top: 8px;
 }
 
 /* 删除确认对话框样式 */

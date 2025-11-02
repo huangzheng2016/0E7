@@ -56,8 +56,9 @@ type Flag struct {
 	Team        string    `json:"team" gorm:"column:team;type:varchar(255);not null;default:'';index;"`
 	Flag        string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;default:'';index;"`
 	Status      string    `json:"status" gorm:"column:status;type:varchar(255);index;"`
-	Msg         string    `json:"msg" gorm:"column:msg;type:text;"` // 提交结果消息
-	ExploitName string    `json:"exploit_name" gorm:"-"`            // 不存储到数据库，仅用于显示
+	Msg         string    `json:"msg" gorm:"column:msg;type:text;"`                               // 提交结果消息
+	Score       float64   `json:"score" gorm:"column:score;type:float;not null;default:0;index;"` // 提交分数
+	ExploitName string    `json:"exploit_name" gorm:"-"`                                          // 不存储到数据库，仅用于显示
 	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
 	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }

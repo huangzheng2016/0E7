@@ -149,7 +149,8 @@ for item in data:
 	result.append({
 		"flag": item,
 		"status": "SUCCESS",
-		"msg": ""
+		"msg": "",
+		"score": 100.0
 	})
 print(json.dumps(result))`),
 				Config:   "{\"type\":\"flag_submiter\",\"num\":20}",

@@ -44,9 +44,10 @@ type ActionConfig struct {
 
 // Flag提交结果结构体
 type FlagSubmitResult struct {
-	Flag   string `json:"flag"`
-	Status string `json:"status"`
-	Msg    string `json:"msg"`
+	Flag   string  `json:"flag"`
+	Status string  `json:"status"`
+	Msg    string  `json:"msg"`
+	Score  float64 `json:"score"` // 提交分数
 }
 
 // 启动Action调度器
@@ -436,16 +437,17 @@ func processFlagResultsArray(results []FlagSubmitResult) error {
 			continue
 		}
 
-		// 更新状态和消息
+		// 更新状态、消息和分数
 		flag.Status = result.Status
 		flag.Msg = result.Msg
+		flag.Score = result.Score // 保存分数，包括0值
 		flag.UpdatedAt = time.Now()
 
 		err = config.Db.Save(&flag).Error
 		if err != nil {
 			log.Printf("更新flag %s 状态失败: %v", result.Flag, err)
 		} else {
-			log.Printf("更新flag %s 状态为: %s, 消息: %s", result.Flag, result.Status, result.Msg)
+			log.Printf("更新flag %s 状态为: %s, 消息: %s, 分数: %.1f", result.Flag, result.Status, result.Msg, result.Score)
 		}
 	}
 

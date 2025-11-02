@@ -15,6 +15,7 @@ interface Flag {
   flag: string
   status: string
   msg: string
+  score: number
   created_at: string
   updated_at: string
   exploit_name?: string
@@ -529,6 +530,14 @@ onUnmounted(() => {
               <el-tag :type="getStatusTagType(row.status)">
                 {{ getStatusText(row.status) }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="score" label="分数" width="100">
+            <template #default="{ row }">
+              <el-text v-if="row.score && row.score > 0" type="success">
+                {{ row.score.toFixed(1) }}
+              </el-text>
+              <el-text v-else type="info">-</el-text>
             </template>
           </el-table-column>
           <el-table-column prop="msg" label="消息" min-width="150">
