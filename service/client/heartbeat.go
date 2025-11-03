@@ -4,7 +4,6 @@ import (
 	"0E7/service/config"
 	"0E7/service/update"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -25,16 +24,12 @@ func heartbeat() {
 			go heartbeat()
 		}
 	}()
-	go func() {
-		for range jobsChan {
-			go func() {
-				workerSemaphore.Acquire(context.Background(), 1)
-				defer workerSemaphore.Release(1)
-				exploit()
-			}()
-		}
-	}()
-	for {
+
+	interval := 5 * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for range ticker.C {
 		cpuInfo, err := cpu.Info()
 		if err != nil {
 			log.Println("Failed to get cpuInfo:", err)
@@ -78,6 +73,7 @@ func heartbeat() {
 		request, err := http.NewRequest("POST", config.Server_url+"/api/heartbeat", requestBody)
 		if err != nil {
 			log.Println(err)
+			continue
 		}
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		response, err := client.Do(request)
@@ -120,16 +116,7 @@ func heartbeat() {
 			if !found && config.Client_update {
 				log.Println("Try to update")
 				go update.Replace()
-			} else if !config.Client_only_monitor {
-				// 获取 worker 资源并启动 exploit
-				go func() {
-					workerSemaphore.Acquire(context.Background(), 1)
-					defer workerSemaphore.Release(1)
-					exploit()
-				}()
 			}
-			go monitor()
 		}
-		time.Sleep(time.Second * 5)
 	}
 }

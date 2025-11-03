@@ -44,9 +44,10 @@ type ActionConfig struct {
 
 // Flag提交结果结构体
 type FlagSubmitResult struct {
-	Flag   string `json:"flag"`
-	Status string `json:"status"`
-	Msg    string `json:"msg"`
+	Flag   string  `json:"flag"`
+	Status string  `json:"status"`
+	Msg    string  `json:"msg"`
+	Score  float64 `json:"score"` // 提交分数
 }
 
 // 启动Action调度器
@@ -55,7 +56,7 @@ func StartActionScheduler() {
 	go taskExecutor()
 
 	// 启动定时器，每5秒查询一次数据库
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -66,9 +67,8 @@ func StartActionScheduler() {
 // 检查并排队待执行的任务
 func checkAndQueueActions() {
 	var actions []database.Action
-	// 查询条件：间隔>=0 且 有代码 且 (next_run <= 当前时间 或 next_run < 2000年)
 	year2000 := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	err := config.Db.Where("interval >= 0 AND is_deleted = ? AND (next_run <= ? OR next_run < ?)", false, time.Now(), year2000).Find(&actions).Error
+	err := config.Db.Where("is_deleted = ? AND ((interval >= 0 AND next_run <= ?) OR (interval < 0 AND next_run <= ?))", false, time.Now(), year2000).Find(&actions).Error
 	if err != nil {
 		log.Println("查询Action失败:", err)
 		return
@@ -142,8 +142,12 @@ func executeTask(actionRecord *database.Action) {
 		} else {
 			log.Printf("任务 %s (ID: %d) 执行成功", actionRecord.Name, actionRecord.ID)
 			actionRecord.Status = "SUCCESS"
-			actionRecord.Error = "" // 清空错误信息
-			actionRecord.NextRun = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
+			actionRecord.Error = ""
+			if actionRecord.Interval >= 0 {
+				actionRecord.NextRun = time.Now().Add(time.Duration(actionRecord.Interval) * time.Second)
+			} else {
+				actionRecord.NextRun = time.Date(2035, 1, 1, 0, 0, 0, 0, time.UTC)
+			}
 		}
 	case <-taskCtx.Done():
 		log.Printf("任务 %s (ID: %d) 执行超时", actionRecord.Name, actionRecord.ID)
@@ -183,6 +187,12 @@ func executeActionCode(actionRecord *database.Action, ctx context.Context) error
 		return nil
 	}
 
+	// 如果是template类型，不运行，显示提示信息
+	if actionConfig.Type == "template" {
+		log.Printf("模版 %s 无需运行", actionRecord.Name)
+		return nil
+	}
+
 	// 其他类型需要执行代码
 	match := regexp.MustCompile(`^data:(code\/(?:python2|python3|golang|bash));base64,(.*)$`).FindStringSubmatch(actionRecord.Code)
 	if match == nil {
@@ -205,6 +215,10 @@ func executeActionCode(actionRecord *database.Action, ctx context.Context) error
 		flags, err = getFlagsForSubmission(actionConfig.Num)
 		if err != nil {
 			return fmt.Errorf("获取flags失败: %v", err)
+		}
+		if len(flags) == 0 {
+			log.Printf("没有待提交的flags")
+			return nil
 		}
 	}
 
@@ -423,16 +437,17 @@ func processFlagResultsArray(results []FlagSubmitResult) error {
 			continue
 		}
 
-		// 更新状态和消息
+		// 更新状态、消息和分数
 		flag.Status = result.Status
 		flag.Msg = result.Msg
+		flag.Score = result.Score // 保存分数，包括0值
 		flag.UpdatedAt = time.Now()
 
 		err = config.Db.Save(&flag).Error
 		if err != nil {
 			log.Printf("更新flag %s 状态失败: %v", result.Flag, err)
 		} else {
-			log.Printf("更新flag %s 状态为: %s, 消息: %s", result.Flag, result.Status, result.Msg)
+			log.Printf("更新flag %s 状态为: %s, 消息: %s, 分数: %.1f", result.Flag, result.Status, result.Msg, result.Score)
 		}
 	}
 

@@ -70,12 +70,11 @@ const decodeBase64UTF8 = (base64: string): string => {
 // 获取exploit列表
 const fetchExploitList = async () => {
   try {
-    const formData = new FormData()
-    formData.append('page_size', '1000') // 获取所有exploit
+    const params = new URLSearchParams()
+    params.append('page_size', '1000') // 获取所有exploit
     
-    const response = await fetch('/webui/exploit_show', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/exploit_show?${params.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()
@@ -98,12 +97,8 @@ const fetchExploitList = async () => {
 // 根据actionId获取数据
 const fetchActionById = async (id: number | string) => {
   try {
-    const formData = new FormData()
-    formData.append('id', id.toString())
-    
-    const response = await fetch('/webui/action_get_by_id', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/action_get_by_id?id=${id.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()
@@ -179,9 +174,9 @@ const updateFormFromAction = (action: Action) => {
     if (action.code && action.code.startsWith('data:code/')) {
       try {
         const parts = action.code.split(';base64,')
-        if (parts.length === 2) {
+        if (parts.length === 2 && parts[0] && parts[1]) {
           const langPart = parts[0].split('/')
-          if (langPart.length === 2) {
+          if (langPart.length === 2 && langPart[1]) {
             // 先设置语言，再设置代码内容
             form.value.code_language = langPart[1]
           }
@@ -467,6 +462,7 @@ const formatNextRunTime = (nextRun: string, interval: number) => {
                   clearable
                 >
                   <el-option label="无" value="" />
+                  <el-option label="流量模版" value="template" />
                   <el-option label="Flag提交器" value="flag_submiter" />
                   <el-option label="执行脚本" value="exec_script" />
                 </el-select>
@@ -535,7 +531,7 @@ const formatNextRunTime = (nextRun: string, interval: number) => {
             <CodeEditor
               v-model="form.code"
               :language="form.code_language"
-              @update:language="(lang) => form.code_language = lang"
+              @update:language="(lang: string) => form.code_language = lang"
               placeholder="请输入要执行的代码..."
             />
           </el-form-item>

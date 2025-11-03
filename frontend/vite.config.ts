@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     vue(),
   ],
-  base: '/static/',
+  base: '/',
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
@@ -30,21 +30,27 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            return id.toString().split('node_modules/')[1].split('/')[0].toString();
-          }
-        },
-        chunkFileNames: (chunkInfo) => {
-          let fileName = chunkInfo.name || '[name]';
-          if(fileName[0]==='.') fileName = fileName.slice(1);
-          console.log('fl:'+fileName);
-          return `js/${fileName}.[hash].js`;
-        },
+        entryFileNames: 'static/[name].[hash].js',
+        chunkFileNames: 'static/[name].[hash].js',
         assetFileNames: (assetInfo) => {
           let fileName = assetInfo.name || '[name]';
           if(fileName[0]==='.') fileName = fileName.slice(1);
-          return `css/${fileName}.[hash][extname]`;
+          return `static/${fileName}.[hash][extname]`;
+        },
+        manualChunks(id) {
+          // 只对 node_modules 中的依赖进行拆分
+          if (id.includes('node_modules')) {
+            // 将大型库拆分出来
+            if (id.includes('element-plus')) {
+              return 'element-plus';
+            }
+            if (id.includes('vuex')) {
+              return 'vuex';
+            }
+            // CodeMirror 相关包合并到 vendor，避免初始化顺序问题
+            // 其他依赖合并到 vendor
+            return 'vendor';
+          }
         }
       }
     }

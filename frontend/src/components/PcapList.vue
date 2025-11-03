@@ -313,20 +313,19 @@ const fetchPcapItems = async () => {
       return
     }
 
-    const formData = new FormData()
-    formData.append('page', currentPage.value.toString())
-    formData.append('page_size', pageSize.value.toString())
+    const params = new URLSearchParams()
+    params.append('page', currentPage.value.toString())
+    params.append('page_size', pageSize.value.toString())
     
     if (searchFilters.value.ip) {
-      formData.append('ip', searchFilters.value.ip)
+      params.append('ip', searchFilters.value.ip)
     }
     if (searchFilters.value.tags) {
-      formData.append('tags', searchFilters.value.tags)
+      params.append('tags', searchFilters.value.tags)
     }
 
-    const response = await fetch('/webui/pcap_show', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_show?${params.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()
@@ -382,7 +381,7 @@ const fetchSearchResults = async () => {
   }
 
   try {
-    const formData = new FormData()
+    const params = new URLSearchParams()
     
     let query = searchFilters.value.fulltext.trim() || '*'
     
@@ -400,18 +399,17 @@ const fetchSearchResults = async () => {
       }
     }
     
-    formData.append('query', query)
-    formData.append('page', currentPage.value.toString())
-    formData.append('page_size', pageSize.value.toString())
-    formData.append('search_type', '0')
-    formData.append('search_mode', searchMode.value)
+    params.append('query', query)
+    params.append('page', currentPage.value.toString())
+    params.append('page_size', pageSize.value.toString())
+    params.append('search_type', '0')
+    params.append('search_mode', searchMode.value)
     if (searchFilters.value.port) {
-      formData.append('port', searchFilters.value.port)
+      params.append('port', searchFilters.value.port)
     }
 
-    const response = await fetch('/webui/search_pcap', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/search_pcap?${params.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()
@@ -838,29 +836,29 @@ onMounted(() => {
         <el-input
           v-model="searchFilters.fulltext"
           placeholder="全文搜索 (支持正则表达式，如: /flag\{.*\}/)"
-          style="width: 300px"
+          class="search-input search-input-fulltext"
           @keyup.enter="handleSearch"
           clearable
         />
         <el-input
           v-model="searchFilters.ip"
           placeholder="IP地址 (源IP或目标IP)"
-          style="width: 180px"
+          class="search-input search-input-ip"
           @keyup.enter="handleSearch"
         />
         <el-input
           v-model="searchFilters.tags"
           placeholder="标签"
-          style="width: 120px"
+          class="search-input search-input-tags"
           @keyup.enter="handleSearch"
         />
         <el-input
           v-model="searchFilters.port"
           placeholder="端口"
-          style="width: 100px"
+          class="search-input search-input-port"
           @keyup.enter="handleSearch"
         />
-        <el-select v-model="searchMode" placeholder="搜索模式" style="width: 120px; margin-right: 10px;">
+        <el-select v-model="searchMode" placeholder="搜索模式" class="search-select">
           <el-option label="关键词搜索" value="keyword"></el-option>
           <el-option label="字符串匹配" value="string"></el-option>
         </el-select>
@@ -1000,7 +998,7 @@ onMounted(() => {
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          :small="true"
+          size="small"
           :background="true"
           layout="total, sizes, prev, pager, next"
           :total="totalItems"
@@ -1112,17 +1110,38 @@ onMounted(() => {
 .toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 20px;
   padding-bottom: 15px;
   border-bottom: 1px solid #e6e8eb;
   flex-shrink: 0;
+  gap: 10px;
+}
+
+@media (max-width: 1200px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-section {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .action-section {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 .search-section {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .action-section {
@@ -1186,6 +1205,65 @@ onMounted(() => {
 .action-buttons .el-button {
   flex: 0 0 auto;
   min-width: 70px;
+}
+
+/* 搜索输入框响应式宽度 */
+.search-input {
+  min-width: 100px;
+}
+
+.search-input-fulltext {
+  width: 300px;
+  flex: 1 1 300px;
+}
+
+.search-input-ip {
+  width: 180px;
+  flex: 0 1 180px;
+}
+
+.search-input-tags {
+  width: 120px;
+  flex: 0 1 120px;
+}
+
+.search-input-port {
+  width: 100px;
+  flex: 0 1 100px;
+}
+
+.search-select {
+  width: 120px;
+  flex: 0 1 120px;
+}
+
+@media (max-width: 768px) {
+  .search-input-fulltext {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  
+  .search-input-ip,
+  .search-input-tags,
+  .search-input-port,
+  .search-select {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 100px;
+  }
+  
+  .action-buttons .el-button,
+  .toolbar .el-button,
+  .search-section .el-button,
+  .flag-buttons .el-button {
+    min-width: auto !important;
+    padding: 8px !important;
+  }
+  .action-buttons .el-button > .el-icon ~ *,
+  .toolbar .el-button > .el-icon ~ *,
+  .search-section .el-button > .el-icon ~ *,
+  .flag-buttons .el-button > .el-icon ~ * {
+    display: none !important;
+  }
 }
 
 .flow-direction {

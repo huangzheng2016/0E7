@@ -216,17 +216,17 @@ func savefile(file *multipart.FileHeader, c *gin.Context) error {
 		return fmt.Errorf("failed to save file: %v", err)
 	}
 
-	// 将上传的文件加入全局处理队列
-	log.Printf("将上传的文件加入处理队列: %s", filePath)
-	pcap.QueuePcapFile(filePath)
+	// 文件上传完成且MD5检查通过后，加入全局处理队列（跳过MD5检查，因为已经检查过了）
+	log.Printf("文件上传完成，MD5: %s，将加入处理队列: %s", fileMD5, filePath)
+	pcap.QueuePcapFile(filePath, false)
 
 	return nil
 }
 
 // pcap_show 获取流量列表
 func pcap_show(c *gin.Context) {
-	page, _ := strconv.Atoi(c.PostForm("page"))
-	pageSize, _ := strconv.Atoi(c.PostForm("page_size"))
+	page, _ := strconv.Atoi(c.Query("page"))
+	pageSize, _ := strconv.Atoi(c.Query("page_size"))
 
 	if page <= 0 {
 		page = 1
@@ -244,18 +244,18 @@ func pcap_show(c *gin.Context) {
 	query := config.Db.Model(&database.Pcap{})
 
 	// 添加搜索条件
-	if ip := c.PostForm("ip"); ip != "" {
+	if ip := c.Query("ip"); ip != "" {
 		// 同时搜索源IP和目标IP
 		query = query.Where("src_ip LIKE ? OR dst_ip LIKE ?", "%"+ip+"%", "%"+ip+"%")
 	}
 	// 保持向后兼容性，如果传入了单独的src_ip或dst_ip参数
-	if srcIP := c.PostForm("src_ip"); srcIP != "" {
+	if srcIP := c.Query("src_ip"); srcIP != "" {
 		query = query.Where("src_ip LIKE ?", "%"+srcIP+"%")
 	}
-	if dstIP := c.PostForm("dst_ip"); dstIP != "" {
+	if dstIP := c.Query("dst_ip"); dstIP != "" {
 		query = query.Where("dst_ip LIKE ?", "%"+dstIP+"%")
 	}
-	if tags := c.PostForm("tags"); tags != "" {
+	if tags := c.Query("tags"); tags != "" {
 		query = query.Where("tags LIKE ?", "%"+tags+"%")
 	}
 
@@ -298,7 +298,7 @@ func pcap_show(c *gin.Context) {
 
 // pcap_get_by_id 根据ID获取流量详情
 func pcap_get_by_id(c *gin.Context) {
-	idStr := c.PostForm("id")
+	idStr := c.Query("id")
 	if idStr == "" {
 		c.JSON(400, gin.H{
 			"message": "fail",
@@ -334,10 +334,10 @@ func pcap_get_by_id(c *gin.Context) {
 
 // pcap_download 下载pcap文件或获取文件信息
 func pcap_download(c *gin.Context) {
-	pcapId := c.PostForm("pcap_id")
-	fileType := c.PostForm("type") // "raw", "original", "parsed"
-	download := c.PostForm("d")    // 下载参数
-	info := c.PostForm("i")        // 信息参数
+	pcapId := c.Query("pcap_id")
+	fileType := c.Query("type") // "raw", "original", "parsed"
+	download := c.Query("d")    // 下载参数
+	info := c.Query("i")        // 信息参数
 
 	if pcapId == "" {
 		c.JSON(400, gin.H{

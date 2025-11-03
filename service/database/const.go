@@ -56,8 +56,9 @@ type Flag struct {
 	Team        string    `json:"team" gorm:"column:team;type:varchar(255);not null;default:'';index;"`
 	Flag        string    `json:"flag" gorm:"column:flag;type:varchar(255);not null;default:'';index;"`
 	Status      string    `json:"status" gorm:"column:status;type:varchar(255);index;"`
-	Msg         string    `json:"msg" gorm:"column:msg;type:text;"` // 提交结果消息
-	ExploitName string    `json:"exploit_name" gorm:"-"`            // 不存储到数据库，仅用于显示
+	Msg         string    `json:"msg" gorm:"column:msg;type:text;"`                               // 提交结果消息
+	Score       float64   `json:"score" gorm:"column:score;type:float;not null;default:0;index;"` // 提交分数
+	ExploitName string    `json:"exploit_name" gorm:"-"`                                          // 不存储到数据库，仅用于显示
 	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
 	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
@@ -90,11 +91,11 @@ type Action struct {
 	Output    string    `json:"output" gorm:"column:output;type:text;"`
 	Error     string    `json:"error" gorm:"column:error;type:text;"`
 	Config    string    `json:"config" gorm:"column:config;type:text;"`
-	Interval  int       `json:"interval" gorm:"column:interval;type:int;"`
-	Timeout   int       `json:"timeout" gorm:"column:timeout;type:int;default:60;"`                             // 超时时间（秒），默认60秒，最多60秒
-	Status    string    `json:"status" gorm:"column:status;type:varchar(50);default:'pending';not null;index;"` // 任务状态：pending, running, completed, timeout, error
-	NextRun   time.Time `json:"next_run" gorm:"column:next_run;type:datetime;index;"`                           // 下次执行时间
-	IsDeleted bool      `json:"is_deleted" gorm:"column:is_deleted;type:boolean;default:false;index;"`
+	Timeout   int       `json:"timeout" gorm:"column:timeout;type:int;default:60;"`                                                              // 超时时间（秒），默认60秒，最多60秒
+	Status    string    `json:"status" gorm:"column:status;type:varchar(50);default:'pending';not null;index;"`                                  // 任务状态：pending, running, completed, timeout, error
+	IsDeleted bool      `json:"is_deleted" gorm:"column:is_deleted;type:boolean;default:false;index:idx_action_deleted_nextrun_interval;index;"` // 用于复合索引优化查询（索引顺序：is_deleted, next_run, interval）
+	NextRun   time.Time `json:"next_run" gorm:"column:next_run;type:datetime;index:idx_action_deleted_nextrun_interval;index;"`                  // 下次执行时间，用于复合索引
+	Interval  int       `json:"interval" gorm:"column:interval;type:int;index:idx_action_deleted_nextrun_interval;"`                             // 用于复合索引
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime;index;"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }

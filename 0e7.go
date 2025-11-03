@@ -4,6 +4,7 @@ import (
 	"0E7/service/client"
 	"0E7/service/config"
 	flagService "0E7/service/flag"
+	"0E7/service/git"
 	"0E7/service/pcap"
 	"0E7/service/proxy"
 	"0E7/service/route"
@@ -13,7 +14,10 @@ import (
 	"0E7/service/update"
 	"0E7/service/webui"
 	"0E7/service/windows"
+	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -24,6 +28,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -244,30 +249,37 @@ func main() {
 			)
 		}))
 		r_server.Use(gin.Recovery())
+		r_server.Use(etagMiddleware())
 		r_server.Use(gzip.Gzip(gzip.DefaultCompression))
 
 		log.Printf("Server listening on port: %s", config.Server_port)
+
+		// 检查 Git 命令（Git 服务需要）
+		git.CheckAndWarnGit()
 
 		route.Register(r_server)
 		webui.Register(r_server)
 		update.Register(r_server)
 		server.Register(r_server)
+		git.Register(r_server)
+		proxy.RegisterRoutes(r_server)
 
 		// 启动flag检测器
 		_ = flagService.GetFlagDetector()
 		log.Println("Flag检测器已启动")
 
 		fp, _ := fs.Sub(f, "dist")
-		// 静态资源改为 /static 前缀，避免与 /proxy 冲突
-		r_server.StaticFS("/static", http.FS(fp))
-		// 根路径返回 index.html
+		fpStatic, _ := fs.Sub(f, "dist/static")
+
+		// 静态资源处理器，带缓存头
+		r_server.GET("/static/*filepath", func(c *gin.Context) {
+			path := strings.TrimPrefix(c.Param("filepath"), "/")
+			serveStaticFile(c, fpStatic, path, true)
+		})
+
+		// 根路径返回 index.html，带缓存头
 		r_server.GET("/", func(c *gin.Context) {
-			b, err := fs.ReadFile(fp, "index.html")
-			if err != nil {
-				c.String(http.StatusNotFound, "index not found")
-				return
-			}
-			c.Data(http.StatusOK, "text/html; charset=utf-8", b)
+			serveStaticFile(c, fp, "index.html", false)
 		})
 
 		if config.Server_tls {
@@ -295,7 +307,6 @@ func main() {
 
 		pcap.SetFlagRegex(config.Server_flag)
 
-		// 初始化全局 pcap 文件处理队列
 		pcap.InitPcapQueue()
 
 		go pcap.WatchDir("pcap")
@@ -377,7 +388,7 @@ server_url = http://remotehost:6102
 pypi       = https://pypi.tuna.tsinghua.edu.cn/simple
 update     = false
 worker     = 20
-monitor    = false
+monitor    = true
 only_monitor = false
 pcap_workers = 0
 
@@ -414,6 +425,139 @@ search_elasticsearch_password =
 	}
 
 	return nil
+}
+
+// responseWriter 包装 gin.ResponseWriter 以捕获响应体
+type responseWriter struct {
+	gin.ResponseWriter
+	body    *bytes.Buffer
+	written bool
+}
+
+func (w *responseWriter) Write(b []byte) (int, error) {
+	if !w.written {
+		w.body.Write(b)
+		return len(b), nil // 先不写入，等待计算 ETag
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *responseWriter) WriteString(s string) (int, error) {
+	if !w.written {
+		w.body.WriteString(s)
+		return len(s), nil // 先不写入，等待计算 ETag
+	}
+	return w.ResponseWriter.WriteString(s)
+}
+
+func (w *responseWriter) WriteHeader(code int) {
+	// 保存状态码，但不立即写入
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// etagMiddleware 为 API 响应添加 ETag 支持
+func etagMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 跳过静态文件和 index.html（它们已有专门的处理器）
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/static/") || path == "/" {
+			c.Next()
+			return
+		}
+
+		// 包装响应写入器以捕获响应体
+		writer := &responseWriter{
+			ResponseWriter: c.Writer,
+			body:           &bytes.Buffer{},
+		}
+		c.Writer = writer
+
+		// 继续处理请求
+		c.Next()
+
+		// 获取状态码
+		statusCode := writer.ResponseWriter.Status()
+		if statusCode == 0 {
+			// 如果没有设置状态码，默认使用 200
+			statusCode = 200
+		}
+
+		// 只对成功的响应添加 ETag（2xx 状态码）
+		if statusCode >= 200 && statusCode < 300 {
+			// 生成 ETag（基于响应体，即使是空响应也生成）
+			bodyBytes := writer.body.Bytes()
+			hash := sha256.Sum256(bodyBytes)
+			hashStr := hex.EncodeToString(hash[:16])
+			etag := fmt.Sprintf(`"%s"`, hashStr)
+
+			// 检查 If-None-Match 请求头（条件请求）
+			if match := c.GetHeader("If-None-Match"); match != "" {
+				matchCleaned := strings.ReplaceAll(strings.ReplaceAll(match, `"`, ""), " ", "")
+				if strings.Contains(matchCleaned, hashStr) {
+					// 匹配，返回 304 Not Modified
+					writer.ResponseWriter.Header().Set("ETag", etag)
+					writer.ResponseWriter.Header().Del("Content-Length") // 删除可能存在的 Content-Length
+					writer.ResponseWriter.WriteHeader(http.StatusNotModified)
+					return
+				}
+			}
+
+			// 设置 ETag 和缓存控制头
+			writer.ResponseWriter.Header().Set("ETag", etag)
+			// 删除可能已经设置的 Content-Length，让后续的 gzip 中间件根据压缩后的数据设置
+			writer.ResponseWriter.Header().Del("Content-Length")
+			if c.Request.Method == "GET" || c.Request.Method == "HEAD" {
+				writer.ResponseWriter.Header().Set("Cache-Control", "no-cache, must-revalidate")
+			} else {
+				writer.ResponseWriter.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+			}
+		}
+
+		// 写入响应体（原始未压缩内容）
+		// Content-Length 会在后续的 gzip 中间件中根据压缩后的数据自动设置
+		if writer.body.Len() > 0 {
+			writer.written = true
+			writer.ResponseWriter.Write(writer.body.Bytes())
+		}
+
+		// 恢复原始写入器
+		c.Writer = writer.ResponseWriter
+	}
+}
+
+// serveStaticFile 提供静态文件服务，带简单缓存
+func serveStaticFile(c *gin.Context, fileSystem fs.FS, path string, isStaticResource bool) {
+	// 读取文件
+	data, err := fs.ReadFile(fileSystem, path)
+	if err != nil {
+		c.String(http.StatusNotFound, "file not found")
+		return
+	}
+
+	// 设置缓存策略
+	if isStaticResource {
+		// 静态资源（JS/CSS等）：1年缓存
+		c.Header("Cache-Control", "public, max-age=31536000")
+	} else {
+		// index.html：不缓存
+		c.Header("Cache-Control", "no-cache")
+	}
+
+	// 设置 Content-Type
+	contentType := http.DetectContentType(data)
+	if path == "index.html" || strings.HasSuffix(path, ".html") {
+		contentType = "text/html; charset=utf-8"
+	} else if strings.HasSuffix(path, ".js") {
+		contentType = "application/javascript; charset=utf-8"
+	} else if strings.HasSuffix(path, ".css") {
+		contentType = "text/css; charset=utf-8"
+	} else if strings.HasSuffix(path, ".json") {
+		contentType = "application/json; charset=utf-8"
+	} else if strings.HasSuffix(path, ".ico") {
+		contentType = "image/x-icon"
+	}
+
+	c.Data(http.StatusOK, contentType, data)
 }
 
 // setupGracefulShutdown 设置优雅关闭处理

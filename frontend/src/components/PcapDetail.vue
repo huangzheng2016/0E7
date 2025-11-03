@@ -203,12 +203,8 @@ const fetchPcapDetail = async () => {
   
   loading.value = true
   try {
-    const formData = new FormData()
-    formData.append('id', props.pcapId.toString())
-
-    const response = await fetch('/webui/pcap_get_by_id', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_get_by_id?id=${props.pcapId.toString()}`, {
+      method: 'GET'
     })
     
     const result = await response.json()
@@ -272,13 +268,12 @@ const fetchPcapDetail = async () => {
 // 获取flow数据
 const fetchFlowData = async () => {
   try {
-    const formData = new FormData()
-    formData.append('pcap_id', props.pcapId.toString())
-    formData.append('type', 'parsed')
+    const params = new URLSearchParams()
+    params.append('pcap_id', props.pcapId.toString())
+    params.append('type', 'parsed')
 
-    const response = await fetch('/webui/pcap_download', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_download?${params.toString()}`, {
+      method: 'GET'
     })
     
     if (response.ok) {
@@ -345,14 +340,13 @@ const downloadFile = async (type: 'raw' | 'original' | 'parsed') => {
   
   try {
     // 先查询文件大小
-    const infoFormData = new FormData()
-    infoFormData.append('pcap_id', props.pcapId.toString())
-    infoFormData.append('type', type)
-    infoFormData.append('i', 'true')
+    const infoParams = new URLSearchParams()
+    infoParams.append('pcap_id', props.pcapId.toString())
+    infoParams.append('type', type)
+    infoParams.append('i', 'true')
 
-    const infoResponse = await fetch('/webui/pcap_download', {
-      method: 'POST',
-      body: infoFormData
+    const infoResponse = await fetch(`/webui/pcap_download?${infoParams.toString()}`, {
+      method: 'GET'
     })
     
     let fileSize = '未知大小'
@@ -379,14 +373,13 @@ const downloadFile = async (type: 'raw' | 'original' | 'parsed') => {
     }
     
     // 下载文件
-    const formData = new FormData()
-    formData.append('pcap_id', props.pcapId.toString())
-    formData.append('type', type)
-    formData.append('d', 'true')
+    const params = new URLSearchParams()
+    params.append('pcap_id', props.pcapId.toString())
+    params.append('type', type)
+    params.append('d', 'true')
 
-    const response = await fetch('/webui/pcap_download', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_download?${params.toString()}`, {
+      method: 'GET'
     })
     
     if (response.ok) {
@@ -553,14 +546,13 @@ const generateCode = async (templateType: 'requests' | 'pwntools' | 'curl') => {
 
   codeGenerationLoading.value = true
   try {
-    const formData = new FormData()
-    formData.append('pcap_id', props.pcapId.toString())
-    formData.append('template', templateType)
-    formData.append('flow_data', JSON.stringify(flowData.value))
+    const params = new URLSearchParams()
+    params.append('pcap_id', props.pcapId.toString())
+    params.append('template', templateType)
+    params.append('flow_data', JSON.stringify(flowData.value))
 
-    const response = await fetch('/webui/pcap_generate_code', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/pcap_generate_code?${params.toString()}`, {
+      method: 'GET'
     })
     
     if (!response.ok) {
@@ -700,8 +692,9 @@ const loadTabContent = (tabName: string) => {
         const start = Math.max(0, visibleFlowRange.value.start)
         const end = Math.min(flowData.value.length, visibleFlowRange.value.end)
         for (let i = start; i < end; i++) {
-          if (flowData.value[i]) {
-            getHexRowsForFlow(i, flowData.value[i].b)
+          const flow = flowData.value[i]
+          if (flow && flow.b) {
+            getHexRowsForFlow(i, flow.b)
           }
         }
       })
@@ -732,8 +725,9 @@ const handleScroll = debounce((event: Event) => {
   // 预加载十六进制数据（如果已加载相关标签页）
   if (loadedTabs.value.has('hex') || loadedTabs.value.has('compare')) {
     for (let i = start; i < end; i++) {
-      if (flowData.value[i] && !hexDataCache.value.has(i)) {
-        getHexRowsForFlow(i, flowData.value[i].b)
+      const flow = flowData.value[i]
+      if (flow && flow.b && !hexDataCache.value.has(i)) {
+        getHexRowsForFlow(i, flow.b)
       }
     }
   }
@@ -834,6 +828,11 @@ const isByteSelected = (flowIndex: number, byteIndex: number) => {
 // 复制选中的字节数据
 const copySelectedBytes = async (flowIndex: number) => {
   const flow = flowData.value[flowIndex]
+  if (!flow || !flow.b) {
+    ElMessage.error('数据流不存在')
+    return
+  }
+  
   const selection = getFlowSelection(flowIndex)
   
   if (selection.selectedByte === -1 && !selection.selectedRange) {
@@ -851,10 +850,19 @@ const copySelectedBytes = async (flowIndex: number) => {
       const end = selection.selectedRange.end
       selectedData = decodeBase64(flow.b).slice(start, end + 1)
       selectedHex = textToHex(selectedData)
-    } else {
+    } else if (selection.selectedByte !== undefined && selection.selectedByte !== -1) {
       // 复制单个字节
-      selectedData = decodeBase64(flow.b)[selection.selectedByte]
-      selectedHex = textToHex(selectedData)
+      const decodedData = decodeBase64(flow.b)
+      const byte = decodedData[selection.selectedByte]
+      if (byte !== undefined) {
+        selectedData = byte
+        selectedHex = textToHex(selectedData)
+      }
+    }
+    
+    if (!selectedData) {
+      ElMessage.warning('没有选择的数据')
+      return
     }
     
     const copyText = `原始数据: ${selectedData}\n十六进制: ${selectedHex}`
@@ -1371,6 +1379,19 @@ onUnmounted(() => {
 .download-buttons {
   display: flex;
   gap: 8px;
+}
+
+/* 响应式样式：小屏幕时按钮只显示图标 */
+@media (max-width: 768px) {
+  .download-buttons .el-button,
+  .flow-actions .el-button {
+    min-width: auto !important;
+    padding: 8px !important;
+  }
+  .download-buttons .el-button > .el-icon ~ *,
+  .flow-actions .el-button > .el-icon ~ * {
+    display: none !important;
+  }
 }
 
 .info-section {

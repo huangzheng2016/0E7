@@ -17,6 +17,7 @@ config.ini
 /test
 /exploit
 /upload
+/git
 .DS_Store
 /test_*
 cpu.prof

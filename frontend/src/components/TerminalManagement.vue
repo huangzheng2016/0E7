@@ -1,7 +1,6 @@
 <template>
   <div class="terminal-management">
     <div class="header">
-      <h2>终端管理</h2>
       <div class="header-actions">
         <el-button type="primary" @click="refreshClients" :loading="loading">
           <el-icon><Refresh /></el-icon>
@@ -16,7 +15,7 @@
 
     <!-- 客户端列表 -->
     <div class="clients-container">
-      <el-card v-for="client in clients" :key="client.id" class="client-card" shadow="hover">
+      <el-card v-for="client in sortedClients" :key="client.id" class="client-card" shadow="hover">
         <template #header>
           <div class="client-header">
             <div class="client-info">
@@ -52,13 +51,14 @@
                 :key="index"
                 class="interface-item"
                 @click="selectInterface(client, iface)"
+                @dblclick="openTrafficDialogForInterface(client, iface)"
                 :class="{ selected: selectedInterface && selectedInterface.clientId === client.id && selectedInterface.interfaceName === iface.name }"
               >
                 <div class="interface-main">
                   <span class="interface-name">{{ iface.name }}</span>
                   <span class="interface-ip" v-if="iface.ip">{{ iface.ip }}</span>
                 </div>
-                <div class="interface-desc">{{ iface.description || '无描述' }}</div>
+                <div class="interface-desc" v-if="iface.description">{{ iface.description }}</div>
               </div>
             </div>
             <div v-else class="no-interfaces">
@@ -106,7 +106,7 @@
         <el-form-item label="选择客户端" prop="clientId">
           <el-select v-model="trafficForm.clientId" placeholder="请选择客户端" style="width: 100%">
             <el-option
-              v-for="client in clients"
+              v-for="client in sortedClients"
               :key="client.id"
               :label="`${client.hostname || client.name} (ID: ${client.id})`"
               :value="client.id"
@@ -117,12 +117,12 @@
         <el-form-item label="选择网卡" prop="interfaceName">
           <el-select v-model="trafficForm.interfaceName" placeholder="请选择网卡" style="width: 100%">
             <el-option label="全部网卡" value="" />
-            <template v-for="client in clients" :key="client.id">
+            <template v-for="client in sortedClients" :key="client.id">
               <el-option
                 v-if="client.id === trafficForm.clientId"
                 v-for="iface in client.interfaces"
                 :key="`${client.id}-${iface.name}`"
-                :label="`${iface.name} - ${iface.description || '无描述'}`"
+                :label="iface.description ? `${iface.name} - ${iface.description}` : iface.name"
                 :value="iface.name"
               />
             </template>
@@ -141,9 +141,9 @@
         <el-form-item label="采集间隔" prop="interval">
           <el-input-number
             v-model="trafficForm.interval"
-            :min="10"
+            :min="1"
             :max="3600"
-            :step="10"
+            :step="1"
             style="width: 200px"
           />
           <span style="margin-left: 10px">秒</span>
@@ -152,6 +152,8 @@
         <el-form-item label="任务描述" prop="description">
           <el-input
             v-model="trafficForm.description"
+            type="textarea"
+            :rows="3"
             placeholder="可选，用于描述此采集任务"
           />
         </el-form-item>
@@ -236,6 +238,11 @@ const trafficRules = {
 
 const trafficFormRef = ref()
 
+// 按ID排序的客户端列表
+const sortedClients = computed(() => {
+  return [...clients.value].sort((a, b) => a.id - b.id)
+})
+
 // 获取平台类型标签
 const getPlatformType = (platform: string) => {
   switch (platform.toLowerCase()) {
@@ -254,12 +261,8 @@ const getPlatformType = (platform: string) => {
 const refreshClients = async () => {
   loading.value = true
   try {
-    const response = await fetch('/api/clients', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: ''
+    const response = await fetch('/webui/clients', {
+      method: 'GET'
     })
     const result = await response.json()
     
@@ -286,7 +289,7 @@ const loadClientMonitors = async (clientId: number) => {
     const formData = new FormData()
     formData.append('client_id', clientId.toString())
     
-    const response = await fetch('/api/client_monitors', {
+    const response = await fetch('/webui/client_monitors', {
       method: 'POST',
       body: formData
     })
@@ -311,6 +314,30 @@ const selectInterface = (client: Client, iface: NetworkInterface) => {
   }
 }
 
+// 为指定网卡打开流量采集对话框
+const openTrafficDialogForInterface = (client: Client, iface: NetworkInterface) => {
+  // 预填充表单
+  trafficForm.clientId = client.id
+  trafficForm.interfaceName = iface.name
+  // 将网卡描述预填充到任务描述中
+  if (iface.description) {
+    trafficForm.description = `监控网卡: ${iface.name} (${iface.description})`
+  } else {
+    trafficForm.description = `监控网卡: ${iface.name}`
+  }
+  // 重置其他字段为默认值（保持BPF和间隔为默认）
+  trafficForm.bpf = ''
+  trafficForm.interval = 60
+  
+  // 打开对话框
+  showTrafficCollectionDialog.value = true
+  
+  // 等待对话框打开后，验证表单（确保选择的下拉框正确显示）
+  setTimeout(() => {
+    trafficFormRef.value?.clearValidate()
+  }, 100)
+}
+
 // 删除监控任务
 const deleteMonitor = async (monitorId: number) => {
   try {
@@ -323,7 +350,7 @@ const deleteMonitor = async (monitorId: number) => {
     const formData = new FormData()
     formData.append('monitor_id', monitorId.toString())
 
-    const response = await fetch('/api/delete_monitor', {
+    const response = await fetch('/webui/delete_monitor', {
       method: 'POST',
       body: formData
     })
@@ -360,7 +387,7 @@ const submitTrafficCollection = async () => {
     formData.append('interval', trafficForm.interval.toString())
     formData.append('description', trafficForm.description)
 
-    const response = await fetch('/api/traffic_collection', {
+    const response = await fetch('/webui/traffic_collection', {
       method: 'POST',
       body: formData
     })
@@ -408,18 +435,22 @@ onMounted(() => {
 <style scoped>
 .terminal-management {
   padding: 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e6e8eb;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  margin-bottom: 20px;
-}
-
-.header h2 {
-  margin: 0;
-  color: #303133;
+  margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .header-actions {
@@ -429,12 +460,18 @@ onMounted(() => {
 
 .clients-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 16px;
+  flex: 1;
+  align-content: start;
+  overflow-y: auto;
 }
 
 .client-card {
   margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  height: fit-content;
 }
 
 .client-header {
@@ -480,11 +517,24 @@ onMounted(() => {
 
 .client-content {
   margin-top: 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .interfaces-section,
 .monitors-section {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.interfaces-section:last-child,
+.monitors-section:last-child {
+  margin-bottom: 0;
 }
 
 .interfaces-section h4,
@@ -497,8 +547,9 @@ onMounted(() => {
 
 .interfaces-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  flex: 1;
 }
 
 .interface-item {
@@ -600,9 +651,30 @@ onMounted(() => {
 }
 
 /* 响应式设计 */
+@media (max-width: 1400px) {
+  .clients-container {
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .clients-container {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+  
+  .interfaces-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
+  .terminal-management {
+    padding: 16px;
+  }
+  
   .clients-container {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
   
   .client-header {
@@ -616,6 +688,19 @@ onMounted(() => {
   
   .interfaces-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* 响应式样式：小屏幕时按钮只显示图标 */
+@media (max-width: 768px) {
+  .toolbar .el-button,
+  .action-buttons .el-button {
+    min-width: auto !important;
+    padding: 8px !important;
+  }
+  .toolbar .el-button > .el-icon ~ *,
+  .action-buttons .el-button > .el-icon ~ * {
+    display: none !important;
   }
 }
 </style>

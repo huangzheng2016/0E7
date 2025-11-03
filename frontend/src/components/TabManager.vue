@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { Menu, Close } from '@element-plus/icons-vue'
 import ActionList from './ActionList.vue'
 import ExploitList from './ExploitList.vue'
 import PcapList from './PcapList.vue'
@@ -9,11 +10,37 @@ import PcapDetail from './PcapDetail.vue'
 import FlagList from './FlagList.vue'
 import TerminalManagement from './TerminalManagement.vue'
 import ProxyCache from './ProxyCache.vue'
+import GitRepoList from './GitRepoList.vue'
+import { 
+  Clock, 
+  Document, 
+  Monitor, 
+  Flag, 
+  Connection, 
+  Files, 
+  Folder, 
+  Edit, 
+  View 
+} from '@element-plus/icons-vue'
+
+// 定义tab类型对应的图标映射
+const tabIcons: Record<string, any> = {
+  'action-list': Clock,
+  'exploit-list': Document,
+  'pcap-list': Monitor,
+  'flag-list': Flag,
+  'terminal-management': Connection,
+  'proxy-cache': Files,
+  'git-repo-list': Folder,
+  'action-edit': Edit,
+  'exploit-edit': Edit,
+  'pcap-detail': View
+}
 
 interface Tab {
   id: string
   title: string
-  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management' | 'proxy-cache' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
+  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management' | 'proxy-cache' | 'git-repo-list' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
   // 只保存ID，不保存完整数据
   itemId?: number | string  // action的id、exploit的id或pcap的id
   closable: boolean
@@ -70,6 +97,12 @@ const tabs = ref<Tab[]>([
     id: 'proxy-cache',
     title: '代理缓存',
     type: 'proxy-cache',
+    closable: false
+  },
+  {
+    id: 'git-repo-list',
+    title: 'Git 仓库',
+    type: 'git-repo-list',
     closable: false
   }
 ])
@@ -145,6 +178,12 @@ const loadState = () => {
             title: '代理缓存',
             type: 'proxy-cache',
             closable: false
+          },
+          {
+            id: 'git-repo-list',
+            title: 'Git 仓库',
+            type: 'git-repo-list',
+            closable: false
           }
         ]
         
@@ -197,14 +236,19 @@ const addTab = (tab: Omit<Tab, 'id'>) => {
 // 关闭选项卡
 const closeTab = (tabId: string) => {
   const index = tabs.value.findIndex(tab => tab.id === tabId)
-  if (index > -1 && tabs.value[index].closable) {
+  if (index > -1 && tabs.value[index]?.closable) {
     const closedTab = tabs.value[index]
+    if (!closedTab) return
+    
     tabs.value.splice(index, 1)
     
     // 如果关闭的是当前活动选项卡，切换到其他选项卡
     if (activeTabId.value === tabId) {
       if (tabs.value.length > 0) {
-        activeTabId.value = tabs.value[Math.max(0, index - 1)].id
+        const nextTab = tabs.value[Math.max(0, index - 1)]
+        if (nextTab) {
+          activeTabId.value = nextTab.id
+        }
       }
       
       // 清理URL参数
@@ -228,7 +272,7 @@ const closeAllTabs = () => {
   tabs.value = tabs.value.filter(tab => !tab.closable)
   
   // 切换到第一个标签页
-  if (tabs.value.length > 0) {
+  if (tabs.value.length > 0 && tabs.value[0]) {
     activeTabId.value = tabs.value[0].id
   }
   
@@ -664,28 +708,48 @@ onUnmounted(() => {
     <div class="tab-sidebar" :class="{ collapsed: isCollapsed }">
       <div class="sidebar-header">
         <el-button
-          v-if="isMobile"
           @click="toggleCollapse"
           size="small"
           type="text"
           class="collapse-btn"
         >
-          <el-icon><Menu /></el-icon>
+          <el-icon :size="18"><Menu /></el-icon>
         </el-button>
         <div v-if="!isCollapsed" class="header-content">
-          <h1 class="sidebar-title">0E7工具箱</h1>
-          <el-button 
-            type="danger" 
-            size="small" 
-            @click="closeAllTabs"
-            class="close-all-btn"
-          >
-            <el-icon><Close /></el-icon>
-            关闭所有
-          </el-button>
+          <div class="title-row">
+            <h1 class="sidebar-title">0E7工具箱</h1>
+            <el-tooltip content="关闭所有tab" placement="top">
+              <el-button 
+                type="text" 
+                size="small" 
+                @click="closeAllTabs"
+                class="close-all-btn"
+              >
+                <el-icon :size="18"><Delete /></el-icon>
+              </el-button>
+            </el-tooltip>
+          </div>
         </div>
       </div>
       
+      <!-- 折叠状态下的图标列表 -->
+      <div v-if="isCollapsed" class="tab-icon-list">
+        <div
+          v-for="tab in tabs"
+          :key="tab.id"
+          :class="['tab-icon-item', { 
+            active: activeTabId === tab.id
+          }]"
+          :data-title="tab.title"
+          @click="switchTab(tab.id)"
+        >
+          <el-icon class="tab-icon" :size="20">
+            <component :is="tabIcons[tab.type] || Document" />
+          </el-icon>
+        </div>
+      </div>
+      
+      <!-- 展开状态下的tab列表 -->
       <div v-if="!isCollapsed" class="tab-list">
         <div
           v-for="tab in tabs"
@@ -697,6 +761,9 @@ onUnmounted(() => {
           :data-title="tab.title"
           @click="switchTab(tab.id)"
         >
+          <el-icon class="tab-type-icon">
+            <component :is="tabIcons[tab.type] || Document" />
+          </el-icon>
           <span class="tab-title">{{ tab.title }}</span>
           <el-icon
             v-if="tab.closable"
@@ -716,7 +783,7 @@ onUnmounted(() => {
         <ActionList
           @edit="handleActionEdit"
           @add="handleActionAdd"
-          @state-change="(state) => handleStateChange('action-list', state)"
+          @state-change="(state: any) => handleStateChange('action-list', state)"
         />
       </div>
       
@@ -724,7 +791,7 @@ onUnmounted(() => {
         <ExploitList
           @edit="handleExploitEdit"
           @add="handleExploitAdd"
-          @state-change="(state) => handleStateChange('exploit-list', state)"
+          @state-change="(state: any) => handleStateChange('exploit-list', state)"
         />
       </div>
       
@@ -733,7 +800,7 @@ onUnmounted(() => {
           :search-state="activeTab.searchState"
           :pagination-state="activeTab.paginationState"
           @view="handlePcapView"
-          @state-change="(state) => handleStateChange('pcap-list', state)"
+          @state-change="(state: any) => handleStateChange('pcap-list', state)"
         />
       </div>
       
@@ -750,6 +817,10 @@ onUnmounted(() => {
       
       <div v-else-if="activeTab?.type === 'proxy-cache'">
         <ProxyCache />
+      </div>
+      
+      <div v-else-if="activeTab?.type === 'git-repo-list'">
+        <GitRepoList />
       </div>
       
       <div v-else-if="activeTab?.type === 'action-edit'">
@@ -820,6 +891,12 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   background: #f5f7fa;
+  min-height: 48px;
+}
+
+.tab-sidebar.collapsed .sidebar-header {
+  padding: 8px;
+  justify-content: center;
 }
 
 .header-content {
@@ -829,24 +906,83 @@ onUnmounted(() => {
   width: 100%;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
 .sidebar-title {
   font-weight: 600;
   color: #303133;
   font-size: 16px;
   margin: 0;
-  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: calc(100% - 40px);
 }
 
 .close-all-btn {
+  padding: 4px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  width: 100%;
+  flex-shrink: 0;
 }
 
 .collapse-btn {
   padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-icon-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 8px 0;
+  gap: 4px;
+}
+
+.tab-icon-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 4px;
+  margin: 2px 8px;
+  position: relative;
+}
+
+.tab-icon-item:hover {
+  background: #ecf5ff;
+}
+
+.tab-icon-item.active {
+  background: #409eff;
+  color: #fff;
+}
+
+.tab-icon-item.active:hover {
+  background: #66b1ff;
+}
+
+.tab-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-list {
@@ -868,6 +1004,17 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   box-sizing: border-box;
+  gap: 8px;
+}
+
+.tab-type-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-item:not(.closable) {
@@ -961,20 +1108,24 @@ onUnmounted(() => {
 
 
 /* 滚动条样式 */
-.tab-list::-webkit-scrollbar {
+.tab-list::-webkit-scrollbar,
+.tab-icon-list::-webkit-scrollbar {
   width: 4px;
 }
 
-.tab-list::-webkit-scrollbar-track {
+.tab-list::-webkit-scrollbar-track,
+.tab-icon-list::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
-.tab-list::-webkit-scrollbar-thumb {
+.tab-list::-webkit-scrollbar-thumb,
+.tab-icon-list::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 2px;
 }
 
-.tab-list::-webkit-scrollbar-thumb:hover {
+.tab-list::-webkit-scrollbar-thumb:hover,
+.tab-icon-list::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
 
@@ -1012,5 +1163,23 @@ onUnmounted(() => {
   .tab-sidebar.collapsed {
     width: 50px !important;
   }
+}
+
+/* 折叠状态下图标列表的提示框 */
+.tab-icon-item:hover::after {
+  content: attr(data-title);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
 }
 </style>

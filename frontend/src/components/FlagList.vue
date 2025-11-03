@@ -15,6 +15,7 @@ interface Flag {
   flag: string
   status: string
   msg: string
+  score: number
   created_at: string
   updated_at: string
   exploit_name?: string
@@ -115,26 +116,25 @@ const getStatusText = (status: string) => {
 const fetchFlags = async () => {
   loading.value = true
   try {
-    const formData = new FormData()
-    formData.append('page', currentPage.value.toString())
-    formData.append('page_size', pageSize.value.toString())
+    const params = new URLSearchParams()
+    params.append('page', currentPage.value.toString())
+    params.append('page_size', pageSize.value.toString())
     
     if (searchForm.flag) {
-      formData.append('flag', searchForm.flag)
+      params.append('flag', searchForm.flag)
     }
     if (searchForm.team) {
-      formData.append('team', searchForm.team)
+      params.append('team', searchForm.team)
     }
     if (searchForm.status) {
-      formData.append('status', searchForm.status)
+      params.append('status', searchForm.status)
     }
     if (searchForm.exploit_id) {
-      formData.append('exploit_id', searchForm.exploit_id)
+      params.append('exploit_id', searchForm.exploit_id)
     }
 
-    const response = await fetch('/webui/flag_show', {
-      method: 'POST',
-      body: formData
+    const response = await fetch(`/webui/flag_show?${params.toString()}`, {
+      method: 'GET'
     })
     const data = await response.json()
     
@@ -355,7 +355,7 @@ onMounted(() => {
 const openConfigDialog = async () => {
   try {
     const response = await fetch('/webui/flag_config', {
-      method: 'POST'
+      method: 'GET'
     })
     const data = await response.json()
     
@@ -437,10 +437,10 @@ onUnmounted(() => {
                 @keyup.enter="handleSearch"
               />
             </el-form-item>
-            <el-form-item label="Team">
+            <el-form-item label="队伍">
               <el-input
                 v-model="searchForm.team"
-                placeholder="请输入team"
+                placeholder="请输入队伍"
                 clearable
                 style="width: 200px"
                 @keyup.enter="handleSearch"
@@ -461,10 +461,10 @@ onUnmounted(() => {
                 />
               </el-select>
             </el-form-item>
-            <el-form-item label="Exploit ID">
+            <el-form-item label="脚本ID">
               <el-input
                 v-model="searchForm.exploit_id"
-                placeholder="请输入exploit ID"
+                placeholder="请输入脚本ID"
                 clearable
                 style="width: 150px"
                 @keyup.enter="handleSearch"
@@ -524,12 +524,20 @@ onUnmounted(() => {
               <el-text class="flag-text" type="primary">{{ row.flag }}</el-text>
             </template>
           </el-table-column>
-          <el-table-column prop="team" label="Team" width="120" />
+          <el-table-column prop="team" label="队伍" width="120" />
           <el-table-column prop="status" label="状态" width="100">
             <template #default="{ row }">
               <el-tag :type="getStatusTagType(row.status)">
                 {{ getStatusText(row.status) }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="score" label="分数" width="100">
+            <template #default="{ row }">
+              <el-text v-if="row.score && row.score > 0" type="success">
+                {{ row.score.toFixed(1) }}
+              </el-text>
+              <el-text v-else type="info">-</el-text>
             </template>
           </el-table-column>
           <el-table-column prop="msg" label="消息" min-width="150">
@@ -538,13 +546,13 @@ onUnmounted(() => {
               <el-text v-else type="info">-</el-text>
             </template>
           </el-table-column>
-          <el-table-column prop="exploit_id" label="Exploit ID" width="100" />
+          <el-table-column prop="exploit_id" label="脚本ID" width="100" />
           <el-table-column prop="exploit_name" label="Exploit名称" width="150">
             <template #default="{ row }">
               <el-link 
                 v-if="row.exploit_name && row.exploit_id" 
                 type="primary" 
-                :underline="false"
+                underline="never"
                 @click="handleExploitNameClick(row.exploit_id)"
                 class="exploit-link"
               >
@@ -583,7 +591,7 @@ onUnmounted(() => {
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[10, 20, 50, 100]"
-            :small="true"
+            size="small"
             :background="true"
             layout="total, sizes, prev, pager, next"
             :total="total"
@@ -616,10 +624,10 @@ onUnmounted(() => {
             </el-text>
           </div>
         </el-form-item>
-        <el-form-item label="Team">
+        <el-form-item label="队伍">
           <el-input
             v-model="submitDialog.team"
-            placeholder="请输入team（可选）"
+            placeholder="请输入队伍（可选）"
           />
         </el-form-item>
         <el-form-item label="Flag正则">
@@ -792,6 +800,19 @@ onUnmounted(() => {
   
   .action-right {
     justify-content: center;
+  }
+}
+
+/* 响应式样式：小屏幕时按钮只显示图标 */
+@media (max-width: 768px) {
+  .toolbar .el-button,
+  .action-buttons .el-button {
+    min-width: auto !important;
+    padding: 8px !important;
+  }
+  .toolbar .el-button > .el-icon ~ *,
+  .action-buttons .el-button > .el-icon ~ * {
+    display: none !important;
   }
 }
 </style>

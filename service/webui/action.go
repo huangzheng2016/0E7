@@ -303,7 +303,7 @@ func action_execute(c *gin.Context) {
 
 // action_get_by_id 根据ID获取Action详情
 func action_get_by_id(c *gin.Context) {
-	action_id := c.PostForm("id")
+	action_id := c.Query("id")
 	if action_id == "" {
 		c.JSON(400, gin.H{
 			"message": "fail",
