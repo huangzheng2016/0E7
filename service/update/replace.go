@@ -124,7 +124,6 @@ func Replace() {
 	log.Printf("Starting update process, downloading file: %s", filePath)
 	err := downloadFile(filePath)
 	if err != nil {
-<<<<<<< HEAD
 		log.Println("File download error", err)
 		// 下载失败，记录失败时间和失败次数
 		lastFailureTime = time.Now()
@@ -136,15 +135,7 @@ func Replace() {
 	lastFailureTime = time.Time{}
 	failureCount = 0
 
-	wdPath, err := os.Getwd()
-=======
-		log.Printf("File download error: %v", err)
-		return
-	}
-
-	// 获取可执行文件的目录作为工作目录，而不是当前工作目录
 	execPath, err := os.Executable()
->>>>>>> 0717f7ac9e19c53c1173bc383f262243d223c55b
 	if err != nil {
 		log.Printf("Failed to get executable path: %v", err)
 		// 回退到使用当前工作目录

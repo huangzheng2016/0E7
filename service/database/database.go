@@ -150,7 +150,7 @@ for item in data:
 		"flag": item,
 		"status": "SUCCESS",
 		"msg": "",
-		"score": 100.0
+		"score": 10.0
 	})
 print(json.dumps(result))`),
 				Config:   "{\"type\":\"flag_submiter\",\"num\":20}",
