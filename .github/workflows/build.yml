@@ -307,14 +307,54 @@ jobs:
     - name: Prepare release files
       run: |
         mkdir -p release
+        mkdir -p release_temp
+        
+        # Copy individual platform archives to release
         find . -name "*.tar.gz" -o -name "*.zip" | while read file; do
           cp "$file" release/
         done
         
-        # Create combined archive
-        cd release
-        tar -czf 0e7_all_platforms.tar.gz *.tar.gz *.zip
+        # Extract all archives to get executables
+        cd release_temp
+        
+        # Extract Linux AMD64
+        if [ -f ../release/0e7_linux_amd64.tar.gz ]; then
+          tar -xzf ../release/0e7_linux_amd64.tar.gz
+        fi
+        
+        # Extract Darwin AMD64
+        if [ -f ../release/0e7_darwin_amd64.tar.gz ]; then
+          tar -xzf ../release/0e7_darwin_amd64.tar.gz
+        fi
+        
+        # Extract Darwin ARM64
+        if [ -f ../release/0e7_darwin_arm64.tar.gz ]; then
+          tar -xzf ../release/0e7_darwin_arm64.tar.gz
+        fi
+        
+        # Extract Windows AMD64
+        if [ -f ../release/0e7_windows_amd64.zip ]; then
+          unzip -q ../release/0e7_windows_amd64.zip
+        fi
+        
+        # Create combined archive with all executables (not nested archives)
+        # Collect all executable files
+        ls -la
+        # Build file list dynamically
+        FILES=""
+        [ -f 0e7_linux_amd64 ] && FILES="$FILES 0e7_linux_amd64"
+        [ -f 0e7_darwin_amd64 ] && FILES="$FILES 0e7_darwin_amd64"
+        [ -f 0e7_darwin_arm64 ] && FILES="$FILES 0e7_darwin_arm64"
+        [ -f 0e7_windows_amd64.exe ] && FILES="$FILES 0e7_windows_amd64.exe"
+        
+        if [ -n "$FILES" ]; then
+          tar -czf ../release/0e7_all_platforms.tar.gz $FILES
+        else
+          echo "Warning: No executable files found to create all_platforms archive"
+        fi
+        
         cd ..
+        rm -rf release_temp
         
         ls -la release/
         
@@ -354,15 +394,9 @@ jobs:
           3. Make the binary executable (Linux/macOS): `chmod +x 0e7_*`
           4. Run: `./0e7_*` (Linux/macOS) or `0e7_*.exe` (Windows)
           
-          ### Features
-          - Network traffic analysis
-          - PCAP file processing
-          - Client-server architecture
-          - Web-based management interface
-          
           ### Dependencies
           - **Linux**: Requires libpcap-dev
           - **macOS**: Requires libpcap (via Homebrew)
-          - **Windows**: Requires WinPcap (extracted from Nmap 7.12 setup)
+          - **Windows**: Requires WinPcap or Npcap
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
