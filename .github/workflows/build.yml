@@ -19,15 +19,6 @@ jobs:
       with:
         go-version: '1.25'
         
-    - name: Cache apt packages
-      uses: actions/cache@v3
-      with:
-        path: /var/cache/apt
-        key: apt-libpcap-${{ runner.os }}-${{ hashFiles('**/build.yml') }}
-        restore-keys: |
-          apt-libpcap-${{ runner.os }}-
-          apt-${{ runner.os }}-
-          
     - name: Install libpcap-dev
       run: |
         sudo apt-get update
@@ -37,8 +28,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '24'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
         
     - name: Install frontend dependencies
       run: |
@@ -99,18 +88,6 @@ jobs:
       with:
         go-version: '1.25'
         
-    - name: Cache Homebrew packages
-      uses: actions/cache@v3
-      with:
-        path: |
-          /usr/local/Cellar
-          /usr/local/var/homebrew/locks
-          /usr/local/Homebrew/Library/Taps
-        key: brew-libpcap-${{ runner.os }}-${{ hashFiles('**/build.yml') }}
-        restore-keys: |
-          brew-libpcap-${{ runner.os }}-
-          brew-${{ runner.os }}-
-          
     - name: Install libpcap
       run: |
         brew install libpcap
@@ -119,8 +96,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '24'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
         
     - name: Install frontend dependencies
       run: |
@@ -175,33 +150,13 @@ jobs:
       with:
         go-version: '1.25'
         
-    - name: Cache 7-Zip
-      id: cache-7zip
-      uses: actions/cache@v3
-      with:
-        path: C:\ProgramData\chocolatey\bin\7z.exe
-        key: 7zip-v1
-        restore-keys: |
-          7zip-
-          
-    - name: Install 7-Zip (if not cached)
-      if: steps.cache-7zip.outputs.cache-hit != 'true'
+    - name: Install 7-Zip
       run: |
         Write-Host "Installing 7-Zip..."
         choco install 7zip -y
         Write-Host "7-Zip installed successfully"
         
-    - name: Cache WinPcap installer
-      id: cache-winpcap
-      uses: actions/cache@v3
-      with:
-        path: winpcap-nmap-4.13.exe
-        key: winpcap-nmap-4.13-v1
-        restore-keys: |
-          winpcap-nmap-4.13-
-          
-    - name: Download WinPcap installer (if not cached)
-      if: steps.cache-winpcap.outputs.cache-hit != 'true'
+    - name: Download WinPcap installer
       run: |
         Write-Host "Downloading Nmap 7.12 setup to extract WinPcap..."
         try {
@@ -229,10 +184,10 @@ jobs:
           Write-Host "WinPcap is already installed. Version: $($winpcapInstalled.Version)"
         } else {
           if (Test-Path "winpcap-nmap-4.13.exe") {
-            Write-Host "Installing WinPcap from cached installer..."
+            Write-Host "Installing WinPcap from downloaded installer..."
             $process = Start-Process -FilePath "winpcap-nmap-4.13.exe" -ArgumentList "/S", "/v/qn" -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -eq 0) {
-              Write-Host "WinPcap installed successfully from cached installer"
+              Write-Host "WinPcap installed successfully from downloaded installer"
             } else {
               Write-Host "WinPcap installation failed with exit code: $($process.ExitCode)"
               # Try alternative installation method
@@ -249,8 +204,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '24'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
         
     - name: Install frontend dependencies
       run: |
