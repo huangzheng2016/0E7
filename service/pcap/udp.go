@@ -133,29 +133,12 @@ func (s *udpStream) addPacket(packet gopacket.Packet, udp *layers.UDP) {
 		s.originalPackets = append(s.originalPackets, dataCopy)
 	}
 
-	// 创建FlowItem
 	flowItem := FlowItem{
 		B64:  base64.StdEncoding.EncodeToString(payload),
 		From: from,
 		Time: int(timestamp.UnixNano() / 1000000),
 	}
 
-	// 检查是否可以合并到前一个FlowItem
-	if len(s.FlowItems) > 0 {
-		lastItem := &s.FlowItems[len(s.FlowItems)-1]
-		if lastItem.From == from {
-			// 合并数据
-			existingData, err := base64.StdEncoding.DecodeString(lastItem.B64)
-			if err == nil {
-				combinedData := string(existingData) + string(payload)
-				lastItem.B64 = base64.StdEncoding.EncodeToString([]byte(combinedData))
-				s.total_size += len(payload)
-				return
-			}
-		}
-	}
-
-	// 添加新的FlowItem
 	s.FlowItems = append(s.FlowItems, flowItem)
 	s.total_size += len(payload)
 }
@@ -215,6 +198,7 @@ func (s *udpStream) finalize() {
 		Size:            s.total_size,
 		OriginalPackets: s.originalPackets,
 		LinkType:        s.linktype,
+		Tags:            []string{"UDP"},
 	}
 
 	// 调用重组回调函数

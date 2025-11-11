@@ -164,21 +164,24 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 		from = "s"
 	}
 
-	// consolidate subsequent elements from the same origin（避免跨 HTTP 报文边界合并）
 	l := len(t.FlowItems)
-	if l > 0 {
-		if t.FlowItems[l-1].From == from {
-			// 解码现有的B64数据
-			existingData, err := base64.StdEncoding.DecodeString(t.FlowItems[l-1].B64)
-			if err == nil {
-				// 简单判定是否为新的 HTTP 报文起始或上一个以双 CRLF 结束
-				startsNewHTTP := hasHTTPStart([]byte(string_data))
-				endsWithHeader := endsWithDoubleCRLF(existingData)
-				if !(startsNewHTTP || endsWithHeader) {
+	if l > 0 && t.FlowItems[l-1].From == from {
+		existingData, err := base64.StdEncoding.DecodeString(t.FlowItems[l-1].B64)
+		if err == nil {
+			startsNewHTTP := hasHTTPStart([]byte(string_data))
+			endsWithHeader := endsWithDoubleCRLF(existingData)
+			existingIsHTTP := hasHTTPStart(existingData)
+
+			if existingIsHTTP {
+				if !startsNewHTTP {
 					combinedData := append(existingData, []byte(string_data)...)
 					t.FlowItems[l-1].B64 = base64.StdEncoding.EncodeToString(combinedData)
 					return
 				}
+			} else if !startsNewHTTP && !endsWithHeader {
+				combinedData := append(existingData, []byte(string_data)...)
+				t.FlowItems[l-1].B64 = base64.StdEncoding.EncodeToString(combinedData)
+				return
 			}
 		}
 	}

@@ -652,7 +652,7 @@ func InitPcapQueue() {
 
 // QueuePcapFile 将 pcap 文件加入处理队列
 func QueuePcapFile(filePath string, check bool) {
-	pcapFileChan <- pcapFileTask{filePath: filePath, checkMD5: true}
+	pcapFileChan <- pcapFileTask{filePath: filePath, checkMD5: check}
 	log.Printf("已排队处理文件: %s", filePath)
 }
 
