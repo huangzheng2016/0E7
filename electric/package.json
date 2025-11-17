@@ -1,7 +1,8 @@
 {
   "name": "0e7-electric",
   "version": "1.0.0",
-  "description": "0E7 桌面端（Electric/Electron 包装）",
+  "description": "0E7 Desktop Version",
+  "homepage": "https://0e7.cn",
   "author": {
     "name": "0E7 Team",
     "email": "huangzhengdoc@gmail.com"

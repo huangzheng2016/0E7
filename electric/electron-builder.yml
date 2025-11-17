@@ -21,7 +21,6 @@ win:
     - nsis
 linux:
   category: Utility
-  homepage: https://0e7.cn
   target:
     - deb
 publish: null
