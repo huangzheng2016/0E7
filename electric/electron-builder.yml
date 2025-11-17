@@ -1,6 +1,5 @@
 appId: com.0e7.desktop
 productName: 0E7
-homepage: https://0e7.cn
 directories:
   output: release
   buildResources: build
@@ -17,15 +16,13 @@ mac:
   category: public.app-category.utilities
   target:
     - dmg
-    - zip
 win:
   target:
     - nsis
-    - zip
 linux:
   category: Utility
+  homepage: https://0e7.cn
   target:
-    - AppImage
     - deb
 publish: null
 

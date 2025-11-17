@@ -457,13 +457,9 @@ jobs:
           - **Windows AMD64**: `0e7_windows_amd64.zip`
           - **All Platforms**: `0e7_all_platforms.tar.gz`
           - **macOS Electric AMD64 (DMG)**: `0e7_electric_mac_amd64.dmg`
-          - **macOS Electric AMD64 (ZIP)**: `0e7_electric_mac_amd64.zip`
           - **macOS Electric ARM64 (DMG)**: `0e7_electric_mac_arm64.dmg`
-          - **macOS Electric ARM64 (ZIP)**: `0e7_electric_mac_arm64.zip`
-          - **Linux Electric AMD64 (AppImage)**: `0e7_electric_linux_amd64.AppImage`
           - **Linux Electric AMD64 (DEB)**: `0e7_electric_linux_amd64.deb`
           - **Windows Electric AMD64 (Installer)**: `0e7_electric_win_amd64.exe`
-          - **Windows Electric AMD64 (ZIP)**: `0e7_electric_win_amd64.zip`
           
           ### Installation
           1. Download the appropriate file for your platform
