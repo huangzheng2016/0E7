@@ -99,6 +99,7 @@ func main() {
 	var (
 		configFile   = flag.String("config", "config.ini", "指定配置文件路径")
 		serverMode   = flag.Bool("server", false, "以服务器模式启动")
+		serverPort   = flag.String("server-port", "", "在运行时覆盖配置文件中的 server.port")
 		help         = flag.Bool("help", false, "显示帮助信息")
 		installGuide = flag.Bool("install-guide", false, "显示Windows依赖安装指南")
 		cpuProfile   = flag.String("cpu-profile", "", "启用CPU性能分析并将结果写入指定文件")
@@ -108,9 +109,11 @@ func main() {
 	// 支持短参数
 	flag.BoolVar(serverMode, "s", false, "以服务器模式启动（等同于 --server）")
 	flag.BoolVar(help, "h", false, "显示帮助信息（等同于 --help）")
+	flag.StringVar(serverPort, "p", "", "以短参数形式覆盖 server.port（等同于 --server-port）")
 
 	// 解析命令行参数
 	flag.Parse()
+	envServerPort := os.Getenv("OE7_SERVER_PORT")
 
 	// 初始化性能分析
 	if *cpuProfile != "" {
@@ -202,6 +205,24 @@ func main() {
 	err = config.Init_conf(*configFile)
 	if err != nil {
 		log.Printf("Config load error from %s: %v", *configFile, err)
+	}
+
+	overridePort := ""
+	if serverPort != nil && *serverPort != "" {
+		overridePort = *serverPort
+	} else if envServerPort != "" {
+		overridePort = envServerPort
+	}
+	if overridePort != "" {
+		config.Server_port = overridePort
+		if config.Server_mode {
+			if config.Server_tls {
+				config.Server_url = "https://127.0.0.1:" + config.Server_port
+			} else {
+				config.Server_url = "http://127.0.0.1:" + config.Server_port
+			}
+		}
+		log.Printf("Server port overridden to %s", config.Server_port)
 	}
 
 	file, err := os.OpenFile("0e7.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -352,6 +373,7 @@ func showHelp() {
 	fmt.Println("  0e7 -config <file>            # 指定配置文件路径")
 	fmt.Println("  0e7 --server, -s              # 服务器模式启动")
 	fmt.Println("  0e7 --server -config <file>   # 服务器模式启动并指定配置文件")
+	fmt.Println("  0e7 --server-port 6200        # 覆盖配置文件中的 server.port")
 	fmt.Println("  0e7 --cpu-profile cpu.prof    # 启用CPU性能分析输出文件")
 	fmt.Println("  0e7 --mem-profile mem.prof    # 启用内存性能分析输出文件")
 	fmt.Println("  0e7 --help, -h                # 显示帮助信息")
@@ -361,6 +383,7 @@ func showHelp() {
 	fmt.Println("  -config, --config <file>      指定配置文件路径（默认: config.ini）")
 	fmt.Println("  --server, -s                  以服务器模式启动")
 	fmt.Println("  --help, -h                    显示帮助信息")
+	fmt.Println("  --server-port, -p <port>      运行时覆盖 server.port（优先级高于配置）")
 	fmt.Println("  --install-guide               显示Windows依赖安装指南")
 	fmt.Println("  --cpu-profile <file>          启用CPU性能分析并写入指定文件")
 	fmt.Println("  --mem-profile <file>          启用内存性能分析并在退出时写入指定文件")

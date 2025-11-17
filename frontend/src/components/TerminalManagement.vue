@@ -14,7 +14,7 @@
     </div>
 
     <!-- 客户端列表 -->
-    <div class="clients-container">
+    <div v-if="sortedClients.length > 0" class="clients-container">
       <el-card v-for="client in sortedClients" :key="client.id" class="client-card" shadow="hover">
         <template #header>
           <div class="client-header">
@@ -94,6 +94,12 @@
         </div>
       </el-card>
     </div>
+    <el-empty
+      v-else
+      description="暂无在线客户端"
+      :image-size="160"
+      class="clients-empty"
+    />
 
     <!-- 流量采集对话框 -->
     <el-dialog
@@ -267,17 +273,22 @@ const refreshClients = async () => {
     const result = await response.json()
     
     if (result.message === 'success') {
-      clients.value = result.result
-      
-      // 为每个客户端加载监控任务
-      for (const client of clients.value) {
-        await loadClientMonitors(client.id)
+      if (!Array.isArray(result.result)) {
+        throw new Error('服务端返回的客户端列表格式不正确')
       }
+
+      const clientList = result.result as Client[]
+      clients.value = clientList
+      
+      // 为每个客户端加载监控任务（并行执行避免阻塞）
+      await Promise.all(
+        clientList.map(client => loadClientMonitors(client.id))
+      )
     } else {
-      ElMessage.error('获取客户端列表失败: ' + result.error)
+      ElMessage.error('获取客户端列表失败: ' + (result.error || '未知错误'))
     }
-  } catch (error) {
-    ElMessage.error('获取客户端列表失败: ' + error)
+  } catch (error: any) {
+    ElMessage.error('获取客户端列表失败: ' + (error?.message || error))
   } finally {
     loading.value = false
   }

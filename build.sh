@@ -12,7 +12,7 @@ echo "开始构建..."
 echo "1. 构建前端..."
 cd frontend
 echo "  安装前端依赖..."
-npm install
+npm install --loglevel=error --fund=false
 echo "  构建前端资源..."
 npm run build-only
 cd ..
@@ -70,9 +70,15 @@ case $CURRENT_OS in
 esac
 
 # 定义构建目标平台（默认只构建当前系统）
-PLATFORMS=(
-    "$CURRENT_OS/$CURRENT_ARCH"
-)
+if [ -n "${TARGET_PLATFORMS:-}" ]; then
+    echo "  检测到自定义 TARGET_PLATFORMS: ${TARGET_PLATFORMS}"
+    TARGET_PLATFORMS_CLEAN=$(echo "${TARGET_PLATFORMS}" | tr ' ' ',')
+    IFS=',' read -r -a PLATFORMS <<< "$TARGET_PLATFORMS_CLEAN"
+else
+    PLATFORMS=(
+        "$CURRENT_OS/$CURRENT_ARCH"
+    )
+fi
 
 # 其他架构（注释掉，需要时可以启用）
 # PLATFORMS_EXTRA=(
@@ -141,4 +147,4 @@ for file in 0e7_*; do
 done
 
 echo ""
-echo "构建完成！🎉"
+echo "构建完成！"

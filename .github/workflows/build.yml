@@ -32,7 +32,7 @@ jobs:
     - name: Install frontend dependencies
       run: |
         cd frontend
-        npm ci
+        npm ci --loglevel=error --fund=false
         
     - name: Build frontend
       run: |
@@ -100,7 +100,7 @@ jobs:
     - name: Install frontend dependencies
       run: |
         cd frontend
-        npm ci
+        npm ci --loglevel=error --fund=false
         
     - name: Build frontend
       run: |
@@ -208,7 +208,7 @@ jobs:
     - name: Install frontend dependencies
       run: |
         cd frontend
-        npm ci
+        npm ci --loglevel=error --fund=false
         
     - name: Build frontend
       run: |
@@ -248,8 +248,119 @@ jobs:
         name: windows-amd64
         path: 0e7_windows_amd64.zip
 
+  electric-mac:
+    needs: build-darwin
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Download macOS amd64 binary
+      uses: actions/download-artifact@v4
+      with:
+        name: darwin-amd64
+        path: artifacts/darwin-amd64
+
+    - name: Download macOS arm64 binary
+      uses: actions/download-artifact@v4
+      with:
+        name: darwin-arm64
+        path: artifacts/darwin-arm64
+
+    - name: Extract binaries
+      run: |
+        tar -xzf artifacts/darwin-amd64/0e7_darwin_amd64.tar.gz
+        tar -xzf artifacts/darwin-arm64/0e7_darwin_arm64.tar.gz
+
+    - name: Build Electric (macOS)
+      run: |
+        chmod +x build-electric.sh 0e7_darwin_amd64 0e7_darwin_arm64
+        ./build-electric.sh --platform mac --arch all --skip-backend
+
+    - name: Upload Electric macOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: electric-mac
+        path: electric/release/**
+
+  electric-linux:
+    needs: build-linux
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Download Linux binary
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-amd64
+        path: artifacts/linux-amd64
+
+    - name: Extract binary
+      run: |
+        tar -xzf artifacts/linux-amd64/0e7_linux_amd64.tar.gz
+
+    - name: Build Electric (Linux)
+      run: |
+        chmod +x build-electric.sh 0e7_linux_amd64
+        ./build-electric.sh --platform linux --arch amd64 --skip-backend
+
+    - name: Upload Electric Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: electric-linux
+        path: electric/release/**
+
+  electric-windows:
+    needs: build-windows
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Download Windows binary
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-amd64
+        path: artifacts/windows-amd64
+
+    - name: Extract binary
+      shell: pwsh
+      run: |
+        Expand-Archive -Path artifacts/windows-amd64/0e7_windows_amd64.zip -DestinationPath .
+
+    - name: Build Electric (Windows)
+      shell: bash
+      run: |
+        chmod +x build-electric.sh
+        ./build-electric.sh --platform windows --arch amd64 --skip-backend
+
+    - name: Upload Electric Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: electric-windows
+        path: electric/release/**
+
   release:
-    needs: [build-linux, build-darwin, build-windows]
+    needs: [build-linux, build-darwin, build-windows, electric-mac, electric-linux, electric-windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event.inputs.version
     
@@ -263,7 +374,12 @@ jobs:
         mkdir -p release_temp
         
         # Copy individual platform archives to release
-        find . -name "*.tar.gz" -o -name "*.zip" | while read file; do
+        find . \( -name "*.tar.gz" -o -name "*.zip" \) | while read file; do
+          cp "$file" release/
+        done
+
+        # Copy Electric artifacts
+        find . -type f -name "0e7_electric_*" | while read file; do
           cp "$file" release/
         done
         
@@ -340,6 +456,14 @@ jobs:
           - **macOS ARM64**: `0e7_darwin_arm64.tar.gz`
           - **Windows AMD64**: `0e7_windows_amd64.zip`
           - **All Platforms**: `0e7_all_platforms.tar.gz`
+          - **macOS Electric AMD64 (DMG)**: `0e7_electric_mac_amd64.dmg`
+          - **macOS Electric AMD64 (ZIP)**: `0e7_electric_mac_amd64.zip`
+          - **macOS Electric ARM64 (DMG)**: `0e7_electric_mac_arm64.dmg`
+          - **macOS Electric ARM64 (ZIP)**: `0e7_electric_mac_arm64.zip`
+          - **Linux Electric AMD64 (AppImage)**: `0e7_electric_linux_amd64.AppImage`
+          - **Linux Electric AMD64 (DEB)**: `0e7_electric_linux_amd64.deb`
+          - **Windows Electric AMD64 (Installer)**: `0e7_electric_win_amd64.exe`
+          - **Windows Electric AMD64 (ZIP)**: `0e7_electric_win_amd64.zip`
           
           ### Installation
           1. Download the appropriate file for your platform

@@ -1,0 +1,23 @@
+{
+  "name": "0e7-electric",
+  "version": "1.0.0",
+  "description": "0E7 桌面端（Electric/Electron 包装）",
+  "author": "0E7 Team",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development electron src/main.js",
+    "build:mac": "electron-builder --config electron-builder.yml --mac",
+    "build:win": "electron-builder --config electron-builder.yml --win",
+    "build:linux": "electron-builder --config electron-builder.yml --linux"
+  },
+  "dependencies": {
+    "wait-on": "^7.2.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^32.3.3",
+    "electron-builder": "^25.1.8"
+  }
+}
+

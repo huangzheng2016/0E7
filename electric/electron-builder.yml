@@ -1,0 +1,30 @@
+appId: com.0e7.desktop
+productName: 0E7
+directories:
+  output: release
+  buildResources: build
+artifactName: 0e7_electric_${os}_${arch}.${ext}
+files:
+  - filter:
+      - package.json
+      - node_modules/**/*
+      - src/**/*
+extraResources:
+  - from: resources/bin
+    to: bin
+mac:
+  category: public.app-category.utilities
+  target:
+    - dmg
+    - zip
+win:
+  target:
+    - nsis
+    - zip
+linux:
+  category: Utility
+  target:
+    - AppImage
+    - deb
+publish: null
+

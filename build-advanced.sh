@@ -113,9 +113,9 @@ print_info "1. 构建前端..."
 cd frontend
 print_info "  安装前端依赖..."
 if [ "$VERBOSE" = true ]; then
-    npm install
+    npm install --loglevel=error --fund=false
 else
-    npm install > /dev/null 2>&1
+    npm install --loglevel=error --fund=false > /dev/null 2>&1
 fi
 
 print_info "  构建前端资源..."
@@ -333,7 +333,7 @@ for file in 0e7_*; do
 done
 
 echo ""
-print_success "构建完成！🎉"
+print_success "构建完成！"
 
 # 显示使用建议
 if [ "$RELEASE" = false ]; then
