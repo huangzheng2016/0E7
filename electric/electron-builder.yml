@@ -1,5 +1,6 @@
 appId: com.0e7.desktop
 productName: 0E7
+homepage: https://0e7.cn
 directories:
   output: release
   buildResources: build
