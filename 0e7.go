@@ -14,7 +14,9 @@ import (
 	"0E7/service/update"
 	"0E7/service/webui"
 	"0E7/service/windows"
+	"archive/tar"
 	"bytes"
+	gzipcompress "compress/gzip"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -26,11 +28,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -82,6 +86,82 @@ func runCleanup() {
 	})
 }
 
+// archiveLogFile 归档日志文件：创建 log 文件夹，将日志文件压缩为 tar.gz
+func archiveLogFile(logFilePath string) error {
+	// 检查日志文件是否存在且有内容
+	info, err := os.Stat(logFilePath)
+	if err != nil {
+		return err
+	}
+	if info.Size() == 0 {
+		// 文件为空，不需要归档
+		return nil
+	}
+
+	// 创建 log 文件夹
+	logDir := "log"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("创建 log 文件夹失败: %v", err)
+	}
+
+	// 生成时间戳文件名：年份时间到毫秒，格式：2025-11-18_12-30-45.123.tar.gz
+	now := time.Now()
+	timestamp := fmt.Sprintf("%04d-%02d-%02d_%02d-%02d-%02d.%03d",
+		now.Year(), now.Month(), now.Day(),
+		now.Hour(), now.Minute(), now.Second(),
+		now.Nanosecond()/1000000)
+	archiveName := fmt.Sprintf("%s.tar.gz", timestamp)
+	archivePath := filepath.Join(logDir, archiveName)
+
+	// 打开日志文件
+	logFile, err := os.Open(logFilePath)
+	if err != nil {
+		return fmt.Errorf("打开日志文件失败: %v", err)
+	}
+	defer logFile.Close()
+
+	// 创建 tar.gz 文件
+	archiveFile, err := os.Create(archivePath)
+	if err != nil {
+		return fmt.Errorf("创建归档文件失败: %v", err)
+	}
+	defer archiveFile.Close()
+
+	// 创建 gzip writer
+	gzipWriter := gzipcompress.NewWriter(archiveFile)
+	defer gzipWriter.Close()
+
+	// 创建 tar writer
+	tarWriter := tar.NewWriter(gzipWriter)
+	defer tarWriter.Close()
+
+	// 获取文件信息
+	fileInfo, err := logFile.Stat()
+	if err != nil {
+		return fmt.Errorf("获取文件信息失败: %v", err)
+	}
+
+	// 创建 tar header
+	header := &tar.Header{
+		Name:    filepath.Base(logFilePath),
+		Size:    fileInfo.Size(),
+		Mode:    int64(fileInfo.Mode()),
+		ModTime: fileInfo.ModTime(),
+	}
+
+	// 写入 header
+	if err := tarWriter.WriteHeader(header); err != nil {
+		return fmt.Errorf("写入 tar header 失败: %v", err)
+	}
+
+	// 复制文件内容到 tar
+	if _, err := io.Copy(tarWriter, logFile); err != nil {
+		return fmt.Errorf("复制文件内容失败: %v", err)
+	}
+
+	return nil
+}
+
 func main() {
 
 	fmt.Print("  ___   _____    _____  ____                            _  _\n" +
@@ -104,6 +184,7 @@ func main() {
 		installGuide = flag.Bool("install-guide", false, "显示Windows依赖安装指南")
 		cpuProfile   = flag.String("cpu-profile", "", "启用CPU性能分析并将结果写入指定文件")
 		memProfile   = flag.String("mem-profile", "", "启用内存性能分析并将结果写入指定文件")
+		logFile      = flag.String("log-file", "0e7.log", "指定日志文件路径")
 	)
 
 	// 支持短参数
@@ -225,7 +306,16 @@ func main() {
 		log.Printf("Server port overridden to %s", config.Server_port)
 	}
 
-	file, err := os.OpenFile("0e7.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	// 日志归档：在启动前压缩现有日志文件
+	if _, err := os.Stat(*logFile); err == nil {
+		// 日志文件存在，进行归档
+		if err := archiveLogFile(*logFile); err != nil {
+			// 归档失败不影响启动，只记录错误
+			fmt.Printf("警告: 日志归档失败: %v\n", err)
+		}
+	}
+
+	file, err := os.OpenFile(*logFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		log.Printf("日志文件初始化失败: %v", err)
 		runCleanup()
@@ -235,9 +325,13 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	if config.Global_debug {
 		multiWriter := io.MultiWriter(os.Stdout, file)
-		log.SetOutput(multiWriter)
+		// 使用日志拦截Writer，将日志同时发送到WebSocket广播器
+		logWriter := webui.NewLogWriter(multiWriter)
+		log.SetOutput(logWriter)
 	} else {
-		log.SetOutput(file)
+		// 使用日志拦截Writer，将日志同时发送到WebSocket广播器
+		logWriter := webui.NewLogWriter(file)
+		log.SetOutput(logWriter)
 	}
 
 	update.InitUpdate()
@@ -259,7 +353,8 @@ func main() {
 
 		r_server.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 			// 统一格式: 时间 | 状态码 | 耗时 | 客户端IP | 方法 路径 | 错误
-			return fmt.Sprintf("%s | %3d | %13v | %15s | %-7s %s | %s\n",
+			// 使用紧凑格式，避免过多空格
+			return fmt.Sprintf("%s | %d | %v | %s | %s %s | %s\n",
 				param.TimeStamp.Format("2006/01/02 15:04:05"),
 				param.StatusCode,
 				param.Latency,
@@ -376,6 +471,7 @@ func showHelp() {
 	fmt.Println("  0e7 --server-port 6200        # 覆盖配置文件中的 server.port")
 	fmt.Println("  0e7 --cpu-profile cpu.prof    # 启用CPU性能分析输出文件")
 	fmt.Println("  0e7 --mem-profile mem.prof    # 启用内存性能分析输出文件")
+	fmt.Println("  0e7 --log-file custom.log    # 指定日志文件路径")
 	fmt.Println("  0e7 --help, -h                # 显示帮助信息")
 	fmt.Println("  0e7 --install-guide           # 显示Windows依赖安装指南")
 	fmt.Println("")
@@ -387,6 +483,7 @@ func showHelp() {
 	fmt.Println("  --install-guide               显示Windows依赖安装指南")
 	fmt.Println("  --cpu-profile <file>          启用CPU性能分析并写入指定文件")
 	fmt.Println("  --mem-profile <file>          启用内存性能分析并在退出时写入指定文件")
+	fmt.Println("  --log-file <file>             指定日志文件路径（默认: 0e7.log）")
 	fmt.Println("")
 }
 

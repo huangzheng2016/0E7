@@ -19,6 +19,7 @@ config.ini
 /bleve
 /test
 /exploit
+/log
 /upload
 /git
 .DS_Store

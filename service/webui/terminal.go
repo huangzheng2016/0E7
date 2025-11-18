@@ -27,7 +27,7 @@ func getClients(c *gin.Context) {
 	}
 
 	// 解析每个客户端的网卡信息
-	var result []map[string]interface{}
+	result := make([]map[string]interface{}, 0) // 确保始终是数组而不是 nil
 	for _, client := range clients {
 		clientInfo := map[string]interface{}{
 			"id":         client.ID,
@@ -180,7 +180,7 @@ func getClientMonitors(c *gin.Context) {
 		return
 	}
 
-	var result []map[string]interface{}
+	result := make([]map[string]interface{}, 0) // 确保始终是数组而不是 nil
 	for _, monitor := range monitors {
 		result = append(result, map[string]interface{}{
 			"id":         monitor.ID,

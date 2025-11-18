@@ -19,6 +19,12 @@ export default defineConfig({
       '/webui': {
         target: 'http://localhost:6102',
         changeOrigin: true,
+        secure: false,
+        ws: true // 支持WebSocket代理
+      },
+      '/api': {
+        target: 'http://localhost:6102',
+        changeOrigin: true,
         secure: false
       }
     }

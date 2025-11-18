@@ -11,6 +11,7 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/gopacket v1.1.19
 	github.com/google/uuid v1.3.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/shirou/gopsutil/v3 v3.23.9
 	github.com/traefik/yaegi v0.15.1

@@ -11,6 +11,7 @@ import FlagList from './FlagList.vue'
 import TerminalManagement from './TerminalManagement.vue'
 import ProxyCache from './ProxyCache.vue'
 import GitRepoList from './GitRepoList.vue'
+import LogViewer from './LogViewer.vue'
 import { 
   Clock, 
   Document, 
@@ -20,7 +21,8 @@ import {
   Files, 
   Folder, 
   Edit, 
-  View 
+  View,
+  Notebook
 } from '@element-plus/icons-vue'
 
 // 定义tab类型对应的图标映射
@@ -32,6 +34,7 @@ const tabIcons: Record<string, any> = {
   'terminal-management': Connection,
   'proxy-cache': Files,
   'git-repo-list': Folder,
+  'log-viewer': Notebook,
   'action-edit': Edit,
   'exploit-edit': Edit,
   'pcap-detail': View
@@ -40,7 +43,7 @@ const tabIcons: Record<string, any> = {
 interface Tab {
   id: string
   title: string
-  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management' | 'proxy-cache' | 'git-repo-list' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
+  type: 'action-list' | 'exploit-list' | 'pcap-list' | 'flag-list' | 'terminal-management' | 'proxy-cache' | 'git-repo-list' | 'log-viewer' | 'action-edit' | 'exploit-edit' | 'pcap-detail'
   // 只保存ID，不保存完整数据
   itemId?: number | string  // action的id、exploit的id或pcap的id
   closable: boolean
@@ -104,10 +107,17 @@ const tabs = ref<Tab[]>([
     title: 'Git 仓库',
     type: 'git-repo-list',
     closable: false
+  },
+  {
+    id: 'log-viewer',
+    title: '日志查看',
+    type: 'log-viewer',
+    closable: false
   }
 ])
 
 const activeTabId = ref('action-list')
+const lastActiveTabId = ref<string | null>(null) // 记录上一个活动的tab ID
 const isCollapsed = ref(false)
 const isMobile = ref(false)
 
@@ -184,6 +194,12 @@ const loadState = () => {
             title: 'Git 仓库',
             type: 'git-repo-list',
             closable: false
+          },
+          {
+            id: 'log-viewer',
+            title: '日志查看',
+            type: 'log-viewer',
+            closable: false
           }
         ]
         
@@ -243,6 +259,15 @@ const addTab = (tab: Omit<Tab, 'id'>) => {
     id,
     ...tab
   }
+  
+  // 记录上一个活动的tab（如果当前有活动的tab）
+  if (activeTabId.value) {
+    const currentTab = tabs.value.find(tab => tab.id === activeTabId.value)
+    if (currentTab) {
+      lastActiveTabId.value = activeTabId.value
+    }
+  }
+  
   tabs.value.push(newTab)
   activeTabId.value = id
 }
@@ -258,24 +283,56 @@ const closeTab = (tabId: string) => {
     
     // 如果关闭的是当前活动选项卡，切换到其他选项卡
     if (activeTabId.value === tabId) {
-      if (tabs.value.length > 0) {
-        const nextTab = tabs.value[Math.max(0, index - 1)]
-        if (nextTab) {
-          activeTabId.value = nextTab.id
+      // 优先切换到上一个活动的tab
+      let nextTabId: string | null = null
+      
+      if (lastActiveTabId.value) {
+        // 检查上一个活动的tab是否还存在
+        const lastTab = tabs.value.find(tab => tab.id === lastActiveTabId.value)
+        if (lastTab) {
+          nextTabId = lastActiveTabId.value
         }
       }
       
-      // 清理URL参数
-      const url = new URL(window.location.href)
-      if (closedTab.type === 'action-edit') {
-        url.searchParams.delete('action_id')
-      } else if (closedTab.type === 'exploit-edit') {
-        url.searchParams.delete('exploit_id')
-      } else if (closedTab.type === 'pcap-detail') {
-        url.searchParams.delete('pcap_id')
-        url.searchParams.delete('search')
+      // 如果上一个活动的tab不存在或也被关闭了，则切换到定时计划
+      if (!nextTabId) {
+        const actionListTab = tabs.value.find(tab => tab.type === 'action-list')
+        if (actionListTab) {
+          nextTabId = actionListTab.id
+        } else if (tabs.value.length > 0) {
+          // 如果定时计划也不存在（理论上不应该发生），则切换到第一个tab
+          nextTabId = tabs.value[0].id
+        }
       }
-      window.history.pushState({ path: url.href }, '', url.href)
+      
+      if (nextTabId) {
+        activeTabId.value = nextTabId
+        // 更新URL
+        updateUrlForActiveTab()
+      }
+      
+      // 清理URL参数（如果切换到非编辑页面）
+      const nextTab = tabs.value.find(tab => tab.id === nextTabId)
+      if (nextTab && nextTab.type !== closedTab.type) {
+        const url = new URL(window.location.href)
+        if (closedTab.type === 'action-edit') {
+          url.searchParams.delete('action_id')
+        } else if (closedTab.type === 'exploit-edit') {
+          url.searchParams.delete('exploit_id')
+        } else if (closedTab.type === 'pcap-detail') {
+          url.searchParams.delete('pcap_id')
+          url.searchParams.delete('search')
+        }
+        window.history.pushState({ path: url.href }, '', url.href)
+      }
+      
+      // 清除lastActiveTabId，因为已经切换了
+      lastActiveTabId.value = null
+    } else {
+      // 如果关闭的不是当前活动的tab，需要更新lastActiveTabId
+      if (lastActiveTabId.value === tabId) {
+        lastActiveTabId.value = null
+      }
     }
   }
 }
@@ -285,7 +342,10 @@ const closeAllTabs = () => {
   // 只保留不可关闭的标签页（通常是列表页面）
   tabs.value = tabs.value.filter(tab => !tab.closable)
   
-  // 切换到第一个标签页
+  // 重置上一个活动的tab
+  lastActiveTabId.value = null
+  
+  // 切换到第一个标签页（通常是定时计划）
   if (tabs.value.length > 0 && tabs.value[0]) {
     activeTabId.value = tabs.value[0].id
   }
@@ -306,6 +366,15 @@ defineExpose({
 
 // 切换到指定选项卡
 const switchTab = (tabId: string) => {
+  // 记录上一个活动的tab（如果当前有活动的tab且不是要切换到的tab）
+  if (activeTabId.value && activeTabId.value !== tabId) {
+    // 确保上一个tab仍然存在
+    const lastTab = tabs.value.find(tab => tab.id === activeTabId.value)
+    if (lastTab) {
+      lastActiveTabId.value = activeTabId.value
+    }
+  }
+  
   // 直接切换标签页，不需要保存/恢复状态
   activeTabId.value = tabId
   
@@ -841,6 +910,10 @@ onUnmounted(() => {
       
       <div v-else-if="activeTab?.type === 'git-repo-list'">
         <GitRepoList />
+      </div>
+      
+      <div v-else-if="activeTab?.type === 'log-viewer'">
+        <LogViewer />
       </div>
       
       <div v-else-if="activeTab?.type === 'action-edit'">

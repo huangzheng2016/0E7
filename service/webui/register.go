@@ -52,4 +52,7 @@ func Register(router *gin.Engine) {
 	router.POST("/webui/traffic_collection", createTrafficCollection)
 	router.POST("/webui/client_monitors", getClientMonitors)
 	router.POST("/webui/delete_monitor", deleteMonitor)
+
+	// 日志流式传输WebSocket
+	router.GET("/webui/log/ws", handleLogWebSocket)
 }

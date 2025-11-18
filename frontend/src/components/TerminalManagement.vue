@@ -273,22 +273,23 @@ const refreshClients = async () => {
     const result = await response.json()
     
     if (result.message === 'success') {
-      if (!Array.isArray(result.result)) {
-        throw new Error('服务端返回的客户端列表格式不正确')
-      }
-
-      const clientList = result.result as Client[]
+      // 处理 result.result 为 null 或 undefined 的情况
+      const clientList = Array.isArray(result.result) ? (result.result as Client[]) : []
       clients.value = clientList
       
       // 为每个客户端加载监控任务（并行执行避免阻塞）
-      await Promise.all(
-        clientList.map(client => loadClientMonitors(client.id))
-      )
+      if (clientList.length > 0) {
+        await Promise.all(
+          clientList.map(client => loadClientMonitors(client.id))
+        )
+      }
     } else {
       ElMessage.error('获取客户端列表失败: ' + (result.error || '未知错误'))
+      clients.value = []
     }
   } catch (error: any) {
     ElMessage.error('获取客户端列表失败: ' + (error?.message || error))
+    clients.value = []
   } finally {
     loading.value = false
   }
@@ -309,11 +310,17 @@ const loadClientMonitors = async (clientId: number) => {
     if (result.message === 'success') {
       const client = clients.value.find(c => c.id === clientId)
       if (client) {
-        client.monitors = result.result
+        // 确保 result.result 是数组，如果不是则使用空数组
+        client.monitors = Array.isArray(result.result) ? result.result : []
       }
     }
   } catch (error) {
     console.error('加载监控任务失败:', error)
+    // 如果出错，确保 monitors 是空数组
+    const client = clients.value.find(c => c.id === clientId)
+    if (client) {
+      client.monitors = []
+    }
   }
 }
 
