@@ -7,9 +7,9 @@ config.ini
 *.bak
 *.backup
 /frontend/node_modules/
-/electric/node_modules/
-/electric/release/
-/electric/resources/bin/
+/electron/node_modules/
+/electron/release/
+/electron/resources/bin/
 .idea
 /0E7
 /flow

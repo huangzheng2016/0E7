@@ -3,12 +3,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ELECTRIC_DIR="${ROOT_DIR}/electric"
-RESOURCES_DIR="${ELECTRIC_DIR}/resources"
+ELECTRON_DIR="${ROOT_DIR}/electron"
+RESOURCES_DIR="${ELECTRON_DIR}/resources"
 BIN_DIR="${RESOURCES_DIR}/bin"
 
 rename_archives() {
-  if [ ! -d "${ELECTRIC_DIR}/release" ]; then
+  if [ ! -d "${ELECTRON_DIR}/release" ]; then
     return
   fi
   while IFS= read -r -d '' file; do
@@ -16,12 +16,12 @@ rename_archives() {
     if [ "$file" != "$new_file" ]; then
       mv "$file" "$new_file"
     fi
-  done < <(find "${ELECTRIC_DIR}/release" -type f -name '0e7_electric_*_x64.*' -print0)
+  done < <(find "${ELECTRON_DIR}/release" -type f -name '0e7_electron_*_x64.*' -print0)
 }
 
 usage() {
   cat <<'EOF'
-用法: ./build-electric.sh [选项]
+用法: ./build-electron.sh [选项]
 
 选项:
   --platform <auto|mac|linux|windows|all>  指定目标平台，默认 auto（当前系统）
@@ -214,8 +214,8 @@ else
 fi
 
 ensure_dependencies() {
-  echo "==> 安装 Electric 依赖"
-  npm --prefix "${ELECTRIC_DIR}" install --loglevel=error --fund=false
+  echo "==> 安装 Electron 依赖"
+  npm --prefix "${ELECTRON_DIR}" install --loglevel=error --fund=false
 }
 
 backend_filename() {
@@ -252,7 +252,7 @@ map_arch_flag() {
   esac
 }
 
-run_electric_build() {
+run_electron_build() {
   local os="$1"
   local arch="$2"
   local arch_flag
@@ -260,19 +260,22 @@ run_electric_build() {
 
   case "$os" in
     darwin)
-      npm --prefix "${ELECTRIC_DIR}" run build:mac -- "--${arch_flag}"
+      npm --prefix "${ELECTRON_DIR}" run build:mac -- "--${arch_flag}"
       ;;
     linux)
-      npm --prefix "${ELECTRIC_DIR}" run build:linux -- "--${arch_flag}"
+      npm --prefix "${ELECTRON_DIR}" run build:linux -- "--${arch_flag}"
       ;;
     windows)
-      npm --prefix "${ELECTRIC_DIR}" run build:win -- "--${arch_flag}"
+      npm --prefix "${ELECTRON_DIR}" run build:win -- "--${arch_flag}"
       ;;
     *)
       echo "未知的构建目标: ${os}"
       exit 1
       ;;
   esac
+  
+  # 删除生成的 blockmap 文件
+  find "${ELECTRON_DIR}/release" -name "*.blockmap" -type f -delete 2>/dev/null || true
 }
 
 ensure_dependencies
@@ -281,10 +284,10 @@ for target in "${TARGETS[@]}"; do
   IFS='/' read -r os arch <<< "$target"
   echo "==> 打包 ${os}/${arch}"
   prepare_binary "$os" "$arch"
-  run_electric_build "$os" "$arch"
+  run_electron_build "$os" "$arch"
 done
 
 rename_archives
 
-echo "Electric 打包完成，产物位于 ${ELECTRIC_DIR}/release"
+echo "Electron 打包完成，产物位于 ${ELECTRON_DIR}/release"
 

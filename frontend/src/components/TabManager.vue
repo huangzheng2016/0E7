@@ -207,18 +207,32 @@ const loadState = () => {
         tabs.value = mergedTabs
       }
       
-      // 恢复活动标签页
+      // 恢复活动标签页，但确保对应的 tab 存在
       if (state.activeTabId) {
-        activeTabId.value = state.activeTabId
+        const tabExists = tabs.value.some(tab => tab.id === state.activeTabId)
+        if (tabExists) {
+          activeTabId.value = state.activeTabId
+        } else {
+          // 如果保存的 tab 不存在，回退到默认的 action-list
+          activeTabId.value = 'action-list'
+        }
+      } else {
+        // 如果没有保存的 activeTabId，使用默认值
+        activeTabId.value = 'action-list'
       }
       
       // 恢复折叠状态
       if (typeof state.isCollapsed === 'boolean') {
         isCollapsed.value = state.isCollapsed
       }
+    } else {
+      // 如果没有保存的状态，确保使用默认值
+      activeTabId.value = 'action-list'
     }
   } catch (error) {
     console.warn('Failed to load tab state:', error)
+    // 出错时也确保使用默认值
+    activeTabId.value = 'action-list'
   }
 }
 
@@ -692,6 +706,12 @@ onMounted(() => {
   
   // 根据URL参数自动打开对应的编辑标签页
   openTabFromUrl()
+  
+  // 确保 activeTabId 对应的 tab 存在，如果不存在则回退到 action-list
+  const activeTab = tabs.value.find(tab => tab.id === activeTabId.value)
+  if (!activeTab) {
+    activeTabId.value = 'action-list'
+  }
   
   checkScreenSize()
   window.addEventListener('resize', checkScreenSize)

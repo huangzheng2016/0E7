@@ -510,14 +510,14 @@ onUnmounted(() => {
 
     <!-- 数据表格 -->
     <div class="table-section">
-      <el-card>
-        <el-table
-          :data="flags"
-          v-loading="loading"
-          stripe
-          style="width: 100%"
-          height="calc(100vh - 300px)"
-        >
+      <el-card class="table-card">
+        <div class="table-wrapper">
+          <el-table
+            :data="flags"
+            v-loading="loading"
+            stripe
+            style="width: 100%"
+          >
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="flag" label="Flag" min-width="200">
             <template #default="{ row }">
@@ -583,7 +583,8 @@ onUnmounted(() => {
               </el-button>
             </template>
           </el-table-column>
-        </el-table>
+          </el-table>
+        </div>
 
         <!-- 分页 -->
         <div class="pagination-container">
@@ -691,11 +692,20 @@ onUnmounted(() => {
 
 <style scoped>
 .flag-list {
-  padding: 0;
+  padding: 20px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e6e8eb;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .search-section {
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .search-card {
@@ -708,6 +718,7 @@ onUnmounted(() => {
 
 .action-section {
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .action-bar {
@@ -732,7 +743,35 @@ onUnmounted(() => {
 }
 
 .table-section {
-  margin-bottom: 16px;
+  margin-bottom: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.table-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 20px;
+  flex: 1;
+  min-height: 0;
+}
+
+.table-wrapper {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
 }
 
 .flag-text {

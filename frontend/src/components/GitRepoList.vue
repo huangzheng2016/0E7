@@ -250,7 +250,7 @@ onMounted(() => {
     </div>
 
     <div class="repo-table-container" v-loading="loading">
-      <el-table :data="sortedRepos" stripe style="width: 100%" height="calc(100vh - 300px)">
+      <el-table :data="sortedRepos" stripe style="width: 100%; flex: 1; min-height: 0;">
         <el-table-column prop="name" label="仓库名称" width="200">
           <template #default="{ row }">
             <strong>{{ row.name }}</strong>
@@ -412,12 +412,14 @@ git push -u origin main` }}</code></pre>
 .git-repo-list {
   padding: 20px;
   background: #fff;
-  border-radius: 4px;
+  border-radius: 6px;
+  border: 1px solid #e6e8eb;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100vh - 40px);
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .header {
@@ -425,6 +427,7 @@ git push -u origin main` }}</code></pre>
   justify-content: flex-start;
   align-items: center;
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
 .header-actions {

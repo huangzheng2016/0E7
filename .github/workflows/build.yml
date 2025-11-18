@@ -248,7 +248,7 @@ jobs:
         name: windows-amd64
         path: 0e7_windows_amd64.zip
 
-  electric-mac:
+  electron-mac:
     needs: build-darwin
     runs-on: macos-latest
 
@@ -278,18 +278,20 @@ jobs:
         tar -xzf artifacts/darwin-amd64/0e7_darwin_amd64.tar.gz
         tar -xzf artifacts/darwin-arm64/0e7_darwin_arm64.tar.gz
 
-    - name: Build Electric (macOS)
+    - name: Build Electron (macOS)
       run: |
-        chmod +x build-electric.sh 0e7_darwin_amd64 0e7_darwin_arm64
-        ./build-electric.sh --platform mac --arch all --skip-backend
+        chmod +x build-electron.sh 0e7_darwin_amd64 0e7_darwin_arm64
+        ./build-electron.sh --platform mac --arch all --skip-backend
+        # Remove blockmap files
+        find electron/release -name "*.blockmap" -type f -delete 2>/dev/null || true
 
-    - name: Upload Electric macOS artifacts
+    - name: Upload Electron macOS artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: electric-mac
-        path: electric/release/**
+        name: electron-mac
+        path: electron/release/**
 
-  electric-linux:
+  electron-linux:
     needs: build-linux
     runs-on: ubuntu-latest
 
@@ -312,18 +314,20 @@ jobs:
       run: |
         tar -xzf artifacts/linux-amd64/0e7_linux_amd64.tar.gz
 
-    - name: Build Electric (Linux)
+    - name: Build Electron (Linux)
       run: |
-        chmod +x build-electric.sh 0e7_linux_amd64
-        ./build-electric.sh --platform linux --arch amd64 --skip-backend
+        chmod +x build-electron.sh 0e7_linux_amd64
+        ./build-electron.sh --platform linux --arch amd64 --skip-backend
+        # Remove blockmap files
+        find electron/release -name "*.blockmap" -type f -delete 2>/dev/null || true
 
-    - name: Upload Electric Linux artifacts
+    - name: Upload Electron Linux artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: electric-linux
-        path: electric/release/**
+        name: electron-linux
+        path: electron/release/**
 
-  electric-windows:
+  electron-windows:
     needs: build-windows
     runs-on: windows-latest
 
@@ -347,20 +351,22 @@ jobs:
       run: |
         Expand-Archive -Path artifacts/windows-amd64/0e7_windows_amd64.zip -DestinationPath .
 
-    - name: Build Electric (Windows)
+    - name: Build Electron (Windows)
       shell: bash
       run: |
-        chmod +x build-electric.sh
-        ./build-electric.sh --platform windows --arch amd64 --skip-backend
+        chmod +x build-electron.sh
+        ./build-electron.sh --platform windows --arch amd64 --skip-backend
+        # Remove blockmap files
+        find electron/release -name "*.blockmap" -type f -delete 2>/dev/null || true
 
-    - name: Upload Electric Windows artifacts
+    - name: Upload Electron Windows artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: electric-windows
-        path: electric/release/**
+        name: electron-windows
+        path: electron/release/**
 
   release:
-    needs: [build-linux, build-darwin, build-windows, electric-mac, electric-linux, electric-windows]
+    needs: [build-linux, build-darwin, build-windows, electron-mac, electron-linux, electron-windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event.inputs.version
     
@@ -378,8 +384,8 @@ jobs:
           cp "$file" release/
         done
 
-        # Copy Electric artifacts
-        find . -type f -name "0e7_electric_*" | while read file; do
+        # Copy Electron artifacts (exclude blockmap files)
+        find . -type f -name "0e7_electron_*" ! -name "*.blockmap" | while read file; do
           cp "$file" release/
         done
         
@@ -456,10 +462,10 @@ jobs:
           - **macOS ARM64**: `0e7_darwin_arm64.tar.gz`
           - **Windows AMD64**: `0e7_windows_amd64.zip`
           - **All Platforms**: `0e7_all_platforms.tar.gz`
-          - **macOS Electric AMD64 (DMG)**: `0e7_electric_mac_amd64.dmg`
-          - **macOS Electric ARM64 (DMG)**: `0e7_electric_mac_arm64.dmg`
-          - **Linux Electric AMD64 (DEB)**: `0e7_electric_linux_amd64.deb`
-          - **Windows Electric AMD64 (Installer)**: `0e7_electric_win_amd64.exe`
+          - **macOS Electron AMD64 (DMG)**: `0e7_electron_mac_amd64.dmg`
+          - **macOS Electron ARM64 (DMG)**: `0e7_electron_mac_arm64.dmg`
+          - **Linux Electron AMD64 (DEB)**: `0e7_electron_linux_amd64.deb`
+          - **Windows Electron AMD64 (Installer)**: `0e7_electron_win_amd64.exe`
           
           ### Installation
           1. Download the appropriate file for your platform

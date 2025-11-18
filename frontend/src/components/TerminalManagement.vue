@@ -446,7 +446,7 @@ onMounted(() => {
 <style scoped>
 .terminal-management {
   padding: 20px;
-  height: 100%;
+  height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -454,6 +454,7 @@ onMounted(() => {
   border-radius: 6px;
   border: 1px solid #e6e8eb;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
 .header {

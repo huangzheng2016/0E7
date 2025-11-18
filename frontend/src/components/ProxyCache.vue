@@ -218,7 +218,7 @@ const copyCurlCommand = () => {
       </div>
     </div>
 
-    <el-table :data="rows" height="calc(100% - 56px)" stripe>
+    <el-table :data="rows" style="flex: 1; min-height: 0;" stripe>
       <el-table-column prop="method" label="方法" width="90" />
       <el-table-column prop="statusCode" label="状态" width="90" />
       <el-table-column prop="status" label="缓存状态" width="110" />
@@ -319,18 +319,20 @@ const copyCurlCommand = () => {
 .proxy-cache {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100vh - 40px);
   padding: 20px;
   background: #fff;
   border-radius: 6px;
   border: 1px solid #e6e8eb;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 .toolbar-left {
   display: flex;

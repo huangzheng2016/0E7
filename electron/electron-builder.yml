@@ -1,9 +1,11 @@
 appId: com.0e7.desktop
-productName: 0E7
+productName: 0E7 Desktop
 directories:
   output: release
   buildResources: build
-artifactName: 0e7_electric_${os}_${arch}.${ext}
+artifactName: 0e7_electron_${os}_${arch}.${ext}
+icon: build/icon.png
+generateUpdatesFilesForAllChannels: false
 files:
   - filter:
       - package.json
@@ -14,13 +16,22 @@ extraResources:
     to: bin
 mac:
   category: public.app-category.utilities
+  icon: build/icon.icns
   target:
     - dmg
+dmg:
+  title: ${productName}
 win:
+  icon: build/icon.png
   target:
     - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  uninstallDisplayName: 0E7 Desktop
 linux:
   category: Utility
+  icon: build/icon.png
   target:
     - deb
 publish: null
