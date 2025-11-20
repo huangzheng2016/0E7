@@ -46,7 +46,7 @@ let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let searchAddon: SearchAddon | null = null
 let ws: WebSocket | null = null
-let reconnectTimer: NodeJS.Timeout | null = null
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 const reconnectDelay = 3000 // 3秒后重连
 let isUserAtBottom = true // 用户是否在底部
 
@@ -147,7 +147,6 @@ const initTerminal = async () => {
       background: '#1e1e1e',
       foreground: '#ffffff',
       cursor: '#aeafad',
-      selection: '#3a3d41',
       black: '#000000',
       red: '#cd3131',
       green: '#0dbc79',
@@ -163,8 +162,9 @@ const initTerminal = async () => {
       brightBlue: '#3b8eea',
       brightMagenta: '#d670d6',
       brightCyan: '#29b8db',
-      brightWhite: '#ffffff'
-    },
+      brightWhite: '#ffffff',
+      selection: '#3a3d41'
+    } as any,
     scrollback: 10000, // 最多保留10000行历史记录，超过会自动清理旧内容
     disableStdin: false // 启用stdin以监听键盘事件
   })

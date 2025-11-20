@@ -299,7 +299,7 @@ const closeTab = (tabId: string) => {
         const actionListTab = tabs.value.find(tab => tab.type === 'action-list')
         if (actionListTab) {
           nextTabId = actionListTab.id
-        } else if (tabs.value.length > 0) {
+        } else if (tabs.value.length > 0 && tabs.value[0]) {
           // 如果定时计划也不存在（理论上不应该发生），则切换到第一个tab
           nextTabId = tabs.value[0].id
         }
