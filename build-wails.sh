@@ -330,7 +330,8 @@ run_wails_build() {
         echo "==> 已创建 tar.gz 包: 0e7-wails_linux_${arch_flag}.tar.gz"
       fi
       
-      if command -v nfpm &> /dev/null; then
+      # 只在Linux平台生成deb包
+      if [[ "$os" == "linux" ]] && command -v nfpm &> /dev/null; then
         cd "${WAILS_DIR}"
         mkdir -p deb-package/usr/local/bin
         mkdir -p deb-package/usr/share/applications

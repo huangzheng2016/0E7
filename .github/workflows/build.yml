@@ -591,8 +591,8 @@ jobs:
           cp "$file" release/
         done
         
-        # Copy Wails artifacts (exclude release directory) - already covered by above, but keep for clarity
-        find . -path ./release -prune -o -type f \( -name "0e7-wails_*" -o -name "0e7-desktop_*.deb" \) -print | while read file; do
+        # Copy Wails artifacts (exclude release directory) - only zip/tar.gz/dmg, not deb for Windows
+        find . -path ./release -prune -o -type f \( -name "0e7-wails_*.zip" -o -name "0e7-wails_*.tar.gz" -o -name "0e7-wails_*.dmg" -o -name "0e7-desktop_*.deb" \) -print | while read file; do
           cp "$file" release/
         done
         
