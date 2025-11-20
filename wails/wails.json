@@ -1,0 +1,25 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "0E7 Desktop",
+  "outputfilename": "0e7-desktop",
+  "frontend": {
+    "dir": "",
+    "install": "",
+    "build": "",
+    "dev": ""
+  },
+  "author": {
+    "name": "HydrogenE7",
+    "email": "huangzhengdoc@gmail.com"
+  },
+  "info": {
+    "productName": "0E7 Desktop",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2024",
+    "comments": "0E7 For Security"
+  },
+  "nsisType": "multiple",
+  "obfuscated": false,
+  "garbleargs": ""
+}
+

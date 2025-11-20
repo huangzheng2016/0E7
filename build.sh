@@ -113,11 +113,21 @@ for platform in "${PLATFORMS[@]}"; do
         output_name="0e7_${os}_${arch}"
     fi
     
-    # 设置环境变量并构建
-    GOOS=$os GOARCH=$arch go build -o "$output_name" .
+    # 设置环境变量并构建（去除符号表和调试信息以减小体积）
+    GOOS=$os GOARCH=$arch go build -ldflags="-s -w" -trimpath -o "$output_name" .
     
     if [ $? -eq 0 ]; then
         echo "    ✓ $output_name 构建成功"
+        
+        # 使用 UPX 压缩（如果可用）
+        if command -v upx &> /dev/null; then
+            echo "    → 使用 UPX 压缩 $output_name..."
+            if upx --best --lzma "$output_name" 2>/dev/null; then
+                echo "    ✓ UPX 压缩成功"
+            else
+                echo "    ⚠ UPX 压缩失败，使用未压缩版本"
+            fi
+        fi
     else
         echo "    ✗ $output_name 构建失败"
         exit 1

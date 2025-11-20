@@ -10,6 +10,9 @@ config.ini
 /electron/node_modules/
 /electron/release/
 /electron/resources/bin/
+/wails/build/
+/wails/frontend/
+/wails/bin/
 .idea
 /0E7
 /flow

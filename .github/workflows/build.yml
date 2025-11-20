@@ -365,8 +365,186 @@ jobs:
         name: electron-windows
         path: electron/release/**
 
+  wails-linux:
+    needs: build-linux
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.25'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Download Linux binary
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-amd64
+        path: artifacts/linux-amd64
+
+    - name: Extract binary
+      run: |
+        tar -xzf artifacts/linux-amd64/0e7_linux_amd64.tar.gz
+
+    - name: Install Wails CLI
+      run: |
+        go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+    - name: Build Wails (Linux)
+      run: |
+        chmod +x build-wails.sh 0e7_linux_amd64
+        ./build-wails.sh --platform linux --arch amd64 --skip-backend
+
+    - name: Package Wails Linux app
+      run: |
+        cd wails/build/bin
+        if [ -f "0e7-desktop" ]; then
+          tar -czf 0e7-wails_linux_amd64.tar.gz 0e7-desktop
+          echo "Package created: 0e7-wails_linux_amd64.tar.gz"
+        else
+          echo "Error: Wails binary not found"
+          exit 1
+        fi
+
+    - name: Upload Wails Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wails-linux-amd64
+        path: wails/build/bin/0e7-wails_linux_amd64.tar.gz
+
+  wails-mac:
+    needs: build-darwin
+    runs-on: macos-latest
+    
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+            binary_name: 0e7_darwin_amd64
+            artifact_name: darwin-amd64
+            package_name: 0e7-wails_darwin_amd64.tar.gz
+          - goarch: arm64
+            binary_name: 0e7_darwin_arm64
+            artifact_name: darwin-arm64
+            package_name: 0e7-wails_darwin_arm64.tar.gz
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.25'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Download macOS binary
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: artifacts/${{ matrix.artifact_name }}
+
+    - name: Extract binary
+      run: |
+        tar -xzf artifacts/${{ matrix.artifact_name }}/0e7_${{ matrix.goarch == 'amd64' && 'darwin_amd64' || 'darwin_arm64' }}.tar.gz
+
+    - name: Install Wails CLI
+      run: |
+        go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+    - name: Build Wails (macOS ${{ matrix.goarch }})
+      run: |
+        chmod +x build-wails.sh ${{ matrix.binary_name }}
+        ./build-wails.sh --platform mac --arch ${{ matrix.goarch }} --skip-backend
+
+    - name: Package Wails macOS app
+      run: |
+        cd wails/build/bin
+        if [ -d "0E7 Desktop.app" ]; then
+          tar -czf ${{ matrix.package_name }} "0E7 Desktop.app"
+          echo "Package created: ${{ matrix.package_name }}"
+        else
+          echo "Error: Wails app bundle not found"
+          exit 1
+        fi
+
+    - name: Upload Wails macOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wails-mac-${{ matrix.goarch }}
+        path: wails/build/bin/${{ matrix.package_name }}
+
+  wails-windows:
+    needs: build-windows
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.25'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Download Windows binary
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-amd64
+        path: artifacts/windows-amd64
+
+    - name: Extract binary
+      shell: pwsh
+      run: |
+        Expand-Archive -Path artifacts/windows-amd64/0e7_windows_amd64.zip -DestinationPath .
+
+    - name: Install Wails CLI
+      shell: bash
+      run: |
+        go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+    - name: Build Wails (Windows)
+      shell: bash
+      run: |
+        chmod +x build-wails.sh
+        ./build-wails.sh --platform windows --arch amd64 --skip-backend
+
+    - name: Package Wails Windows app
+      shell: pwsh
+      run: |
+        cd wails/build/bin
+        if (Test-Path "0e7-desktop.exe") {
+          Compress-Archive -Path "0e7-desktop.exe" -DestinationPath "0e7-wails_windows_amd64.zip" -Force
+          Write-Host "Package created: 0e7-wails_windows_amd64.zip"
+        } else {
+          Write-Host "Error: Wails binary not found"
+          exit 1
+        }
+
+    - name: Upload Wails Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wails-windows-amd64
+        path: wails/build/bin/0e7-wails_windows_amd64.zip
+
   release:
-    needs: [build-linux, build-darwin, build-windows, electron-mac, electron-linux, electron-windows]
+    needs: [build-linux, build-darwin, build-windows, electron-mac, electron-linux, electron-windows, wails-linux, wails-mac, wails-windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event.inputs.version
     
@@ -386,6 +564,11 @@ jobs:
 
         # Copy Electron artifacts (exclude blockmap files)
         find . -type f -name "0e7_electron_*" ! -name "*.blockmap" | while read file; do
+          cp "$file" release/
+        done
+        
+        # Copy Wails artifacts
+        find . -type f -name "0e7-wails_*" | while read file; do
           cp "$file" release/
         done
         
@@ -466,6 +649,10 @@ jobs:
           - **macOS Electron ARM64 (DMG)**: `0e7_electron_mac_arm64.dmg`
           - **Linux Electron AMD64 (DEB)**: `0e7_electron_linux_amd64.deb`
           - **Windows Electron AMD64 (Installer)**: `0e7_electron_win_amd64.exe`
+          - **Linux Wails AMD64**: `0e7-wails_linux_amd64.tar.gz`
+          - **macOS Wails AMD64**: `0e7-wails_darwin_amd64.tar.gz`
+          - **macOS Wails ARM64**: `0e7-wails_darwin_arm64.tar.gz`
+          - **Windows Wails AMD64**: `0e7-wails_windows_amd64.zip`
           
           ### Installation
           1. Download the appropriate file for your platform
