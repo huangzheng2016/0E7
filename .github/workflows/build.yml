@@ -521,6 +521,26 @@ jobs:
       run: |
         Expand-Archive -Path artifacts/windows-amd64/0e7_windows_amd64.zip -DestinationPath .
 
+    - name: Install zip tool
+      shell: pwsh
+      run: |
+        Write-Host "Checking for zip command..."
+        # Check Git for Windows zip (usually available on Windows runners)
+        $gitZip = "C:\Program Files\Git\usr\bin\zip.exe"
+        if (Test-Path $gitZip) {
+          Write-Host "Found zip in Git for Windows: $gitZip"
+          # Add to PATH for this step
+          $env:Path = "$env:Path;C:\Program Files\Git\usr\bin"
+        } elseif (Get-Command zip -ErrorAction SilentlyContinue) {
+          Write-Host "zip command already available in PATH"
+        } else {
+          Write-Host "Installing zip tool via choco..."
+          choco install zip -y
+          Write-Host "Zip tool installed successfully"
+        }
+        # Verify zip is available
+        zip --version
+
     - name: Install Wails CLI
       shell: bash
       run: |
@@ -529,9 +549,17 @@ jobs:
     - name: Build Wails (Windows)
       shell: bash
       run: |
+        # Ensure zip is in PATH (Git for Windows or choco-installed zip)
+        export PATH="$PATH:/c/Program Files/Git/usr/bin"
+        # Verify zip is available
+        if command -v zip &> /dev/null; then
+          echo "zip command found: $(which zip)"
+          zip --version
+        else
+          echo "Warning: zip command not found, build script will handle fallback"
+        fi
         chmod +x build-wails.sh
         ./build-wails.sh --platform windows --arch amd64 --skip-backend
-        # Note: zip command is usually available on Windows runners
 
     - name: Upload Wails Windows artifacts
       uses: actions/upload-artifact@v4

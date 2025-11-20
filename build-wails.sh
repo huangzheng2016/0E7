@@ -282,12 +282,20 @@ run_wails_build() {
     exe_file="0e7-desktop.exe"
     if [[ -f "$exe_file" ]]; then
       echo "==> Windows exe 文件位于: ${WAILS_DIR}/build/bin/${exe_file}"
-      if zip -q "0e7-wails_windows_${arch_flag}.zip" "$exe_file" 2>/dev/null; then
-        echo "==> 已创建 zip 包: 0e7-wails_windows_${arch_flag}.zip"
-        rm -f "$exe_file"
-        echo "==> 已删除原始 exe 文件"
+      # 检查zip命令是否存在
+      if command -v zip &> /dev/null; then
+        zip_file="0e7-wails_windows_${arch_flag}.zip"
+        if zip -q "$zip_file" "$exe_file" 2>&1; then
+          echo "==> 已创建 zip 包: $zip_file"
+          rm -f "$exe_file"
+          echo "==> 已删除原始 exe 文件"
+        else
+          echo "警告: zip 打包失败，保留原始文件"
+          echo "提示: 请检查 zip 命令是否可用，或手动打包"
+        fi
       else
-        echo "警告: zip 打包失败，保留原始文件"
+        echo "警告: 未找到 zip 命令，跳过打包"
+        echo "提示: 请安装 zip 工具或手动打包 exe 文件"
       fi
     fi
   elif [[ "$os" == "darwin" ]]; then
