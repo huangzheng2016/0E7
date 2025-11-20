@@ -367,7 +367,7 @@ jobs:
 
   wails-linux:
     needs: build-linux
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
@@ -398,13 +398,17 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           libgtk-3-dev \
-          libwebkit2gtk-4.0-dev \
+          libwebkit2gtk-4.1-dev \
           libayatana-appindicator3-dev \
           librsvg2-dev
 
     - name: Install Wails CLI
       run: |
         go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+    - name: Install nfpm for deb packaging
+      run: |
+        go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
     - name: Build Wails (Linux)
       run: |
@@ -413,20 +417,15 @@ jobs:
 
     - name: Package Wails Linux app
       run: |
-        cd wails/build/bin
-        if [ -f "0e7-desktop" ]; then
-          tar -czf 0e7-wails_linux_amd64.tar.gz 0e7-desktop
-          echo "Package created: 0e7-wails_linux_amd64.tar.gz"
-        else
-          echo "Error: Wails binary not found"
-          exit 1
-        fi
+        echo "打包由 build-wails.sh 自动处理"
 
     - name: Upload Wails Linux artifacts
       uses: actions/upload-artifact@v4
       with:
         name: wails-linux-amd64
-        path: wails/build/bin/0e7-wails_linux_amd64.tar.gz
+        path: |
+          wails/build/bin/0e7-wails_linux_amd64.tar.gz
+          wails/build/bin/*.deb
 
   wails-mac:
     needs: build-darwin
@@ -472,6 +471,10 @@ jobs:
       run: |
         go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
+    - name: Install create-dmg for dmg packaging
+      run: |
+        brew install create-dmg
+
     - name: Build Wails (macOS ${{ matrix.goarch }})
       run: |
         chmod +x build-wails.sh ${{ matrix.binary_name }}
@@ -479,20 +482,15 @@ jobs:
 
     - name: Package Wails macOS app
       run: |
-        cd wails/build/bin
-        if [ -d "0E7 Desktop.app" ]; then
-          tar -czf ${{ matrix.package_name }} "0E7 Desktop.app"
-          echo "Package created: ${{ matrix.package_name }}"
-        else
-          echo "Error: Wails app bundle not found"
-          exit 1
-        fi
+        echo "打包由 build-wails.sh 自动处理"
 
     - name: Upload Wails macOS artifacts
       uses: actions/upload-artifact@v4
       with:
         name: wails-mac-${{ matrix.goarch }}
-        path: wails/build/bin/${{ matrix.package_name }}
+        path: |
+          wails/build/bin/${{ matrix.package_name }}
+          wails/build/bin/*.dmg
 
   wails-windows:
     needs: build-windows
@@ -533,18 +531,7 @@ jobs:
       run: |
         chmod +x build-wails.sh
         ./build-wails.sh --platform windows --arch amd64 --skip-backend
-
-    - name: Package Wails Windows app
-      shell: pwsh
-      run: |
-        cd wails/build/bin
-        if (Test-Path "0e7-desktop.exe") {
-          Compress-Archive -Path "0e7-desktop.exe" -DestinationPath "0e7-wails_windows_amd64.zip" -Force
-          Write-Host "Package created: 0e7-wails_windows_amd64.zip"
-        } else {
-          Write-Host "Error: Wails binary not found"
-          exit 1
-        }
+        # Note: zip command is usually available on Windows runners
 
     - name: Upload Wails Windows artifacts
       uses: actions/upload-artifact@v4
@@ -566,18 +553,18 @@ jobs:
         mkdir -p release
         mkdir -p release_temp
         
-        # Copy individual platform archives to release
-        find . \( -name "*.tar.gz" -o -name "*.zip" \) | while read file; do
+        # Copy individual platform archives to release (exclude release directory)
+        find . -path ./release -prune -o \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.deb" -o -name "*.dmg" \) -type f -print | while read file; do
           cp "$file" release/
         done
 
-        # Copy Electron artifacts (exclude blockmap files)
-        find . -type f -name "0e7_electron_*" ! -name "*.blockmap" | while read file; do
+        # Copy Electron artifacts (exclude blockmap files and release directory)
+        find . -path ./release -prune -o -type f -name "0e7_electron_*" ! -name "*.blockmap" -print | while read file; do
           cp "$file" release/
         done
         
-        # Copy Wails artifacts
-        find . -type f -name "0e7-wails_*" | while read file; do
+        # Copy Wails artifacts (exclude release directory) - already covered by above, but keep for clarity
+        find . -path ./release -prune -o -type f \( -name "0e7-wails_*" -o -name "0e7-desktop_*.deb" \) -print | while read file; do
           cp "$file" release/
         done
         

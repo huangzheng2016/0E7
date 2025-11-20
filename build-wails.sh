@@ -275,24 +275,118 @@ run_wails_build() {
   export GOARCH="$arch_flag"
   
   wails build -platform "${os}/${arch_flag}" -clean -ldflags "-s -w" -skipbindings -s
+  
+  cd "${WAILS_DIR}/build/bin"
+  
   if [[ "$os" == "windows" ]]; then
-    exe_file="build/bin/0e7-desktop.exe"
+    exe_file="0e7-desktop.exe"
     if [[ -f "$exe_file" ]]; then
-      echo "==> Windows exe 文件位于: ${WAILS_DIR}/${exe_file}"
+      echo "==> Windows exe 文件位于: ${WAILS_DIR}/build/bin/${exe_file}"
+      if zip -q "0e7-wails_windows_${arch_flag}.zip" "$exe_file" 2>/dev/null; then
+        echo "==> 已创建 zip 包: 0e7-wails_windows_${arch_flag}.zip"
+        rm -f "$exe_file"
+        echo "==> 已删除原始 exe 文件"
+      else
+        echo "警告: zip 打包失败，保留原始文件"
+      fi
     fi
   elif [[ "$os" == "darwin" ]]; then
-    app_bundle="build/bin/0E7 Desktop.app"
+    app_bundle="0E7 Desktop.app"
     if [[ -d "$app_bundle" ]]; then
-      echo "==> macOS 应用包位于: ${WAILS_DIR}/${app_bundle}"
+      echo "==> macOS 应用包位于: ${WAILS_DIR}/build/bin/${app_bundle}"
+      if tar -czf "0e7-wails_darwin_${arch_flag}.tar.gz" "$app_bundle"; then
+        echo "==> 已创建 tar.gz 包: 0e7-wails_darwin_${arch_flag}.tar.gz"
+      fi
+      
+      if command -v create-dmg &> /dev/null; then
+        dmg_name="0e7-wails_darwin_${arch_flag}.dmg"
+        if create-dmg --overwrite "$app_bundle" . --dmg-name "$dmg_name" 2>/dev/null; then
+          echo "==> 已创建 dmg 包: ${dmg_name}"
+          rm -rf "$app_bundle"
+          echo "==> 已删除原始 app 包"
+        else
+          echo "警告: dmg 打包失败，保留原始文件"
+        fi
+      else
+        echo "提示: 安装 create-dmg 可自动生成 dmg 包"
+        rm -rf "$app_bundle"
+        echo "==> 已删除原始 app 包（仅保留 tar.gz）"
+      fi
     fi
   elif [[ "$os" == "linux" ]]; then
-    exe_file="build/bin/0e7-desktop"
+    exe_file="0e7-desktop"
     if [[ -f "$exe_file" ]]; then
       chmod +x "$exe_file"
-      echo "==> Linux 可执行文件位于: ${WAILS_DIR}/${exe_file}"
+      echo "==> Linux 可执行文件位于: ${WAILS_DIR}/build/bin/${exe_file}"
+      if tar -czf "0e7-wails_linux_${arch_flag}.tar.gz" "$exe_file"; then
+        echo "==> 已创建 tar.gz 包: 0e7-wails_linux_${arch_flag}.tar.gz"
+      fi
+      
+      if command -v nfpm &> /dev/null; then
+        cd "${WAILS_DIR}"
+        mkdir -p deb-package/usr/local/bin
+        mkdir -p deb-package/usr/share/applications
+        
+        cp build/bin/0e7-desktop deb-package/usr/local/bin/0e7-desktop
+        chmod +x deb-package/usr/local/bin/0e7-desktop
+        
+        cat > deb-package/usr/share/applications/0e7-desktop.desktop <<'EOF'
+[Desktop Entry]
+Name=0E7 Desktop
+Comment=0E7 For Security
+Exec=/usr/local/bin/0e7-desktop
+Icon=0e7-desktop
+Terminal=false
+Type=Application
+Categories=Utility;
+EOF
+        
+        VERSION="${GITHUB_REF:-refs/tags/v1.0.0}"
+        VERSION="${VERSION#refs/tags/v}"
+        if [[ -z "$VERSION" || "$VERSION" == "refs/tags/"* ]]; then
+          VERSION="1.0.0"
+        fi
+        
+        cat > nfpm.yaml <<EOF
+name: "0e7-desktop"
+arch: "${arch_flag}"
+platform: "linux"
+version: "${VERSION}"
+section: "default"
+priority: "extra"
+maintainer: "HydrogenE7 <huangzhengdoc@gmail.com>"
+description: "0E7 Desktop Application"
+vendor: "HydrogenE7"
+homepage: "https://github.com/huangzheng2016/0E7"
+license: "MIT"
+contents:
+  - src: deb-package/usr/local/bin/0e7-desktop
+    dst: /usr/local/bin/0e7-desktop
+  - src: deb-package/usr/share/applications/0e7-desktop.desktop
+    dst: /usr/share/applications/0e7-desktop.desktop
+EOF
+        
+        if nfpm package --packager deb --target build/bin/ 2>/dev/null; then
+          echo "==> 已创建 deb 包: build/bin/0e7-desktop_${VERSION}_${arch_flag}.deb"
+          cd build/bin
+          rm -f 0e7-desktop
+          echo "==> 已删除原始可执行文件（保留 deb 和 tar.gz）"
+        else
+          echo "警告: deb 打包失败，保留原始文件"
+        fi
+        
+        cd "${WAILS_DIR}"
+        rm -rf deb-package nfpm.yaml
+      else
+        echo "提示: 安装 nfpm 可自动生成 deb 包"
+        cd build/bin
+        rm -f 0e7-desktop
+        echo "==> 已删除原始可执行文件（仅保留 tar.gz）"
+      fi
     fi
   fi
   
+  cd "${WAILS_DIR}"
   rm -rf bin
   mkdir -p bin
   echo -n "PLACEHOLDER" > bin/backend.bin
